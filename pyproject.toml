@@ -1,0 +1,53 @@
+[project]
+name = "nl2anyquery"
+version = "0.1.0"
+description = "Natural Language to Database Query POC - Foundation"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn>=0.30.0",
+    "pydantic>=2.8.0",
+    "pydantic-settings>=2.4.0",
+    "spacy>=3.7.0",
+    "rank-bm25>=0.2.2",
+    "psycopg[binary]>=3.2.0",
+    "pymongo>=4.8.0",
+    "httpx>=0.27.0",
+    "sqlglot>=25.0.0",
+    "tomli-w>=1.0.0",
+    "pandas>=2.2.0",
+    "streamlit>=1.39.0",
+    "en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+]
+
+[project.scripts]
+seed-postgres = "nl2anyquery.cli:seed_postgres_cli"
+seed-mongo = "nl2anyquery.cli:seed_mongo_cli"
+init-schema = "nl2anyquery.cli:init_schema_cli"
+test-model = "nl2anyquery.cli:test_model_cli"
+test-bm25 = "nl2anyquery.cli:test_bm25_cli"
+test-nlp = "nl2anyquery.cli:test_nlp_cli"
+run-api = "nl2anyquery.cli:run_api_cli"
+run-ui = "nl2anyquery.cli:run_ui_cli"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/nl2anyquery"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = ["src"]

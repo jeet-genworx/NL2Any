@@ -1,0 +1,309 @@
+[database]
+type = "postgresql"
+name = "jeetthakur"
+schema_version = "1.0"
+last_updated = "2026-09-23T18:11:00.979965+00:00"
+description_generated_at = "2026-09-23T18:11:12.804526+00:00"
+
+[tables.customers]
+kind = "table"
+description = "Stores customer account information"
+
+[tables.customers.columns.id]
+type = "integer"
+description = "Unique identifier for the customer"
+nullable = false
+
+[tables.customers.columns.name]
+type = "character varying"
+description = "Full name of the customer"
+nullable = false
+
+[tables.customers.columns.email]
+type = "character varying"
+description = "Email address of the customer"
+nullable = false
+
+[tables.customers.columns.phone]
+type = "character varying"
+description = "Phone number of the customer"
+nullable = true
+
+[tables.customers.columns.city]
+type = "character varying"
+description = "City where the customer is located"
+nullable = true
+sample_values = [
+    "Boston",
+    "Austin",
+    "Chicago",
+    "New York",
+]
+
+[tables.customers.columns.created_at]
+type = "timestamp with time zone"
+description = "Timestamp when the customer account was created"
+nullable = false
+
+[tables.employees]
+kind = "table"
+description = "Stores employee workforce information"
+
+[tables.employees.columns.id]
+type = "integer"
+description = "Unique identifier for the employee"
+nullable = false
+
+[tables.employees.columns.name]
+type = "character varying"
+description = "Full name of the employee"
+nullable = false
+
+[tables.employees.columns.email]
+type = "character varying"
+description = "Email address of the employee"
+nullable = false
+
+[tables.employees.columns.department]
+type = "character varying"
+description = "Department the employee belongs to"
+nullable = false
+sample_values = [
+    "Engineering",
+    "Operations",
+    "Sales",
+    "Support",
+]
+
+[tables.employees.columns.role]
+type = "character varying"
+description = "Job title or position of the employee"
+nullable = false
+sample_values = [
+    "Senior Specialist",
+    "Manager",
+    "Team Lead",
+    "Specialist",
+]
+
+[tables.employees.columns.city]
+type = "character varying"
+description = "City where the employee is based"
+nullable = true
+sample_values = [
+    "New York",
+    "San Francisco",
+    "Austin",
+    "Chicago",
+]
+
+[tables.employees.columns.hire_date]
+type = "timestamp with time zone"
+description = "Timestamp when the employee was hired"
+nullable = false
+
+[tables.order_items]
+kind = "table"
+description = "Tracks individual items in orders"
+
+[tables.order_items.columns.id]
+type = "integer"
+description = "Unique identifier for the order item"
+nullable = false
+
+[tables.order_items.columns.order_id]
+type = "integer"
+description = "Reference to the related order"
+nullable = false
+
+[tables.order_items.columns.product_id]
+type = "integer"
+description = "Reference to the related product"
+nullable = false
+
+[tables.order_items.columns.quantity]
+type = "integer"
+description = "Number of units ordered"
+nullable = false
+
+[tables.order_items.columns.unit_price]
+type = "numeric"
+description = "Price per unit for the item"
+nullable = false
+
+[tables.orders]
+kind = "table"
+description = "Records customer orders and their status"
+
+[tables.orders.columns.id]
+type = "integer"
+description = "Unique identifier for the order"
+nullable = false
+
+[tables.orders.columns.customer_id]
+type = "integer"
+description = "Reference to the customer who placed the order"
+nullable = false
+
+[tables.orders.columns.order_date]
+type = "timestamp with time zone"
+description = "Timestamp when the order was placed"
+nullable = false
+
+[tables.orders.columns.status]
+type = "character varying"
+description = "Current status of the order"
+nullable = false
+sample_values = [
+    "completed",
+    "cancelled",
+    "pending",
+    "shipped",
+]
+
+[tables.orders.columns.total_amount]
+type = "numeric"
+description = "Total monetary value of the order"
+nullable = false
+
+[tables.orders.columns.shipping_city]
+type = "character varying"
+description = "City for order shipping"
+nullable = true
+sample_values = [
+    "Boston",
+    "Austin",
+    "Chicago",
+    "New York",
+]
+
+[tables.products]
+kind = "table"
+description = "Stores product inventory information"
+
+[tables.products.columns.id]
+type = "integer"
+description = "Unique identifier for the product"
+nullable = false
+
+[tables.products.columns.name]
+type = "character varying"
+description = "Name of the product"
+nullable = false
+
+[tables.products.columns.category]
+type = "character varying"
+description = "Product category type"
+nullable = false
+sample_values = [
+    "Sports",
+    "Home & Kitchen",
+    "Electronics",
+    "Apparel",
+]
+
+[tables.products.columns.price]
+type = "numeric"
+description = "Current price of the product"
+nullable = false
+
+[tables.products.columns.stock_quantity]
+type = "integer"
+description = "Number of units in inventory"
+nullable = false
+
+[tables.products.columns.created_at]
+type = "timestamp with time zone"
+description = "Timestamp when the product was added"
+nullable = false
+
+[tables.support_tickets]
+kind = "table"
+description = "Tracks customer support requests and their resolution status"
+
+[tables.support_tickets.columns.id]
+type = "integer"
+description = "Unique identifier for the support ticket"
+nullable = false
+
+[tables.support_tickets.columns.customer_id]
+type = "integer"
+description = "Identifier of the customer who created the ticket"
+nullable = false
+
+[tables.support_tickets.columns.employee_id]
+type = "integer"
+description = "Identifier of the support employee assigned to the ticket"
+nullable = false
+
+[tables.support_tickets.columns.subject]
+type = "character varying"
+description = "Summary or title of the support request"
+nullable = false
+
+[tables.support_tickets.columns.status]
+type = "character varying"
+description = "Current state of the ticket (e.g., open, in_progress, closed)"
+nullable = false
+sample_values = [
+    "closed",
+    "open",
+    "in_progress",
+    "resolved",
+]
+
+[tables.support_tickets.columns.priority]
+type = "character varying"
+description = "Urgency level of the support request (e.g., high, urgent, medium)"
+nullable = false
+sample_values = [
+    "medium",
+    "urgent",
+    "high",
+    "low",
+]
+
+[tables.support_tickets.columns.created_at]
+type = "timestamp with time zone"
+description = "Timestamp indicating when the ticket was first created"
+nullable = false
+
+[tables.support_tickets.columns.resolved_at]
+type = "timestamp with time zone"
+description = "Timestamp indicating when the ticket was resolved"
+nullable = true
+
+[[relationships]]
+from_table = "order_items"
+from_column = "order_id"
+to_table = "orders"
+to_column = "id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "order_items"
+from_column = "product_id"
+to_table = "products"
+to_column = "id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "orders"
+from_column = "customer_id"
+to_table = "customers"
+to_column = "id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "support_tickets"
+from_column = "customer_id"
+to_table = "customers"
+to_column = "id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "support_tickets"
+from_column = "employee_id"
+to_table = "employees"
+to_column = "id"
+type = "many_to_one"

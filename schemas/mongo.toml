@@ -1,0 +1,288 @@
+[database]
+type = "mongodb"
+name = "nl2anyquery_demo"
+schema_version = "1.0"
+last_updated = "2026-09-23T18:11:51.370913+00:00"
+description_generated_at = "2026-09-23T18:12:08.967726+00:00"
+
+[collections.customers]
+kind = "collection"
+description = "Collection of customer entities with personal and contact information"
+
+[collections.customers.fields._id]
+type = "string"
+description = "Unique identifier for the customer"
+nullable = false
+
+[collections.customers.fields.name]
+type = "string"
+description = "Full name of the customer"
+nullable = false
+
+[collections.customers.fields.email]
+type = "string"
+description = "Email address associated with the customer"
+nullable = false
+
+[collections.customers.fields.phone]
+type = "string"
+description = "Phone number of the customer"
+nullable = false
+
+[collections.customers.fields.address]
+type = "object"
+description = "Object containing the customer's geographic location details"
+nullable = false
+
+[collections.customers.fields.address.fields.city]
+type = "string"
+description = "City where the customer is located"
+nullable = false
+sample_values = [
+    "Denver",
+    "Seattle",
+    "Chicago",
+    "Austin",
+]
+
+[collections.customers.fields.address.fields.country]
+type = "string"
+description = "Country where the customer is located"
+nullable = false
+sample_values = [
+    "USA",
+]
+
+[collections.customers.fields.address.fields.zip_code]
+type = "string"
+description = "Postal code for the customer's address"
+nullable = false
+
+[collections.customers.fields.created_at]
+type = "datetime"
+description = "Timestamp when the customer record was created"
+nullable = false
+
+[collections.employees]
+kind = "collection"
+description = "Collection of employee records with job and location information"
+
+[collections.employees.fields._id]
+type = "string"
+description = "Unique identifier for the employee"
+nullable = false
+
+[collections.employees.fields.name]
+type = "string"
+description = "Full name of the employee"
+nullable = false
+
+[collections.employees.fields.email]
+type = "string"
+description = "Email address associated with the employee"
+nullable = false
+
+[collections.employees.fields.department]
+type = "string"
+description = "Department the employee belongs to"
+nullable = false
+sample_values = [
+    "Support",
+    "Sales",
+    "Operations",
+    "Engineering",
+]
+
+[collections.employees.fields.role]
+type = "string"
+description = "Job title or position of the employee"
+nullable = false
+sample_values = [
+    "Team Lead",
+    "Manager",
+    "Senior Specialist",
+    "Specialist",
+]
+
+[collections.employees.fields.city]
+type = "string"
+description = "City where the employee is based"
+nullable = false
+sample_values = [
+    "Denver",
+    "Miami",
+    "Boston",
+    "Seattle",
+]
+
+[collections.employees.fields.hire_date]
+type = "datetime"
+description = "Timestamp when the employee was hired"
+nullable = false
+
+[collections.orders]
+kind = "collection"
+description = "Collection of customer orders with transaction details"
+
+[collections.orders.fields._id]
+type = "string"
+description = "Unique identifier for the order"
+nullable = false
+
+[collections.orders.fields.customer_id]
+type = "string"
+description = "Reference to the customer who placed the order"
+nullable = false
+
+[collections.orders.fields.created_at]
+type = "datetime"
+description = "Timestamp when the order was placed"
+nullable = false
+
+[collections.orders.fields.status]
+type = "string"
+description = "Current status of the order"
+nullable = false
+sample_values = [
+    "completed",
+    "pending",
+    "cancelled",
+    "shipped",
+]
+
+[collections.orders.fields.total_amount]
+type = "number"
+description = "Total monetary value of the order"
+nullable = false
+
+[collections.orders.fields.shipping_city]
+type = "string"
+description = "City where the order is shipped to"
+nullable = false
+sample_values = [
+    "Denver",
+    "Seattle",
+    "Boston",
+    "San Francisco",
+]
+
+[collections.orders.fields.items]
+type = "array[object]"
+description = "Array of product items in the order"
+nullable = false
+
+[collections.orders.fields.items.fields.product_id]
+type = "string"
+description = "Unique identifier for a product in the order"
+nullable = false
+
+[collections.orders.fields.items.fields.product_name]
+type = "string"
+description = "Name of the product in the order"
+nullable = false
+
+[collections.orders.fields.items.fields.quantity]
+type = "integer"
+description = "Number of units ordered for the product"
+nullable = false
+
+[collections.orders.fields.items.fields.price]
+type = "number"
+description = "Price per unit for the product"
+nullable = false
+
+[collections.products]
+kind = "collection"
+description = "Collection of product information with inventory details"
+
+[collections.products.fields._id]
+type = "string"
+description = "Unique identifier for the product"
+nullable = false
+
+[collections.products.fields.name]
+type = "string"
+description = "Name of the product"
+nullable = false
+
+[collections.products.fields.category]
+type = "string"
+description = "Type of product (e.g., Apparel, Electronics)"
+nullable = false
+sample_values = [
+    "Apparel",
+    "Electronics",
+    "Beauty",
+    "Books",
+]
+
+[collections.products.fields.price]
+type = "number"
+description = "Listed price for the product"
+nullable = false
+
+[collections.products.fields.stock_quantity]
+type = "integer"
+description = "Number of units available in inventory"
+nullable = false
+
+[collections.products.fields.created_at]
+type = "datetime"
+description = "Timestamp when the product was added"
+nullable = false
+
+[collections.support_tickets]
+kind = "collection"
+description = "Collection of support tickets with status and resolution details"
+
+[collections.support_tickets.fields._id]
+type = "string"
+description = "Unique identifier for the support ticket"
+nullable = false
+
+[collections.support_tickets.fields.customer_id]
+type = "string"
+description = "Reference to the customer associated with the ticket"
+nullable = false
+
+[collections.support_tickets.fields.assigned_employee_id]
+type = "string"
+description = "Reference to the employee handling the ticket"
+nullable = false
+
+[collections.support_tickets.fields.subject]
+type = "string"
+description = "Summary or title of the ticket"
+nullable = false
+
+[collections.support_tickets.fields.status]
+type = "string"
+description = "Current status of the ticket"
+nullable = false
+sample_values = [
+    "in_progress",
+    "closed",
+    "resolved",
+    "open",
+]
+
+[collections.support_tickets.fields.priority]
+type = "string"
+description = "Urgency level of the ticket"
+nullable = false
+sample_values = [
+    "urgent",
+    "medium",
+    "high",
+    "low",
+]
+
+[collections.support_tickets.fields.created_at]
+type = "datetime"
+description = "Timestamp when the ticket was opened"
+nullable = false
+
+[collections.support_tickets.fields.resolved_at]
+type = "datetime"
+description = "Timestamp when the ticket was resolved"
+nullable = true

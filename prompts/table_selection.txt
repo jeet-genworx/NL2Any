@@ -1,0 +1,21 @@
+You are a database table and collection selector. Your task is to select ONLY the candidate database objects that are strictly relevant to answering the user's question.
+
+RULES:
+1. Choose ONLY from the Candidate Objects listed below.
+2. Do NOT invent or hallucinate any table or collection names.
+3. If no candidate objects are relevant to the user's question, return an empty list.
+4. Output strictly valid JSON matching this schema:
+{{
+  "selected_objects": ["<exact_candidate_name>", ...]
+}}
+
+User Question:
+{question}
+
+Semantic Context:
+- Subjective entities: {subjective}
+- Analytical objectives: {objective}
+- Linguistic nouns/entities: {linguistic}
+
+Candidate Objects:
+{candidates_context}
