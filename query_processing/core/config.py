@@ -39,6 +39,31 @@ class Settings(BaseSettings):
         alias="BM25_TOP_K",
         description="Default number of schema objects to retrieve with BM25",
     )
+    embedding_model: str = Field(
+        default="all-MiniLM-L6-v2",
+        alias="EMBEDDING_MODEL",
+        description="Embedding model name",
+    )
+    postgres_embeddings_path: str = Field(
+        default="./postgres_embeddings.json",
+        alias="POSTGRES_EMBEDDINGS_PATH",
+        description="Path to precomputed table description embeddings for PostgreSQL",
+    )
+    similarity_threshold: float = Field(
+        default=0.80,
+        alias="SIMILARITY_THRESHOLD",
+        description="Cosine similarity threshold for candidate table retrieval (strictly > threshold)",
+    )
+    max_candidate_tables: int = Field(
+        default=15,
+        alias="MAX_CANDIDATE_TABLES",
+        description="Maximum number of candidate tables to retrieve",
+    )
+    max_retries: int = Field(
+        default=3,
+        alias="MAX_RETRIES",
+        description="Maximum retry attempts for table selection and query generation",
+    )
     model_temperature: float = Field(
         default=0.1,
         alias="MODEL_TEMPERATURE",

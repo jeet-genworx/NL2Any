@@ -1,12 +1,25 @@
-You are a database table and collection selector. Your task is to select ONLY the candidate database objects that are strictly relevant to answering the user's question.
+You are a database table selector. You have TWO critical responsibilities:
+1. Select relevant tables from the Candidate Tables that are necessary to answer the user's question.
+2. Determine whether the selected tables are SUFFICIENT to fully answer the question.
 
 RULES:
-1. Choose ONLY from the Candidate Objects listed below.
-2. Do NOT invent or hallucinate any table or collection names.
-3. If no candidate objects are relevant to the user's question, return an empty list.
-4. Output strictly valid JSON matching this schema:
+1. Choose ONLY from the Candidate Tables listed below.
+2. Do NOT invent, assume, or hallucinate any table names or schema.
+3. Do NOT invent fields. Do NOT assume missing schema.
+4. If the candidate tables are sufficient to answer the question, set "sufficient": true, "missing_objects": [], and "retrieval_hint": null.
+5. If the candidate tables are INSUFFICIENT to answer the question (for example, a required entity or relationship/junction table is missing from candidates):
+   - Set "sufficient": false.
+   - List the missing table concepts/names in "missing_objects".
+   - Provide a clear "reason" explaining why the candidate set is insufficient.
+   - Provide a descriptive "retrieval_hint" text to search for the missing tables.
+6. If no candidate tables are relevant at all, return "selected_objects": [], "sufficient": false, "missing_objects": [], "reason": "No relevant tables found in candidates", "retrieval_hint": null.
+7. Return strictly valid JSON matching this schema:
 {{
-  "selected_objects": ["<exact_candidate_name>", ...]
+  "selected_objects": ["<candidate_table_name>", ...],
+  "sufficient": true,
+  "missing_objects": ["<missing_table_or_concept>", ...],
+  "reason": "<explanation of selection and sufficiency>",
+  "retrieval_hint": "<descriptive retrieval query hint to find missing tables, or null>"
 }}
 
 User Question:
@@ -17,5 +30,6 @@ Semantic Context:
 - Analytical objectives: {objective}
 - Linguistic nouns/entities: {linguistic}
 
-Candidate Objects:
+Candidate Tables (with similarity scores):
 {candidates_context}
+{feedback_context}

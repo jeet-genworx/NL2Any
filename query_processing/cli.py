@@ -209,3 +209,62 @@ def run_ui_cli() -> None:
     import subprocess
     print("Starting NL2AnyQuery Streamlit frontend...")
     subprocess.run(["streamlit", "run", "frontend/app.py"])
+
+
+def generate_test_embeddings_cli() -> None:
+    """Generate table description embeddings using KoboldCpp and all-MiniLM-L6-v2."""
+    import json
+    from query_processing.providers.embedding.koboldcpp import KoboldCppEmbeddingProvider
+
+    parser = argparse.ArgumentParser(
+        description="Generate test table description embeddings using KoboldCpp."
+    )
+    parser.add_argument(
+        "--output",
+        "-o",
+        type=str,
+        default="tests/fixtures/postgres_embeddings.json",
+        help="Output file path (default: tests/fixtures/postgres_embeddings.json)",
+    )
+    parser.add_argument(
+        "--production",
+        "-p",
+        action="store_true",
+        help="Also write to ./postgres_embeddings.json",
+    )
+    args = parser.parse_args()
+
+    table_descriptions = {
+        "customers": "Customer records containing customer identity, name, email, phone, and city information.",
+        "orders": "Orders placed by customers containing order dates, status, total amounts, shipping city, and customer id.",
+        "order_items": "Individual items within customer orders, containing product id, order id, quantity, and unit price.",
+        "products": "Products available for purchase including product names, categories, prices, and stock quantity.",
+        "employees": "Employee workforce records containing employee name, email, department, role, city, and hire date.",
+        "support_tickets": "Customer support ticket records containing issue subject, status, priority, customer id, and employee id.",
+    }
+
+    async def _generate() -> None:
+        print(f"Connecting to KoboldCpp embedding endpoint at: {settings.koboldcpp_base_url}")
+        print(f"Embedding model: {settings.embedding_model}")
+        provider = KoboldCppEmbeddingProvider()
+
+        embeddings: dict[str, list[float]] = {}
+        for tbl_name, desc in table_descriptions.items():
+            print(f"Generating embedding for '{tbl_name}'...")
+            vec = await provider.embed(desc)
+            if len(vec) != 384:
+                raise ValueError(f"Table '{tbl_name}' vector dimension {len(vec)} != 384")
+            embeddings[tbl_name] = vec
+
+        out_path = Path(args.output)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(json.dumps(embeddings, indent=2), encoding="utf-8")
+        print(f"Saved {len(embeddings)} table embeddings to: {out_path}")
+
+        if args.production:
+            prod_path = Path("./postgres_embeddings.json")
+            prod_path.write_text(json.dumps(embeddings, indent=2), encoding="utf-8")
+            print(f"Also saved production embeddings to: {prod_path}")
+
+    asyncio.run(_generate())
+

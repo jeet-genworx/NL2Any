@@ -36,6 +36,7 @@ test-bm25 = "query_processing.cli:test_bm25_cli"
 test-nlp = "query_processing.cli:test_nlp_cli"
 run-api = "query_processing.cli:run_api_cli"
 run-ui = "query_processing.cli:run_ui_cli"
+generate-test-embeddings = "query_processing.cli:generate_test_embeddings_cli"
 
 [build-system]
 requires = ["hatchling"]

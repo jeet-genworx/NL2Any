@@ -12,9 +12,11 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_GUARDRAIL_PROMPT = Path("query_processing/prompts/guardrail.txt")
 
+import re
+
 DESTRUCTIVE_KEYWORDS = {
     "drop", "delete", "truncate", "update", "insert", "alter", "create",
-    "grant", "revoke", "replace", "remove", "kill", "shutdown"
+    "grant", "revoke", "replace", "remove", "kill", "shutdown", "modify",
 }
 
 
@@ -48,7 +50,7 @@ class GuardrailClassifier:
         cleaned_question = question.strip().lower()
 
         # Deterministic fast check for obvious destructive keywords
-        words = set(cleaned_question.split())
+        words = set(re.findall(r"\b\w+\b", cleaned_question))
         if words.intersection(DESTRUCTIVE_KEYWORDS):
             return GuardrailResult(
                 decision=GuardrailDecision.REJECT,

@@ -32,6 +32,9 @@ def _extract_sql(text: str) -> str:
         else:
             sql = cleaned
 
+    if not sql or sql.strip() == "":
+        return ""
+
     # Strip trailing markdown / extra notes after semicolon
     if ";" in sql:
         sql = sql[: sql.index(";") + 1].strip()

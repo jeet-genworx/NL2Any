@@ -1,13 +1,17 @@
-"""Table and collection selector stage."""
+"""Table selector stage with sufficiency validation and hallucination filtering."""
 
 import logging
 from pathlib import Path
+
 from query_processing.core.text_utils import extract_json_block
-from query_processing.models.pipeline import QuestionAnalysis, TableSelectionResult
+from query_processing.models.pipeline import (
+    CandidateTable,
+    QuestionAnalysis,
+    TableSelectionResult,
+)
 from query_processing.models.schema import DatabaseSchema
 from query_processing.providers.model.base import ModelProvider
 from query_processing.providers.model.koboldcpp import KoboldCppProvider
-from query_processing.retrieval.bm25 import RetrievalResult
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +19,7 @@ DEFAULT_SELECTOR_PROMPT = Path("query_processing/prompts/table_selection.txt")
 
 
 class TableSelector:
-    """Selects relevant tables/collections from BM25 candidates using the SLM."""
+    """Selects relevant tables from candidates and determines sufficiency."""
 
     def __init__(
         self,
@@ -36,25 +40,39 @@ class TableSelector:
     async def select(
         self,
         question_analysis: QuestionAnalysis,
-        candidates: list[RetrievalResult],
-        schema: DatabaseSchema,
+        candidates: list[CandidateTable],
+        schema: DatabaseSchema | None = None,
+        feedback: str | None = None,
     ) -> TableSelectionResult:
-        """Select relevant objects from BM25 candidates with strict validation against TOML schema."""
-        # Refinement 4: Graceful handling for zero BM25 candidates
+        """Select relevant tables from candidates, validating sufficiency and eliminating hallucinations."""
         if not candidates:
-            return TableSelectionResult(selected_objects=[])
+            return TableSelectionResult(
+                selected_objects=[],
+                sufficient=False,
+                missing_objects=[],
+                reason="No candidate tables provided.",
+                retrieval_hint=None,
+            )
 
-        candidate_names = [c.object_name for c in candidates]
-        valid_schema_names = {obj.name.lower(): obj.name for obj in schema.objects}
+        candidate_map = {c.table_name.lower(): c.table_name for c in candidates}
+        schema_map = {obj.name.lower(): obj.name for obj in schema.objects} if schema else {}
 
-        # Format candidates description context
+        # Format candidates context with similarity scores and compact schema fields if available
         lines: list[str] = []
         for c in candidates:
-            obj = c.schema_object
-            field_paths = obj.all_field_paths()[:8]  # brief sample of fields
-            desc = f" - {obj.description}" if obj.description else ""
-            lines.append(f"• {obj.name} ({obj.kind.value}){desc}\n  Fields: {', '.join(field_paths)}")
+            line = f"• {c.table_name} (similarity: {c.similarity:.4f}, rank: {c.rank})"
+            if schema:
+                obj = schema.get_object(c.table_name)
+                if obj:
+                    fields_sample = obj.all_field_paths()[:8]
+                    desc = f" - {obj.description}" if obj.description else ""
+                    line += f"{desc}\n  Fields: {', '.join(fields_sample)}"
+            lines.append(line)
         candidates_context = "\n".join(lines)
+
+        feedback_context = ""
+        if feedback:
+            feedback_context = f"\nATTENTION - PREVIOUS SELECTION FEEDBACK (RETRY):\n{feedback}\n"
 
         template = self._load_prompt_template()
         prompt = template.format(
@@ -63,6 +81,7 @@ class TableSelector:
             objective=", ".join(question_analysis.objective) or "None",
             linguistic=", ".join(question_analysis.nouns) or "None",
             candidates_context=candidates_context,
+            feedback_context=feedback_context,
         )
 
         try:
@@ -74,29 +93,34 @@ class TableSelector:
             data = extract_json_block(raw_response)
             parsed = TableSelectionResult.model_validate(data)
 
-            # Strict validation: must exist in candidate_names and in valid_schema_names
+            # Strict validation: model may only select tables from provided candidates
             validated: list[str] = []
-            candidate_set = {name.lower() for name in candidate_names}
-
             for item in parsed.selected_objects:
                 item_lower = item.strip().lower()
-                if item_lower in candidate_set and item_lower in valid_schema_names:
-                    canonical_name = valid_schema_names[item_lower]
+                if item_lower in candidate_map:
+                    canonical_name = candidate_map[item_lower]
+                    if schema_map and item_lower in schema_map:
+                        canonical_name = schema_map[item_lower]
                     if canonical_name not in validated:
                         validated.append(canonical_name)
                 else:
-                    logger.warning(
-                        "Discarded hallucinated/invalid object from selector: %r", item
-                    )
+                    logger.warning("Discarded hallucinated/non-candidate table: %r", item)
 
-            # If model returned nothing valid but candidates exist and score was high, fallback
-            if not validated and candidates and candidates[0].score > 2.0:
-                validated = [candidates[0].object_name]
-
-            return TableSelectionResult(selected_objects=validated)
+            return TableSelectionResult(
+                selected_objects=validated,
+                sufficient=parsed.sufficient,
+                missing_objects=parsed.missing_objects,
+                reason=parsed.reason,
+                retrieval_hint=parsed.retrieval_hint,
+            )
 
         except Exception as err:
             logger.warning("Table selection SLM call failed: %s. Using top candidate fallback.", err)
-            # Safe fallback: take top BM25 candidate if available
-            fallback = [candidates[0].object_name] if candidates else []
-            return TableSelectionResult(selected_objects=fallback)
+            fallback = [candidates[0].table_name] if candidates else []
+            return TableSelectionResult(
+                selected_objects=fallback,
+                sufficient=True,
+                missing_objects=[],
+                reason=f"Fallback selection due to error: {err}",
+                retrieval_hint=None,
+            )

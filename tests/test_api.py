@@ -24,3 +24,28 @@ def test_schema_endpoint_invalid_db():
     client = TestClient(app)
     response = client.get("/schema/invalid_db")
     assert response.status_code == 400
+
+
+def test_query_endpoint_basic():
+    client = TestClient(app)
+    response = client.post(
+        "/query",
+        json={"database": "postgres", "question": "What database is this?"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["database"] == "postgresql"
+    assert data["basic_answer"] is not None
+
+
+def test_query_endpoint_reject():
+    client = TestClient(app)
+    response = client.post(
+        "/query",
+        json={"database": "postgres", "question": "DROP TABLE customers;"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["guardrail"]["decision"] == "REJECT"
+    assert data["error"] == "Sorry, I can't help with this."
+

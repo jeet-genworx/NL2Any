@@ -142,26 +142,36 @@ if run_btn and question.strip():
     st.divider()
     st.markdown("### 🔍 Pipeline Tracing & Inspection")
 
-    with st.expander("1. Guardrail Classification"):
+    with st.expander("Guardrail"):
         st.json(data.get("guardrail", {}))
 
-    with st.expander("2. Semantic & Linguistic Analysis"):
-        st.markdown("**Semantic Concepts:**")
+    with st.expander("Semantic Analysis"):
         st.json(data.get("semantic_analysis", {}))
-        st.markdown("**spaCy Linguistic Analysis:**")
+
+    with st.expander("Linguistic Analysis"):
         st.json(data.get("linguistic_analysis", {}))
 
-    with st.expander("3. BM25 Candidates & Table Selection"):
-        st.markdown(f"**BM25 Candidates:** `{data.get('candidate_objects', [])}`")
-        st.markdown(f"**SLM Selected Objects:** `{data.get('selected_objects', [])}`")
+    with st.expander("Embedding Retrieval"):
+        candidate_tables = data.get("candidate_tables", [])
+        if candidate_tables:
+            st.markdown("**Embedding Candidates (Cosine Similarity > 0.80, Top 15 max):**")
+            cand_df = pd.DataFrame(candidate_tables)[["rank", "table_name", "similarity"]]
+            cand_df.columns = ["Rank", "Table", "Similarity Score"]
+            st.dataframe(cand_df, hide_index=True, use_container_width=True)
+        else:
+            st.info("No candidate tables retrieved or applicable.")
 
-    with st.expander("4. Relevant Schema & Relationships"):
+    with st.expander("Table Selection"):
+        st.markdown(f"**Selected Tables / Objects:** `{data.get('selected_objects', [])}`")
+        st.markdown(f"**Selection Retries:** {data.get('selection_retries', 0)}")
+
+    with st.expander("Relevant Schema"):
         st.json(data.get("relevant_schema", {}))
 
-    with st.expander("5. Query Plan (Database-Independent)"):
+    with st.expander("Query Plan"):
         st.json(data.get("query_plan", {}))
 
-    with st.expander("6. Generated Query"):
+    with st.expander("Generated Query"):
         gen_q = data.get("generated_query")
         if gen_q:
             if db_choice == "postgres":
@@ -174,9 +184,22 @@ if run_btn and question.strip():
         else:
             st.write("No query generated.")
 
-    with st.expander("7. Validation & Safety Policy"):
-        st.markdown(f"**Generation Attempts:** {data.get('attempts', 1)}")
-        st.markdown("**Validation:**")
-        st.json(data.get("validation", {}))
-        st.markdown("**Read-Only Policy:**")
-        st.json(data.get("policy", {}))
+    with st.expander("Validation"):
+        val_data = data.get("validation", {}) or {}
+        st.markdown(f"**Validation Retries:** {data.get('validation_retries', 0)}")
+        st.markdown(f"**Valid:** `{val_data.get('valid')}`")
+        st.markdown(f"**Error Classification:** `{val_data.get('error_type', 'VALID')}`")
+        if val_data.get("issues"):
+            st.markdown(f"**Issues:** {val_data.get('issues')}")
+        if val_data.get("suggestion"):
+            st.markdown(f"**Suggestion:** {val_data.get('suggestion')}")
+        st.json(val_data)
+
+    with st.expander("Policy"):
+        pol_data = data.get("policy", {}) or {}
+        st.markdown(f"**Allowed:** `{pol_data.get('allowed')}`")
+        st.markdown(f"**Reason:** {pol_data.get('reason', '')}")
+        st.json(pol_data)
+
+    with st.expander("Results"):
+        st.json(data.get("results", {}))

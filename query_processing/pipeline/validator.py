@@ -2,6 +2,7 @@
 
 import logging
 from pathlib import Path
+import re
 import sqlglot
 from sqlglot import exp
 
@@ -11,6 +12,7 @@ from query_processing.models.pipeline import (
     MongoQuery,
     QueryPlan,
     RelevantSchema,
+    ValidationErrorType,
     ValidationResult,
 )
 from query_processing.models.schema import DatabaseType
@@ -21,6 +23,11 @@ from query_processing.providers.model.koboldcpp import KoboldCppProvider
 logger = logging.getLogger(__name__)
 
 DEFAULT_VALIDATOR_PROMPT = Path("query_processing/prompts/validator.txt")
+
+UNSAFE_SQL_PATTERN = re.compile(
+    r"\b(INSERT\s+INTO|UPDATE\s+\w+\s+SET|DELETE\s+FROM|DROP\s+(TABLE|DATABASE|VIEW)|ALTER\s+TABLE|TRUNCATE|CREATE\s+(TABLE|DATABASE)|GRANT\s+|REVOKE\s+)\b",
+    re.IGNORECASE,
+)
 
 
 def validate_sql_schema_references(sql: str, schema: RelevantSchema) -> list[str]:
@@ -78,17 +85,6 @@ def validate_sql_schema_references(sql: str, schema: RelevantSchema) -> list[str
     return issues
 
 
-def validate_mongo_schema_references(query: MongoQuery, schema: RelevantSchema) -> list[str]:
-    """Deterministically verify collection exists in schema for MongoDB."""
-    issues: list[str] = []
-    allowed_collections = schema.get_object_names()
-    if query.collection.lower() not in allowed_collections:
-        issues.append(
-            f"Collection '{query.collection}' does not exist in relevant schema {sorted(allowed_collections)}"
-        )
-    return issues
-
-
 class QueryValidator:
     """Validates generated queries using deterministic AST checks and SLM verification."""
 
@@ -115,23 +111,57 @@ class QueryValidator:
         generated_query: GeneratedQuery,
         schema: RelevantSchema,
     ) -> ValidationResult:
-        """Validate generated query against schema and question."""
-        # 1. Deterministic AST/Schema verification (Refinement 3)
-        deterministic_issues: list[str] = []
+        """Validate generated query against schema and question with classified error types."""
+        # 1. Deterministic fast check for UNSAFE operations
         if generated_query.database_type == DatabaseType.POSTGRESQL:
-            sql_str = str(generated_query.raw_query)
-            deterministic_issues = validate_sql_schema_references(sql_str, schema)
-        elif isinstance(generated_query.raw_query, MongoQuery):
-            deterministic_issues = validate_mongo_schema_references(generated_query.raw_query, schema)
+            sql_str = str(generated_query.raw_query).strip()
+            if not sql_str:
+                return ValidationResult(
+                    valid=False,
+                    error_type=ValidationErrorType.GENERATION_ERROR,
+                    issues=["No SQL query was generated."],
+                    suggestion="Generate a valid read-only PostgreSQL query based on the query plan.",
+                )
 
-        if deterministic_issues:
-            return ValidationResult(
-                valid=False,
-                issues=deterministic_issues,
-                suggestion=f"Correct schema references: {'; '.join(deterministic_issues)}",
-            )
+            if UNSAFE_SQL_PATTERN.search(sql_str):
+                return ValidationResult(
+                    valid=False,
+                    error_type=ValidationErrorType.UNSAFE,
+                    issues=["Unsafe modifying or destructive SQL statement detected."],
+                    suggestion="Queries must be read-only SELECT statements.",
+                )
 
-        # 2. SLM Semantic Validation
+            # 2. Deterministic AST syntax verification
+            try:
+                sqlglot.parse(sql_str, read="postgres")
+            except Exception as syntax_err:
+                return ValidationResult(
+                    valid=False,
+                    error_type=ValidationErrorType.SYNTAX_ERROR,
+                    issues=[f"PostgreSQL syntax error: {syntax_err}"],
+                    suggestion="Correct the PostgreSQL SQL syntax.",
+                )
+
+            # 3. Deterministic schema reference check
+            schema_issues = validate_sql_schema_references(sql_str, schema)
+            if schema_issues:
+                # Check if the plan itself contained invalid sources
+                plan_sources_set = {s.lower() for s in plan.sources}
+                allowed_sources = schema.get_object_names()
+                is_planner_flaw = not plan_sources_set.issubset(allowed_sources)
+                err_type = (
+                    ValidationErrorType.PLANNER_ERROR
+                    if is_planner_flaw
+                    else ValidationErrorType.GENERATION_ERROR
+                )
+                return ValidationResult(
+                    valid=False,
+                    error_type=err_type,
+                    issues=schema_issues,
+                    suggestion=f"Correct schema references: {'; '.join(schema_issues)}",
+                )
+
+        # 4. SLM Semantic Validation
         template = self._load_prompt_template()
         schema_context = _format_relevant_schema_for_planner(schema)
         plan_context = plan.model_dump_json(indent=2)
@@ -151,8 +181,28 @@ class QueryValidator:
                 max_tokens=800,
             )
             data = extract_json_block(raw_response)
+
+            # Map error_type if returned as string
+            raw_err_type = data.get("error_type", "VALID")
+            if not isinstance(raw_err_type, str) or raw_err_type not in ValidationErrorType.__members__:
+                raw_err_type = "VALID" if data.get("valid", True) else "GENERATION_ERROR"
+
+            # Enforce mutual consistency between valid boolean and error_type
+            if raw_err_type != ValidationErrorType.VALID:
+                data["valid"] = False
+            elif not data.get("valid", True):
+                raw_err_type = ValidationErrorType.GENERATION_ERROR
+
+            data["error_type"] = raw_err_type
+
             return ValidationResult.model_validate(data)
+
         except Exception as err:
             logger.warning("Validation SLM call failed: %s. Relying on deterministic check.", err)
-            # If deterministic check passed and SLM call failed, accept with empty issues
-            return ValidationResult(valid=True, issues=[], suggestion=None)
+            # If deterministic checks passed and SLM call failed, accept as valid
+            return ValidationResult(
+                valid=True,
+                error_type=ValidationErrorType.VALID,
+                issues=[],
+                suggestion=None,
+            )

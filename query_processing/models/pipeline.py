@@ -51,10 +51,28 @@ class QuestionAnalysis(BaseModel):
         return " ".join(parts)
 
 
+class CandidateTable(BaseModel):
+    """Candidate table retrieved via cosine similarity."""
+
+    table_name: str
+    similarity: float
+    rank: int
+
+
+class EmbeddingRetrievalResult(BaseModel):
+    """Result of embedding-based candidate retrieval."""
+
+    candidates: list[CandidateTable] = PydanticField(default_factory=list)
+
+
 class TableSelectionResult(BaseModel):
-    """Result of SLM candidate selection."""
+    """Result of Table Selector SLM."""
 
     selected_objects: list[str] = PydanticField(default_factory=list)
+    sufficient: bool = True
+    missing_objects: list[str] = PydanticField(default_factory=list)
+    reason: str = ""
+    retrieval_hint: str | None = None
 
 
 class RelevantSchema(BaseModel):
@@ -134,10 +152,21 @@ class GeneratedQuery(BaseModel):
     formatted_query: str
 
 
+class ValidationErrorType(str, Enum):
+    """Validation error categories for targeted retry routing."""
+
+    VALID = "VALID"
+    SYNTAX_ERROR = "SYNTAX_ERROR"
+    PLANNER_ERROR = "PLANNER_ERROR"
+    UNSAFE = "UNSAFE"
+    GENERATION_ERROR = "GENERATION_ERROR"
+
+
 class ValidationResult(BaseModel):
     """Result of query validation stage."""
 
     valid: bool
+    error_type: ValidationErrorType = ValidationErrorType.VALID
     issues: list[str] = PydanticField(default_factory=list)
     suggestion: str | None = None
 
@@ -169,11 +198,14 @@ class PipelineResponse(BaseModel):
     semantic_analysis: SemanticAnalysisResult | None = None
     linguistic_analysis: dict[str, Any] | None = None
     candidate_objects: list[str] = PydanticField(default_factory=list)
+    candidate_tables: list[CandidateTable] = PydanticField(default_factory=list)
     selected_objects: list[str] = PydanticField(default_factory=list)
     relevant_schema: dict[str, Any] | None = None
     query_plan: QueryPlan | None = None
     generated_query: str | dict[str, Any] | None = None
     attempts: int = 1
+    selection_retries: int = 0
+    validation_retries: int = 0
     validation: ValidationResult | None = None
     policy: PolicyResult | None = None
     results: ExecutionResult | None = None

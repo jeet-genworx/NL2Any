@@ -1,8 +1,8 @@
-"""Deterministic read-only safety policy boundary."""
+from __future__ import annotations
 
 import sqlglot
 from sqlglot import exp
-from query_processing.models.pipeline import GeneratedQuery, MongoQuery, PolicyResult
+from query_processing.models.pipeline import GeneratedQuery, MongoQuery, PolicyResult, RelevantSchema
 from query_processing.models.schema import DatabaseType
 
 PROHIBITED_SQL_EXPRESSIONS = (
@@ -23,15 +23,23 @@ PROHIBITED_SQL_EXPRESSIONS = (
 class SafetyPolicyValidator:
     """Enforces non-negotiable deterministic read-only boundaries."""
 
-    def check(self, query: GeneratedQuery) -> PolicyResult:
-        """Validate that the query is strictly read-only."""
+    def check(
+        self,
+        query: GeneratedQuery,
+        schema: RelevantSchema | None = None,
+    ) -> PolicyResult:
+        """Validate that the query is strictly read-only and references valid schema."""
         if query.database_type == DatabaseType.POSTGRESQL:
-            return self._check_postgres(str(query.raw_query))
+            return self._check_postgres(str(query.raw_query), schema=schema)
         elif query.database_type == DatabaseType.MONGODB:
             return self._check_mongo(query.raw_query)
         return PolicyResult(allowed=False, reason=f"Unsupported database type: {query.database_type}")
 
-    def _check_postgres(self, sql: str) -> PolicyResult:
+    def _check_postgres(
+        self,
+        sql: str,
+        schema: RelevantSchema | None = None,
+    ) -> PolicyResult:
         if not sql or not sql.strip():
             return PolicyResult(allowed=False, reason="Empty SQL query.")
 
@@ -61,13 +69,23 @@ class SafetyPolicyValidator:
 
         # 3. Must be a Select, Union, or CTE Select
         if not isinstance(root, (exp.Select, exp.Union)):
-            # Check if root is a CTE or Expression containing Select
             select_expr = root.find(exp.Select)
             if select_expr is None:
                 return PolicyResult(
                     allowed=False,
                     reason=f"Query does not evaluate to a read-only SELECT (got {type(root).__name__}).",
                 )
+
+        # 4. Deterministic schema reference check (if schema provided)
+        if schema is not None:
+            allowed_tables = schema.get_object_names()
+            for table_exp in root.find_all(exp.Table):
+                t_name = table_exp.name.lower()
+                if t_name and t_name not in allowed_tables:
+                    return PolicyResult(
+                        allowed=False,
+                        reason=f"Prohibited: table '{t_name}' does not exist in relevant schema {sorted(allowed_tables)}.",
+                    )
 
         return PolicyResult(allowed=True, reason="Query verified read-only SELECT.")
 
