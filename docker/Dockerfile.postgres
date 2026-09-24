@@ -1,0 +1,13 @@
+# Dockerfile for PostgreSQL (NL2AnyQuery POC)
+FROM postgres:17-alpine
+
+# Set default environment variables (can be overridden at runtime or in docker-compose)
+ENV POSTGRES_DB=nl2anyquery_db \
+    POSTGRES_USER=nl2user \
+    POSTGRES_PASSWORD=nl2password
+
+# Healthcheck to verify PostgreSQL is accepting connections
+HEALTHCHECK --interval=5s --timeout=5s --retries=5 \
+    CMD pg_isready -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" || exit 1
+
+EXPOSE 5432

@@ -204,7 +204,7 @@ uv sync --extra dev
 ```
 
 ### 2. Configure Environment Variables
-Copy `.env.example` to `.env` and fill in your local connection parameters:
+Copy `.env.example` to `.env` and fill in your connection parameters:
 ```bash
 cp .env.example .env
 ```
@@ -213,6 +213,8 @@ Example `.env`:
 KOBOLDCPP_BASE_URL=http://127.0.0.1:5001/v1
 KOBOLDCPP_MODEL=qwen3-4b-instruct-2507
 
+# Local Postgres: postgresql://username:password@localhost:5432/dbname
+# Docker Postgres: postgresql://nl2user:nl2password@localhost:5432/nl2anyquery_db
 POSTGRES_DSN=postgresql://username:password@localhost:5432/dbname
 MONGODB_URI=mongodb://localhost:27017
 MONGODB_DATABASE=nl2anyquery_demo
@@ -223,6 +225,31 @@ MODEL_MAX_TOKENS=1500
 QUERY_TIMEOUT_SECONDS=10
 MAX_RESULT_ROWS=1000
 ```
+
+### Optional: Running PostgreSQL via Docker
+Instead of running a local PostgreSQL installation, you can use the included `docker/Dockerfile.postgres` and `docker-compose.yml`:
+
+1. **Start the PostgreSQL container**:
+   ```bash
+   docker compose up -d
+   ```
+   *(Note: If your local PostgreSQL is already listening on port 5432, stop local Postgres via `brew services stop postgresql` or change the port mapping in `docker-compose.yml` to `"5433:5432"`).*
+
+2. **Update `.env`**:
+   ```text
+   POSTGRES_DSN=postgresql://nl2user:nl2password@localhost:5432/nl2anyquery_db
+   ```
+   *(Or port `5433` if you mapped to `5433:5432`).*
+
+3. **Check container status**:
+   ```bash
+   docker compose ps
+   ```
+
+4. **Stop container when done**:
+   ```bash
+   docker compose down
+   ```
 
 ### 3. Seed Databases
 Populate realistic, repeatable synthetic relational and document datasets:

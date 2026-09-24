@@ -3,6 +3,7 @@
 import json
 import logging
 from pathlib import Path
+from nl2anyquery.core.config import settings
 from nl2anyquery.core.text_utils import extract_json_block
 from nl2anyquery.models.pipeline import GeneratedQuery, MongoQuery, QueryPlan, RelevantSchema
 from nl2anyquery.models.schema import DatabaseType
@@ -64,7 +65,7 @@ class MongoQueryGenerator(QueryGenerator):
         raw_response = await self.provider.generate(
             prompt=prompt,
             temperature=0.1,
-            max_tokens=600,
+            max_tokens=settings.model_max_tokens,
         )
 
         data = extract_json_block(raw_response)
