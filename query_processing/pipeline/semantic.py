@@ -40,7 +40,7 @@ class SemanticAnalyzer:
             raw_response = await self.provider.generate(
                 prompt=prompt,
                 temperature=0.1,
-                max_tokens=800,
+                max_tokens=1200,
             )
             data = extract_json_block(raw_response)
             return SemanticAnalysisResult.model_validate(data)
