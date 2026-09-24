@@ -28,6 +28,53 @@ with st.sidebar:
     api_url = st.text_input("FastAPI Backend URL", value=API_BASE_URL)
 
     st.divider()
+    st.markdown("### Database Ingestion")
+    use_mst = st.checkbox(
+        "Use MST for contextual table grouping",
+        value=True,
+        help=(
+            "On: tables are described in minimum-spanning-tree order, with only "
+            "the reduced (cycle-free) relationships as context. Off: tables are "
+            "described straight from the full schema graph instead. MongoDB "
+            "always uses the graph, since it has no foreign keys."
+        ),
+    )
+    ingest_btn = st.button(
+        "⚙️ Initialize Database",
+        use_container_width=True,
+        help="Extract metadata → build schema graph/MST → generate SLM table descriptions → embed them.",
+    )
+
+    if ingest_btn:
+        with st.spinner(f"Running ingestion pipeline for {db_choice}... this can take a minute."):
+            try:
+                ingest_resp = httpx.post(
+                    f"{api_url}/ingest/{db_choice}",
+                    params={"use_mst": use_mst},
+                    timeout=300.0,
+                )
+                ingest_resp.raise_for_status()
+                ingest_data = ingest_resp.json()
+                st.success(
+                    f"Ingested {ingest_data['table_count']} tables → "
+                    f"{ingest_data['description_count']} descriptions → "
+                    f"{ingest_data['embedding_count']} embeddings "
+                    f"({ingest_data['embedding_dimensions']}-dim, "
+                    f"MST used: {ingest_data['used_mst']})."
+                )
+                with st.expander("Ingestion details"):
+                    st.json(ingest_data)
+            except httpx.ConnectError:
+                st.error(
+                    f"Could not connect to FastAPI backend at {api_url}. "
+                    "Please make sure it is running via `uv run run-api`."
+                )
+            except httpx.HTTPStatusError as err:
+                st.error(f"Ingestion failed: {err.response.json().get('detail', err.response.text)}")
+            except Exception as err:
+                st.error(f"Ingestion failed: {err}")
+
+    st.divider()
     st.markdown("### Example Questions")
     if db_choice == "postgres":
         sample_questions = [

@@ -1,7 +1,6 @@
 """Deterministic database type detection based on connection URI scheme."""
 
 import re
-from urllib.parse import urlparse
 from query_processing.models.schema import DatabaseType
 
 
@@ -34,5 +33,5 @@ def detect_database_type(connection_string: str) -> DatabaseType:
         return DatabaseType.MONGODB
     else:
         raise ValueError(
-            f"Unsupported database scheme: '{scheme}'. Only PostgreSQL and MongoDB are supported in Part 1."
+            f"Unsupported database scheme: '{scheme}'. Only PostgreSQL and MongoDB are supported."
         )

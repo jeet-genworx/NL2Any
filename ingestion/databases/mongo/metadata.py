@@ -1,4 +1,9 @@
-"""Deterministic MongoDB schema and metadata extraction."""
+"""Universal, deterministic MongoDB metadata extraction.
+
+MongoDB has no fixed schema, so field names/types are inferred by sampling the
+first N documents of each collection and observing what's actually there.
+Makes no assumptions about collection names, field names, or field content.
+"""
 
 from datetime import datetime, timezone
 from typing import Any
@@ -12,39 +17,6 @@ from query_processing.models.schema import (
     SchemaObject,
     SchemaObjectKind,
 )
-
-SAFE_CATEGORICAL_KEYWORDS = {
-    "status",
-    "category",
-    "priority",
-    "city",
-    "state",
-    "country",
-    "role",
-    "department",
-    "type",
-    "kind",
-    "gender",
-}
-
-SENSITIVE_KEYWORDS = {
-    "password",
-    "secret",
-    "token",
-    "key",
-    "auth",
-    "hash",
-    "credential",
-    "salt",
-    "email",
-    "phone",
-    "ssn",
-    "address",
-    "card",
-    "cvv",
-    "birth",
-    "salary",
-}
 
 
 def _infer_type_name(val: Any) -> str:
@@ -82,21 +54,15 @@ def _infer_type_name(val: Any) -> str:
 
 
 class MongoDBMetadataExtractor:
-    """Extracts collections, nested field paths, observed types, and safe sample values from MongoDB."""
+    """Extracts every collection's field names, types, and nesting from sampled documents."""
 
-    def __init__(self, db: Database[dict[str, Any]], sample_limit: int = 20) -> None:
+    def __init__(self, db: Database[dict[str, Any]], sample_limit: int = 10) -> None:
         self.db = db
         self.sample_limit = sample_limit
 
-    def _is_safe_for_sampling(self, field_name: str) -> bool:
-        lower = field_name.lower()
-        if any(sens in lower for sens in SENSITIVE_KEYWORDS):
-            return False
-        return any(safe in lower for safe in SAFE_CATEGORICAL_KEYWORDS)
-
     def _extract_fields_from_docs(self, docs: list[dict[str, Any]]) -> list[Field]:
         """Infer field structure and nested paths from sampled documents."""
-        # Key -> (observed_types: set, sample_values: list, nested_docs: list)
+        # Key -> (observed_types: set, nested_docs: list)
         fields_map: dict[str, dict[str, Any]] = {}
 
         for doc in docs:
@@ -114,7 +80,6 @@ class MongoDBMetadataExtractor:
                     name=name,
                     type=types_str,
                     nullable=info["nullable"],
-                    sample_values=list(info["sample_values"])[:4],
                     nested=nested_fields,
                 )
             )
@@ -131,7 +96,6 @@ class MongoDBMetadataExtractor:
                 fields_map[k] = {
                     "types": set(),
                     "nullable": False,
-                    "sample_values": set(),
                     "nested_docs": [],
                 }
 
@@ -148,12 +112,9 @@ class MongoDBMetadataExtractor:
                 dict_items = [elem for elem in v if isinstance(elem, dict)]
                 if dict_items:
                     fields_map[k]["nested_docs"].extend(dict_items)
-            elif self._is_safe_for_sampling(k) and isinstance(v, (str, int, float, bool)):
-                if len(fields_map[k]["sample_values"]) < 4:
-                    fields_map[k]["sample_values"].add(str(v))
 
     def extract_schema(self) -> DatabaseSchema:
-        """Extract authoritative MongoDB schema metadata."""
+        """Extract every collection's schema from the first `sample_limit` documents."""
         collection_names = [
             c for c in self.db.list_collection_names()
             if not c.startswith("system.")

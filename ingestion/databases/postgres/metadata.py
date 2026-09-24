@@ -1,4 +1,8 @@
-"""Deterministic PostgreSQL metadata extraction."""
+"""Universal, deterministic PostgreSQL metadata extraction.
+
+Extracts every table and column reachable via the connection's information_schema.
+Makes no assumptions about schema names, table names, or column names/content.
+"""
 
 from datetime import datetime, timezone
 from typing import Any
@@ -13,117 +17,58 @@ from query_processing.models.schema import (
     SchemaObjectKind,
 )
 
-SAFE_CATEGORICAL_KEYWORDS = {
-    "status",
-    "category",
-    "priority",
-    "city",
-    "state",
-    "country",
-    "role",
-    "department",
-    "type",
-    "kind",
-    "gender",
-}
-
-SENSITIVE_KEYWORDS = {
-    "password",
-    "secret",
-    "token",
-    "key",
-    "auth",
-    "hash",
-    "credential",
-    "salt",
-    "email",
-    "phone",
-    "ssn",
-    "address",
-    "card",
-    "cvv",
-    "birth",
-    "salary",
-}
+# Built-in schemas that ship with every PostgreSQL installation; never user data.
+SYSTEM_SCHEMAS = ("pg_catalog", "information_schema", "pg_toast")
 
 
 class PostgreSQLMetadataExtractor:
-    """Extracts tables, columns, primary keys, foreign keys, and safe sample values from PostgreSQL."""
+    """Extracts every table and column visible to the connection, with foreign keys."""
 
     def __init__(self, connection: psycopg.Connection[Any]) -> None:
         self.conn = connection
 
-    def _is_safe_for_sampling(self, column_name: str, data_type: str) -> bool:
-        col_lower = column_name.lower()
-        # Strictly exclude sensitive fields
-        if any(sens in col_lower for sens in SENSITIVE_KEYWORDS):
-            return False
-
-        # Only sample safe categorical string/enum-like fields
-        is_string_type = any(
-            t in data_type.lower()
-            for t in ("character", "text", "varchar", "enum")
-        )
-        if not is_string_type:
-            return False
-
-        return any(safe in col_lower for safe in SAFE_CATEGORICAL_KEYWORDS)
-
-    def _fetch_sample_values(self, table_name: str, column_name: str) -> list[Any]:
-        try:
-            # Safe bounded query
-            query = f'SELECT DISTINCT "{column_name}" FROM "{table_name}" WHERE "{column_name}" IS NOT NULL LIMIT 4;'
-            with self.conn.cursor() as cur:
-                cur.execute(query)
-                rows = cur.fetchall()
-                return [str(r[0]) for r in rows if r[0] is not None]
-        except Exception:
-            return []
-
     def extract_schema(self) -> DatabaseSchema:
-        """Extract authoritative PostgreSQL schema metadata."""
+        """Extract all tables and columns from every non-system schema."""
         with self.conn.cursor() as cur:
-            # 1. Database name
             cur.execute("SELECT current_database();")
             db_name_row = cur.fetchone()
             db_name = db_name_row[0] if db_name_row else "postgres"
 
-            # 2. Tables in public schema
-            cur.execute("""
-                SELECT table_name
+            cur.execute(
+                """
+                SELECT table_schema, table_name
                 FROM information_schema.tables
-                WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
-                ORDER BY table_name;
-            """)
-            table_names = [row[0] for row in cur.fetchall()]
+                WHERE table_schema != ALL(%s) AND table_type = 'BASE TABLE'
+                ORDER BY table_schema, table_name;
+                """,
+                (list(SYSTEM_SCHEMAS),),
+            )
+            tables = cur.fetchall()
+            table_names = [row[1] for row in tables]
 
-            # 3. Columns
-            cur.execute("""
-                SELECT table_name, column_name, data_type, is_nullable
+            cur.execute(
+                """
+                SELECT table_schema, table_name, column_name, data_type, is_nullable
                 FROM information_schema.columns
-                WHERE table_schema = 'public'
-                ORDER BY table_name, ordinal_position;
-            """)
+                WHERE table_schema != ALL(%s)
+                ORDER BY table_schema, table_name, ordinal_position;
+                """,
+                (list(SYSTEM_SCHEMAS),),
+            )
             columns_by_table: dict[str, list[Field]] = {tbl: [] for tbl in table_names}
-            for tbl, col_name, data_type, is_nullable in cur.fetchall():
+            for _schema, tbl, col_name, data_type, is_nullable in cur.fetchall():
                 if tbl not in columns_by_table:
                     continue
-
-                sample_vals = []
-                if self._is_safe_for_sampling(col_name, data_type):
-                    sample_vals = self._fetch_sample_values(tbl, col_name)
-
                 columns_by_table[tbl].append(
                     Field(
                         name=col_name,
                         type=data_type,
                         nullable=(is_nullable == "YES"),
-                        sample_values=sample_vals,
                     )
                 )
 
-            # 4. Foreign Key Relationships
-            cur.execute("""
+            cur.execute(
+                """
                 SELECT
                     kcu.table_name AS from_table,
                     kcu.column_name AS from_column,
@@ -135,12 +80,16 @@ class PostgreSQLMetadataExtractor:
                   AND tc.table_schema = kcu.table_schema
                 JOIN information_schema.referential_constraints rc
                   ON tc.constraint_name = rc.constraint_name
+                  AND tc.table_schema = rc.constraint_schema
                 JOIN information_schema.constraint_column_usage ccu
                   ON rc.unique_constraint_name = ccu.constraint_name
-                WHERE tc.table_schema = 'public'
+                  AND rc.unique_constraint_schema = ccu.table_schema
+                WHERE tc.table_schema != ALL(%s)
                   AND tc.constraint_type = 'FOREIGN KEY'
                 ORDER BY kcu.table_name, kcu.column_name;
-            """)
+                """,
+                (list(SYSTEM_SCHEMAS),),
+            )
             relationships: list[Relationship] = []
             for from_tbl, from_col, to_tbl, to_col in cur.fetchall():
                 if from_tbl in columns_by_table and to_tbl in columns_by_table:

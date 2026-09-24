@@ -9,6 +9,7 @@ from query_processing.models.schema import DatabaseType
 from query_processing.pipeline.orchestrator import NL2AnyQueryOrchestrator
 from ingestion.schema.manager import get_default_schema_path
 from ingestion.schema.toml_store import load_schema_file
+from ingestion.pipeline import run_ingestion_pipeline
 
 app = FastAPI(
     title="NL2AnyQuery API",
@@ -24,10 +25,36 @@ class QueryRequest(BaseModel):
     question: str = Field(..., description="Natural language question to query")
 
 
+def _resolve_db_type(database_type: str) -> DatabaseType:
+    db_clean = database_type.lower()
+    if db_clean in ("postgres", "postgresql"):
+        return DatabaseType.POSTGRESQL
+    elif db_clean in ("mongo", "mongodb"):
+        return DatabaseType.MONGODB
+    raise HTTPException(
+        status_code=400,
+        detail=f"Unsupported database '{database_type}'. Use 'postgres' or 'mongo'.",
+    )
+
+
 @app.get("/health")
 def health_check() -> dict[str, str]:
     """Health check endpoint."""
     return {"status": "ok", "version": "0.2.0"}
+
+
+@app.post("/ingest/{database_type}")
+async def ingest_endpoint(database_type: str, use_mst: bool = True) -> dict[str, Any]:
+    """Run the full ingestion pipeline for a database."""
+    db_type = _resolve_db_type(database_type)
+    try:
+        return await run_ingestion_pipeline(db_type, use_mst=use_mst)
+    except FileNotFoundError as err:
+        raise HTTPException(status_code=404, detail=str(err))
+    except ConnectionError as err:
+        raise HTTPException(status_code=502, detail=str(err))
+    except Exception as err:
+        raise HTTPException(status_code=500, detail=str(err))
 
 
 @app.post("/query", response_model=PipelineResponse)
@@ -46,16 +73,7 @@ async def query_endpoint(request: QueryRequest) -> PipelineResponse:
 @app.get("/schema/{database_type}")
 def get_schema_endpoint(database_type: str) -> dict[str, Any]:
     """Retrieve canonical semantic schema information."""
-    db_clean = database_type.lower()
-    if db_clean in ("postgres", "postgresql"):
-        db_type = DatabaseType.POSTGRESQL
-    elif db_clean in ("mongo", "mongodb"):
-        db_type = DatabaseType.MONGODB
-    else:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Unsupported database '{database_type}'. Use 'postgres' or 'mongo'.",
-        )
+    db_type = _resolve_db_type(database_type)
 
     schema_path = get_default_schema_path(db_type)
     if not schema_path.exists():

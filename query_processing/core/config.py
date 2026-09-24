@@ -17,6 +17,11 @@ class Settings(BaseSettings):
         alias="KOBOLDCPP_MODEL",
         description="KoboldCpp model identifier",
     )
+    koboldcpp_embedding_model: str = Field(
+        default="all-MiniLM-L6-v2-Q8_0",
+        alias="KOBOLDCPP_EMBEDDING_MODEL",
+        description="KoboldCpp embedding model identifier (loaded via --embeddingsmodel)",
+    )
 
     postgres_dsn: str = Field(
         default="",
@@ -32,6 +37,11 @@ class Settings(BaseSettings):
         default="nl2anyquery_demo",
         alias="MONGODB_DATABASE",
         description="MongoDB database name",
+    )
+    mongo_sample_limit: int = Field(
+        default=10,
+        alias="MONGO_SAMPLE_LIMIT",
+        description="Number of documents sampled per collection during MongoDB metadata extraction",
     )
 
     bm25_top_k: int = Field(

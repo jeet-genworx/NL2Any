@@ -34,7 +34,7 @@ class MongoDBAdapter(DatabaseAdapter):
         """Extract authoritative MongoDB schema metadata."""
         client = self._get_client()
         db = client[self.database_name]
-        extractor = MongoDBMetadataExtractor(db)
+        extractor = MongoDBMetadataExtractor(db, sample_limit=settings.mongo_sample_limit)
         return extractor.extract_schema()
 
     def close(self) -> None:

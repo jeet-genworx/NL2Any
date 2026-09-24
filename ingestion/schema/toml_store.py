@@ -1,6 +1,5 @@
 """TOML storage and serialization for DatabaseSchema."""
 
-import os
 from pathlib import Path
 import tomllib
 from typing import Any
