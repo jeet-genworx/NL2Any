@@ -6,13 +6,27 @@ from pathlib import Path
 import sys
 
 from query_processing.core.config import settings
-from ingestion.databases.mongo.adapter import MongoDBAdapter
-from ingestion.databases.postgres.adapter import PostgreSQLAdapter
 from query_processing.models.schema import DatabaseType
 from query_processing.nlp.linguistic import LinguisticAnalyzer
 from query_processing.providers.model.koboldcpp import KoboldCppProvider
-from query_processing.retrieval.bm25 import BM25Retriever
-from ingestion.schema.manager import SchemaManager, get_default_schema_path
+from query_processing.retrieval.semantic import SemanticRetriever
+from ingestion.schema.manager import get_default_schema_path
+from ingestion.schema.toml_store import load_schema_file
+from ingestion.schema.graph import get_default_graph_path
+from ingestion.schema.mst import get_default_mst_path
+from ingestion.schema.describe import (
+    describe_tables,
+    get_default_descriptions_path,
+    save_descriptions,
+)
+from ingestion.schema.embed import (
+    embed_descriptions,
+    get_default_embeddings_path,
+    load_descriptions,
+    load_embeddings,
+    save_embeddings,
+)
+from ingestion.pipeline import extract_and_save_schema, run_ingestion_pipeline
 
 
 def seed_postgres_cli() -> None:
@@ -51,7 +65,9 @@ def test_model_cli() -> None:
 
 
 def init_schema_cli() -> None:
-    """CLI handler for init-schema."""
+    """CLI handler for init-schema: extracts authoritative metadata via a database
+    adapter and writes the canonical schema TOML, graph TOML, and (Postgres
+    only) MST TOML consumed by query processing and by describe-schema."""
     parser = argparse.ArgumentParser(description="Initialize database schema TOML.")
     parser.add_argument(
         "--database",
@@ -60,65 +76,210 @@ def init_schema_cli() -> None:
         required=True,
         help="Target database type",
     )
+    args = parser.parse_args()
+
+    db_arg = args.database.lower()
+    db_type = DatabaseType.POSTGRESQL if db_arg in ("postgres", "postgresql") else DatabaseType.MONGODB
+
+    print(f"Extracting authoritative metadata for {db_type.value}...")
+    schema, schema_path, graph_path, mst_path = extract_and_save_schema(db_type)
+
+    print(f"\nGenerated schema saved to: {schema_path}")
+    print(f"Generated graph saved to: {graph_path}")
+    if mst_path:
+        print(f"Generated minimum spanning tree saved to: {mst_path}")
+    else:
+        print("Skipping MST (MongoDB has no foreign-key relationships to reduce).")
+
+    print(f"Total objects: {len(schema.objects)}")
+    for obj in schema.objects:
+        print(f"  [{obj.kind.value}] {obj.name} ({len(obj.fields)} fields)")
+    print(f"Total relationships: {len(schema.relationships)}")
+
+
+def describe_schema_cli() -> None:
+    """CLI handler for describe-schema: generates an SLM description for each
+    table, processed in batches of connected tables so related tables are
+    described with relationship context, and saves the results as a flat
+    JSON table_name -> description mapping. Requires a running KoboldCpp
+    instance. Run init-schema first."""
+    parser = argparse.ArgumentParser(
+        description="Generate per-table descriptions via the SLM, from the schema graph/MST."
+    )
+    parser.add_argument(
+        "--database",
+        "-d",
+        choices=["postgres", "postgresql", "mongo", "mongodb"],
+        default="postgres",
+        help="Target database type",
+    )
+    parser.add_argument(
+        "--use-mst",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Use the MST (tree order, reduced edges) instead of the plain graph "
+        "(extraction order, full edge set). Ignored for MongoDB, which has no MST.",
+    )
     parser.add_argument(
         "--output",
         "-o",
         type=str,
         default=None,
-        help="Output TOML file path (defaults to ingestion/schemas/<db>.toml)",
-    )
-    parser.add_argument(
-        "--describe",
-        action="store_true",
-        help="Enrich schema with descriptions via KoboldCpp SLM",
-    )
-    parser.add_argument(
-        "--refresh",
-        action="store_true",
-        help="Force regeneration of existing descriptions",
+        help="Output JSON file path (defaults to ingestion/schemas/<db>_descriptions.json)",
     )
     args = parser.parse_args()
 
+    db_type = (
+        DatabaseType.POSTGRESQL if args.database.lower() in ("postgres", "postgresql") else DatabaseType.MONGODB
+    )
+    use_mst = args.use_mst and db_type == DatabaseType.POSTGRESQL
+    source_path = get_default_mst_path(db_type) if use_mst else get_default_graph_path(db_type)
+    out_path = Path(args.output) if args.output else get_default_descriptions_path(db_type)
+
     async def _run() -> None:
-        db_arg = args.database.lower()
-        if db_arg in ("postgres", "postgresql"):
-            db_type = DatabaseType.POSTGRESQL
-            adapter = PostgreSQLAdapter(dsn=settings.postgres_dsn)
-        else:
-            db_type = DatabaseType.MONGODB
-            adapter = MongoDBAdapter(uri=settings.mongodb_uri, database=settings.mongodb_database)
+        print(f"Reading {'MST' if use_mst else 'graph'} from: {source_path}")
+        print(f"Connecting to KoboldCpp at: {settings.koboldcpp_base_url}")
+        try:
+            descriptions = await describe_tables(source_path)
+        except FileNotFoundError as err:
+            print(str(err), file=sys.stderr)
+            sys.exit(1)
+        except ConnectionError as err:
+            print(f"Error connecting to KoboldCpp: {err}", file=sys.stderr)
+            sys.exit(1)
 
-        out_path = Path(args.output) if args.output else get_default_schema_path(db_type)
-        print(f"Extracting authoritative metadata for {db_type.value}...")
-        manager = SchemaManager()
+        save_descriptions(descriptions, out_path)
 
-        with adapter:
-            schema = await manager.initialize_schema(
-                adapter=adapter,
-                output_path=out_path,
-                describe_with_slm=args.describe,
-                refresh=args.refresh,
-            )
-
-        print(f"\nGenerated schema saved to: {out_path}")
-        print(f"Total objects: {len(schema.objects)}")
-        for obj in schema.objects:
-            desc_preview = f" - '{obj.description}'" if obj.description else " (no description)"
-            print(f"  [{obj.kind.value}] {obj.name} ({len(obj.fields)} fields){desc_preview}")
-        print(f"Total relationships: {len(schema.relationships)}")
+        print(f"\nGenerated {len(descriptions)} table descriptions, saved to: {out_path}")
+        for table_name, description in descriptions.items():
+            print(f"  {table_name}: {description}")
 
     asyncio.run(_run())
 
 
-def test_bm25_cli() -> None:
-    """CLI handler for test-bm25: test BM25 schema retrieval against a TOML schema."""
-    parser = argparse.ArgumentParser(description="Test BM25 schema retrieval.")
+def embed_schema_cli() -> None:
+    """CLI handler for embed-schema: embeds each table's description (from
+    describe-schema's output) via the local MiniLM embedding model served by
+    KoboldCpp's --embeddingsmodel endpoint, and saves table_name -> vector
+    as a JSON file. Requires a running KoboldCpp instance with an embeddings
+    model loaded."""
+    parser = argparse.ArgumentParser(
+        description="Embed per-table descriptions via the local embedding model."
+    )
+    parser.add_argument(
+        "--database",
+        "-d",
+        choices=["postgres", "postgresql", "mongo", "mongodb"],
+        default="postgres",
+        help="Target database type",
+    )
+    parser.add_argument(
+        "--descriptions-file",
+        type=str,
+        default=None,
+        help="Custom path to the descriptions JSON file (defaults to ingestion/schemas/<db>_descriptions.json)",
+    )
+    parser.add_argument(
+        "--output",
+        "-o",
+        type=str,
+        default=None,
+        help="Output JSON file path (defaults to settings.postgres_embeddings_path for postgres, "
+        "query_processing/embeddings/mongo_embeddings.json for mongo)",
+    )
+    args = parser.parse_args()
+
+    db_type = (
+        DatabaseType.POSTGRESQL if args.database.lower() in ("postgres", "postgresql") else DatabaseType.MONGODB
+    )
+    descriptions_path = (
+        Path(args.descriptions_file) if args.descriptions_file else get_default_descriptions_path(db_type)
+    )
+    out_path = Path(args.output) if args.output else get_default_embeddings_path(db_type)
+
+    async def _run() -> None:
+        print(f"Reading descriptions from: {descriptions_path}")
+        try:
+            descriptions = load_descriptions(descriptions_path)
+        except FileNotFoundError as err:
+            print(str(err), file=sys.stderr)
+            sys.exit(1)
+
+        print(f"Embedding {len(descriptions)} table descriptions via: {settings.koboldcpp_embedding_model}")
+        print(f"Connecting to KoboldCpp at: {settings.koboldcpp_base_url}")
+        try:
+            embeddings = await embed_descriptions(descriptions)
+        except ConnectionError as err:
+            print(f"Error connecting to KoboldCpp: {err}", file=sys.stderr)
+            sys.exit(1)
+
+        save_embeddings(embeddings, out_path)
+
+        dims = len(next(iter(embeddings.values()))) if embeddings else 0
+        print(f"\nGenerated {len(embeddings)} table embeddings ({dims} dimensions each), saved to: {out_path}")
+
+    asyncio.run(_run())
+
+
+def ingest_schema_cli() -> None:
+    """CLI handler for ingest-schema: runs the full ingestion flow in one
+    shot (metadata -> graph/MST -> SLM descriptions -> embeddings) -- the
+    same pipeline the API's /ingest/{database} endpoint runs when a user
+    selects a database in the frontend. Requires a running KoboldCpp
+    instance with an embeddings model loaded."""
+    parser = argparse.ArgumentParser(description="Run the full ingestion pipeline for a database.")
+    parser.add_argument(
+        "--database",
+        "-d",
+        choices=["postgres", "postgresql", "mongo", "mongodb"],
+        required=True,
+        help="Target database type",
+    )
+    parser.add_argument(
+        "--use-mst",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Use the MST for contextual table grouping instead of the plain graph. "
+        "Ignored for MongoDB, which has no MST.",
+    )
+    args = parser.parse_args()
+
+    db_type = (
+        DatabaseType.POSTGRESQL if args.database.lower() in ("postgres", "postgresql") else DatabaseType.MONGODB
+    )
+
+    async def _run() -> None:
+        print(f"Running full ingestion pipeline for {db_type.value}...")
+        try:
+            summary = await run_ingestion_pipeline(db_type, use_mst=args.use_mst)
+        except ConnectionError as err:
+            print(f"Error connecting to KoboldCpp: {err}", file=sys.stderr)
+            sys.exit(1)
+
+        print(f"\nDatabase: {summary['database_name']} ({summary['table_count']} tables, "
+              f"{summary['relationship_count']} relationships)")
+        print(f"Used MST for description grouping: {summary['used_mst']}")
+        print(f"Descriptions: {summary['description_count']} -> {summary['descriptions_path']}")
+        print(
+            f"Embeddings: {summary['embedding_count']} "
+            f"({summary['embedding_dimensions']} dimensions each) -> {summary['embeddings_path']}"
+        )
+
+    asyncio.run(_run())
+
+
+def test_retrieval_cli() -> None:
+    """CLI handler for test-retrieval: test semantic schema retrieval against
+    a TOML schema and its embeddings JSON. Requires a running KoboldCpp
+    instance with an embeddings model loaded, and that 'ingest-schema' (or
+    'describe-schema' + 'embed-schema') has already been run for this database."""
+    parser = argparse.ArgumentParser(description="Test semantic schema retrieval.")
     parser.add_argument(
         "--query",
         "-q",
         type=str,
         required=True,
-        help="Natural language or keyword query",
+        help="Natural language query",
     )
     parser.add_argument(
         "--database",
@@ -135,6 +296,12 @@ def test_bm25_cli() -> None:
         help="Custom path to schema TOML file",
     )
     parser.add_argument(
+        "--embeddings-file",
+        type=str,
+        default=None,
+        help="Custom path to embeddings JSON file",
+    )
+    parser.add_argument(
         "--top-k",
         "-k",
         type=int,
@@ -149,6 +316,9 @@ def test_bm25_cli() -> None:
         else DatabaseType.MONGODB
     )
     schema_path = Path(args.schema_file) if args.schema_file else get_default_schema_path(db_type)
+    embeddings_path = (
+        Path(args.embeddings_file) if args.embeddings_file else get_default_embeddings_path(db_type)
+    )
 
     if not schema_path.exists():
         print(
@@ -158,17 +328,31 @@ def test_bm25_cli() -> None:
         )
         sys.exit(1)
 
-    retriever = BM25Retriever.from_toml_file(schema_path)
-    results = retriever.retrieve(args.query, top_k=args.top_k)
+    async def _run() -> None:
+        try:
+            embeddings = load_embeddings(embeddings_path)
+        except FileNotFoundError as err:
+            print(str(err), file=sys.stderr)
+            sys.exit(1)
 
-    print(f"\nBM25 Query: {args.query!r}")
-    print(f"Schema Source: {schema_path}")
-    print(f"Top matches ({len(results)}):\n" + "-" * 40)
-    for r in results:
-        field_count = len(r.schema_object.fields)
-        print(f"• [{r.score:.4f}] {r.object_name} ({r.schema_object.kind.value}, {field_count} fields)")
-        if r.schema_object.description:
-            print(f"    Description: {r.schema_object.description}")
+        schema = load_schema_file(schema_path)
+        retriever = SemanticRetriever(schema, embeddings)
+        try:
+            results = await retriever.retrieve(args.query, top_k=args.top_k)
+        except ConnectionError as err:
+            print(f"Error connecting to KoboldCpp: {err}", file=sys.stderr)
+            sys.exit(1)
+
+        print(f"\nQuery: {args.query!r}")
+        print(f"Schema Source: {schema_path}")
+        print(f"Top matches ({len(results)}):\n" + "-" * 40)
+        for r in results:
+            field_count = len(r.schema_object.fields)
+            print(f"• [{r.score:.4f}] {r.object_name} ({r.schema_object.kind.value}, {field_count} fields)")
+            if r.schema_object.description:
+                print(f"    Description: {r.schema_object.description}")
+
+    asyncio.run(_run())
 
 
 def test_nlp_cli() -> None:

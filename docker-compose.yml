@@ -48,6 +48,9 @@ services:
       POSTGRES_DSN: postgresql://nl2user:nl2password@postgres:5432/nl2anyquery_db
       MONGODB_URI: mongodb://mongo:27017
       MONGODB_DATABASE: nl2anyquery_demo
+      MONGO_SAMPLE_LIMIT: ${MONGO_SAMPLE_LIMIT:-10}
+    volumes:
+      - schema_data:/app/ingestion/schemas
     entrypoint: ["sh", "docker/seed.sh"]
     restart: "no"
 
@@ -70,14 +73,17 @@ services:
       MONGODB_DATABASE: nl2anyquery_demo
       KOBOLDCPP_BASE_URL: ${KOBOLDCPP_BASE_URL:-http://host.docker.internal:5001/v1}
       KOBOLDCPP_MODEL: ${KOBOLDCPP_MODEL:-qwen3-4b-instruct-2507}
-      BM25_TOP_K: ${BM25_TOP_K:-10}
+      KOBOLDCPP_EMBEDDING_MODEL: ${KOBOLDCPP_EMBEDDING_MODEL:-all-MiniLM-L6-v2-Q8_0}
+      RETRIEVAL_TOP_K: ${RETRIEVAL_TOP_K:-10}
       MODEL_TEMPERATURE: ${MODEL_TEMPERATURE:-0.1}
       MODEL_MAX_TOKENS: ${MODEL_MAX_TOKENS:-1500}
       QUERY_TIMEOUT_SECONDS: ${QUERY_TIMEOUT_SECONDS:-10}
       MAX_RESULT_ROWS: ${MAX_RESULT_ROWS:-1000}
-      SIMILARITY_THRESHOLD: ${SIMILARITY_THRESHOLD:-0.8}
+      SIMILARITY_THRESHOLD: ${SIMILARITY_THRESHOLD:-0.25}
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    volumes:
+      - schema_data:/app/ingestion/schemas
     ports:
       - "8000:8000"
     command: ["uvicorn", "query_processing.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
@@ -100,4 +106,6 @@ volumes:
   postgres_data:
     driver: local
   mongo_data:
+    driver: local
+  schema_data:
     driver: local

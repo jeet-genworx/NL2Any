@@ -27,3 +27,19 @@ class ModelProvider(Protocol):
             The raw text response from the model.
         """
         ...
+
+
+@runtime_checkable
+class EmbeddingProvider(Protocol):
+    """Protocol defining interface for text embedding providers."""
+
+    async def embed(self, texts: list[str]) -> list[list[float]]:
+        """Embed a batch of texts.
+
+        Args:
+            texts: Texts to embed, in order.
+
+        Returns:
+            One embedding vector per input text, in the same order.
+        """
+        ...

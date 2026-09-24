@@ -40,8 +40,8 @@ class QuestionAnalysis(BaseModel):
     verbs: list[str] = PydanticField(default_factory=list)
     entities: list[LinguisticEntity] = PydanticField(default_factory=list)
 
-    def to_bm25_query(self) -> str:
-        """Compose search terms for BM25 schema candidate retrieval."""
+    def to_retrieval_query(self) -> str:
+        """Compose search text for semantic schema candidate retrieval."""
         parts = [self.question]
         parts.extend(self.subjective)
         parts.extend(self.objective)

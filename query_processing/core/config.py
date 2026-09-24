@@ -17,6 +17,11 @@ class Settings(BaseSettings):
         alias="KOBOLDCPP_MODEL",
         description="KoboldCpp model identifier",
     )
+    koboldcpp_embedding_model: str = Field(
+        default="all-MiniLM-L6-v2-Q8_0",
+        alias="KOBOLDCPP_EMBEDDING_MODEL",
+        description="KoboldCpp embedding model identifier (loaded via --embeddingsmodel)",
+    )
 
     postgres_dsn: str = Field(
         default="",
@@ -33,11 +38,16 @@ class Settings(BaseSettings):
         alias="MONGODB_DATABASE",
         description="MongoDB database name",
     )
-
-    bm25_top_k: int = Field(
+    mongo_sample_limit: int = Field(
         default=10,
-        alias="BM25_TOP_K",
-        description="Default number of schema objects to retrieve with BM25",
+        alias="MONGO_SAMPLE_LIMIT",
+        description="Number of documents sampled per collection during MongoDB metadata extraction",
+    )
+
+    retrieval_top_k: int = Field(
+        default=10,
+        alias="RETRIEVAL_TOP_K",
+        description="Default number of schema objects to retrieve via semantic search",
     )
     embedding_model: str = Field(
         default="all-MiniLM-L6-v2",
@@ -50,7 +60,7 @@ class Settings(BaseSettings):
         description="Path to precomputed table description embeddings for PostgreSQL",
     )
     similarity_threshold: float = Field(
-        default=0.80,
+        default=0.25,
         alias="SIMILARITY_THRESHOLD",
         description="Cosine similarity threshold for candidate table retrieval (strictly > threshold)",
     )

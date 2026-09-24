@@ -3,15 +3,8 @@
 import json
 import httpx
 import pytest
-from query_processing.models.schema import (
-    DatabaseSchema,
-    DatabaseType,
-    Field,
-    SchemaObject,
-    SchemaObjectKind,
-)
 from query_processing.providers.model.koboldcpp import KoboldCppProvider
-from ingestion.schema.profiler import SchemaProfiler
+from query_processing.providers.model.embedding import KoboldCppEmbeddingProvider
 
 
 @pytest.mark.asyncio
@@ -63,50 +56,64 @@ async def test_koboldcpp_provider_connection_error():
 
 
 @pytest.mark.asyncio
-async def test_schema_profiler_enrichment_with_mock_provider():
-    class MockProvider:
-        async def generate(self, prompt: str, **kwargs) -> str:
-            return """
-            <think>I should describe customers and orders</think>
-            ```json
-            {
-              "objects": [
-                {
-                  "name": "customers",
-                  "description": "User profiles and contact records.",
-                  "fields": {
-                    "id": "Unique customer ID",
-                    "city": "Primary residence city"
-                  }
-                }
-              ]
-            }
-            ```
-            """
+async def test_koboldcpp_embedding_provider_embed_success():
+    def handler(request: httpx.Request) -> httpx.Response:
+        data = json.loads(request.content)
+        assert data["model"] == "all-MiniLM-L6-v2-Q8_0"
+        assert data["input"] == ["customers table", "orders table"]
+        return httpx.Response(
+            status_code=200,
+            json={
+                "data": [
+                    {"embedding": [0.1, 0.2, 0.3], "index": 0},
+                    {"embedding": [0.4, 0.5, 0.6], "index": 1},
+                ]
+            },
+        )
 
-    schema = DatabaseSchema(
-        database_type=DatabaseType.POSTGRESQL,
-        database_name="test_db",
-        objects=[
-            SchemaObject(
-                name="customers",
-                kind=SchemaObjectKind.TABLE,
-                description="",
-                fields=[
-                    Field(name="id", type="integer"),
-                    Field(name="city", type="varchar"),
-                ],
-            )
-        ],
-    )
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport) as client:
+        provider = KoboldCppEmbeddingProvider(
+            base_url="http://mock-kobold/v1",
+            model="all-MiniLM-L6-v2-Q8_0",
+            http_client=client,
+        )
+        vectors = await provider.embed(["customers table", "orders table"])
+        assert vectors == [[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]]
 
-    profiler = SchemaProfiler(provider=MockProvider())
-    enriched = await profiler.enrich_schema(schema)
 
-    cust = enriched.get_object("customers")
-    assert cust is not None
-    assert cust.description == "User profiles and contact records."
-    assert cust.get_field("id").description == "Unique customer ID"
-    assert cust.get_field("city").description == "Primary residence city"
-    # Authoritative types must not change
-    assert cust.get_field("id").type == "integer"
+@pytest.mark.asyncio
+async def test_koboldcpp_embedding_provider_orders_by_index():
+    def handler(request: httpx.Request) -> httpx.Response:
+        # Server returns them out of order; provider must sort by index.
+        return httpx.Response(
+            status_code=200,
+            json={
+                "data": [
+                    {"embedding": [1.0], "index": 1},
+                    {"embedding": [0.0], "index": 0},
+                ]
+            },
+        )
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport) as client:
+        provider = KoboldCppEmbeddingProvider(
+            base_url="http://mock-kobold/v1", model="test-embed", http_client=client
+        )
+        vectors = await provider.embed(["a", "b"])
+        assert vectors == [[0.0], [1.0]]
+
+
+@pytest.mark.asyncio
+async def test_koboldcpp_embedding_provider_connection_error():
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("Connection refused")
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport) as client:
+        provider = KoboldCppEmbeddingProvider(
+            base_url="http://mock-kobold/v1", model="test-embed", http_client=client
+        )
+        with pytest.raises(ConnectionError, match="Failed to connect to KoboldCpp"):
+            await provider.embed(["a"])

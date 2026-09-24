@@ -1,0 +1,117 @@
+[graph]
+database_type = "postgresql"
+database_name = "nl2anyquery_db"
+generated_at = "2026-09-24T16:47:15.614596+00:00"
+node_count = 6
+total_edge_count = 5
+mst_edge_count = 5
+component_count = 1
+
+[[nodes]]
+id = "customers"
+kind = "table"
+columns = [
+    { name = "id", type = "integer", nullable = false },
+    { name = "name", type = "character varying", nullable = false },
+    { name = "email", type = "character varying", nullable = false },
+    { name = "phone", type = "character varying", nullable = true },
+    { name = "city", type = "character varying", nullable = true },
+    { name = "created_at", type = "timestamp with time zone", nullable = false },
+]
+
+[[nodes]]
+id = "orders"
+kind = "table"
+columns = [
+    { name = "id", type = "integer", nullable = false },
+    { name = "customer_id", type = "integer", nullable = false },
+    { name = "order_date", type = "timestamp with time zone", nullable = false },
+    { name = "status", type = "character varying", nullable = false },
+    { name = "total_amount", type = "numeric", nullable = false },
+    { name = "shipping_city", type = "character varying", nullable = true },
+]
+
+[[nodes]]
+id = "support_tickets"
+kind = "table"
+columns = [
+    { name = "id", type = "integer", nullable = false },
+    { name = "customer_id", type = "integer", nullable = false },
+    { name = "employee_id", type = "integer", nullable = false },
+    { name = "subject", type = "character varying", nullable = false },
+    { name = "status", type = "character varying", nullable = false },
+    { name = "priority", type = "character varying", nullable = false },
+    { name = "created_at", type = "timestamp with time zone", nullable = false },
+    { name = "resolved_at", type = "timestamp with time zone", nullable = true },
+]
+
+[[nodes]]
+id = "order_items"
+kind = "table"
+columns = [
+    { name = "id", type = "integer", nullable = false },
+    { name = "order_id", type = "integer", nullable = false },
+    { name = "product_id", type = "integer", nullable = false },
+    { name = "quantity", type = "integer", nullable = false },
+    { name = "unit_price", type = "numeric", nullable = false },
+]
+
+[[nodes]]
+id = "employees"
+kind = "table"
+columns = [
+    { name = "id", type = "integer", nullable = false },
+    { name = "name", type = "character varying", nullable = false },
+    { name = "email", type = "character varying", nullable = false },
+    { name = "department", type = "character varying", nullable = false },
+    { name = "role", type = "character varying", nullable = false },
+    { name = "city", type = "character varying", nullable = true },
+    { name = "hire_date", type = "timestamp with time zone", nullable = false },
+]
+
+[[nodes]]
+id = "products"
+kind = "table"
+columns = [
+    { name = "id", type = "integer", nullable = false },
+    { name = "name", type = "character varying", nullable = false },
+    { name = "category", type = "character varying", nullable = false },
+    { name = "price", type = "numeric", nullable = false },
+    { name = "stock_quantity", type = "integer", nullable = false },
+    { name = "created_at", type = "timestamp with time zone", nullable = false },
+]
+
+[[mst_edges]]
+from = "order_items"
+from_column = "order_id"
+to = "orders"
+to_column = "id"
+type = "many_to_one"
+
+[[mst_edges]]
+from = "order_items"
+from_column = "product_id"
+to = "products"
+to_column = "id"
+type = "many_to_one"
+
+[[mst_edges]]
+from = "orders"
+from_column = "customer_id"
+to = "customers"
+to_column = "id"
+type = "many_to_one"
+
+[[mst_edges]]
+from = "support_tickets"
+from_column = "customer_id"
+to = "customers"
+to_column = "id"
+type = "many_to_one"
+
+[[mst_edges]]
+from = "support_tickets"
+from_column = "employee_id"
+to = "employees"
+to_column = "id"
+type = "many_to_one"
