@@ -1,8 +1,8 @@
 """Tests for SafetyPolicyValidator."""
 
-from nl2anyquery.models.pipeline import GeneratedQuery, MongoQuery
-from nl2anyquery.models.schema import DatabaseType
-from nl2anyquery.pipeline.policy import SafetyPolicyValidator
+from query_processing.models.pipeline import GeneratedQuery, MongoQuery
+from query_processing.models.schema import DatabaseType
+from query_processing.pipeline.policy import SafetyPolicyValidator
 
 
 def test_sql_policy_allow_select():

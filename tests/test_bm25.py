@@ -1,13 +1,13 @@
 """Tests for in-memory BM25 schema object retriever."""
 
-from nl2anyquery.models.schema import (
+from query_processing.models.schema import (
     DatabaseSchema,
     DatabaseType,
     Field,
     SchemaObject,
     SchemaObjectKind,
 )
-from nl2anyquery.retrieval.bm25 import BM25Retriever
+from query_processing.retrieval.bm25 import BM25Retriever
 
 
 def test_bm25_retriever_ranking():

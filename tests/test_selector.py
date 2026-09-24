@@ -1,10 +1,10 @@
 """Tests for TableSelector stage."""
 
 import pytest
-from nl2anyquery.models.pipeline import QuestionAnalysis
-from nl2anyquery.models.schema import DatabaseSchema, DatabaseType, Field, SchemaObject, SchemaObjectKind
-from nl2anyquery.pipeline.selector import TableSelector
-from nl2anyquery.retrieval.bm25 import RetrievalResult
+from query_processing.models.pipeline import QuestionAnalysis
+from query_processing.models.schema import DatabaseSchema, DatabaseType, Field, SchemaObject, SchemaObjectKind
+from query_processing.pipeline.selector import TableSelector
+from query_processing.retrieval.bm25 import RetrievalResult
 
 
 class MockSelectorProvider:

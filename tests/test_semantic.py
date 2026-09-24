@@ -1,7 +1,7 @@
 """Tests for SemanticAnalyzer stage."""
 
 import pytest
-from nl2anyquery.pipeline.semantic import SemanticAnalyzer
+from query_processing.pipeline.semantic import SemanticAnalyzer
 
 
 class MockSemanticProvider:

@@ -1,9 +1,9 @@
 """Tests for QueryPlanner stage."""
 
 import pytest
-from nl2anyquery.models.pipeline import QuestionAnalysis, RelevantSchema
-from nl2anyquery.models.schema import DatabaseType, Field, SchemaObject, SchemaObjectKind
-from nl2anyquery.pipeline.planner import QueryPlanner
+from query_processing.models.pipeline import QuestionAnalysis, RelevantSchema
+from query_processing.models.schema import DatabaseType, Field, SchemaObject, SchemaObjectKind
+from query_processing.pipeline.planner import QueryPlanner
 
 
 class MockPlannerProvider:

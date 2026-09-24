@@ -1,7 +1,7 @@
 """Tests for text and model response utilities."""
 
 import pytest
-from nl2anyquery.core.text_utils import extract_json_block, strip_think_tags
+from query_processing.core.text_utils import extract_json_block, strip_think_tags
 
 
 def test_strip_think_tags_closed():

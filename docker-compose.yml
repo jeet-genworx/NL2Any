@@ -14,7 +14,89 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nl2user -d nl2anyquery_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mongo:
+    image: mongo:7
+    container_name: nl2anyquery_mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  seed:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.app
+    container_name: nl2anyquery_seed
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+    environment:
+      POSTGRES_DSN: postgresql://nl2user:nl2password@postgres:5432/nl2anyquery_db
+      MONGODB_URI: mongodb://mongo:27017
+      MONGODB_DATABASE: nl2anyquery_demo
+    entrypoint: ["sh", "docker/seed.sh"]
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.app
+    container_name: nl2anyquery_api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+      seed:
+        condition: service_completed_successfully
+    environment:
+      POSTGRES_DSN: postgresql://nl2user:nl2password@postgres:5432/nl2anyquery_db
+      MONGODB_URI: mongodb://mongo:27017
+      MONGODB_DATABASE: nl2anyquery_demo
+      KOBOLDCPP_BASE_URL: ${KOBOLDCPP_BASE_URL:-http://host.docker.internal:5001/v1}
+      KOBOLDCPP_MODEL: ${KOBOLDCPP_MODEL:-qwen3-4b-instruct-2507}
+      BM25_TOP_K: ${BM25_TOP_K:-10}
+      MODEL_TEMPERATURE: ${MODEL_TEMPERATURE:-0.1}
+      MODEL_MAX_TOKENS: ${MODEL_MAX_TOKENS:-1500}
+      QUERY_TIMEOUT_SECONDS: ${QUERY_TIMEOUT_SECONDS:-10}
+      MAX_RESULT_ROWS: ${MAX_RESULT_ROWS:-1000}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8000:8000"
+    command: ["uvicorn", "query_processing.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.app
+    container_name: nl2anyquery_frontend
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      API_BASE_URL: http://api:8000
+    ports:
+      - "8501:8501"
+    command: ["streamlit", "run", "frontend/app.py", "--server.address", "0.0.0.0", "--server.port", "8501"]
 
 volumes:
   postgres_data:
+    driver: local
+  mongo_data:
     driver: local

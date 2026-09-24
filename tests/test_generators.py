@@ -1,10 +1,10 @@
 """Tests for database-specific query generators."""
 
 import pytest
-from nl2anyquery.models.pipeline import MongoQuery, QueryPlan, RelevantSchema
-from nl2anyquery.models.schema import DatabaseType, Field, SchemaObject, SchemaObjectKind
-from nl2anyquery.pipeline.generators.mongo import MongoQueryGenerator
-from nl2anyquery.pipeline.generators.postgres import PostgresQueryGenerator
+from query_processing.models.pipeline import MongoQuery, QueryPlan, RelevantSchema
+from query_processing.models.schema import DatabaseType, Field, SchemaObject, SchemaObjectKind
+from query_processing.pipeline.generators.mongo import MongoQueryGenerator
+from query_processing.pipeline.generators.postgres import PostgresQueryGenerator
 
 
 class MockPostgresProvider:

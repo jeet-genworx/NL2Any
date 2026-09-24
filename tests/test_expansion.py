@@ -1,6 +1,6 @@
 """Tests for SchemaExpander."""
 
-from nl2anyquery.models.schema import (
+from query_processing.models.schema import (
     DatabaseSchema,
     DatabaseType,
     Field,
@@ -8,7 +8,7 @@ from nl2anyquery.models.schema import (
     SchemaObject,
     SchemaObjectKind,
 )
-from nl2anyquery.pipeline.expansion import SchemaExpander
+from query_processing.pipeline.expansion import SchemaExpander
 
 
 def test_schema_expander_with_bridge_table():

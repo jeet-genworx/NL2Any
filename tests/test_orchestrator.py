@@ -1,7 +1,7 @@
 """Tests for end-to-end NL2AnyQueryOrchestrator with mocks."""
 
 import pytest
-from nl2anyquery.models.pipeline import (
+from query_processing.models.pipeline import (
     GeneratedQuery,
     GuardrailDecision,
     GuardrailResult,
@@ -14,14 +14,14 @@ from nl2anyquery.models.pipeline import (
     TableSelectionResult,
     ValidationResult,
 )
-from nl2anyquery.models.schema import (
+from query_processing.models.schema import (
     DatabaseSchema,
     DatabaseType,
     Field,
     SchemaObject,
     SchemaObjectKind,
 )
-from nl2anyquery.pipeline.orchestrator import NL2AnyQueryOrchestrator
+from query_processing.pipeline.orchestrator import NL2AnyQueryOrchestrator
 
 
 class MockGuardrail:
@@ -117,7 +117,7 @@ async def test_orchestrator_happy_path(test_schema):
         executor=MockExecutor(),
     )
     orchestrator._schemas[DatabaseType.POSTGRESQL] = test_schema
-    from nl2anyquery.retrieval.bm25 import BM25Retriever
+    from query_processing.retrieval.bm25 import BM25Retriever
     orchestrator._bm25_indices[DatabaseType.POSTGRESQL] = BM25Retriever(test_schema)
 
     resp = await orchestrator.execute_pipeline("Show customers", database="postgres")
@@ -143,7 +143,7 @@ async def test_orchestrator_retry_loop(test_schema):
         executor=MockExecutor(),
     )
     orchestrator._schemas[DatabaseType.POSTGRESQL] = test_schema
-    from nl2anyquery.retrieval.bm25 import BM25Retriever
+    from query_processing.retrieval.bm25 import BM25Retriever
     orchestrator._bm25_indices[DatabaseType.POSTGRESQL] = BM25Retriever(test_schema)
 
     resp = await orchestrator.execute_pipeline("Show customers", database="postgres")
@@ -158,7 +158,7 @@ async def test_orchestrator_reject_path(test_schema):
         guardrail=MockGuardrail(GuardrailDecision.REJECT),
     )
     orchestrator._schemas[DatabaseType.POSTGRESQL] = test_schema
-    from nl2anyquery.retrieval.bm25 import BM25Retriever
+    from query_processing.retrieval.bm25 import BM25Retriever
     orchestrator._bm25_indices[DatabaseType.POSTGRESQL] = BM25Retriever(test_schema)
 
     resp = await orchestrator.execute_pipeline("Drop tables", database="postgres")
@@ -173,7 +173,7 @@ async def test_orchestrator_basic_path(test_schema):
         guardrail=MockGuardrail(GuardrailDecision.BASIC),
     )
     orchestrator._schemas[DatabaseType.POSTGRESQL] = test_schema
-    from nl2anyquery.retrieval.bm25 import BM25Retriever
+    from query_processing.retrieval.bm25 import BM25Retriever
     orchestrator._bm25_indices[DatabaseType.POSTGRESQL] = BM25Retriever(test_schema)
 
     resp = await orchestrator.execute_pipeline("Who are you?", database="postgres")
@@ -190,7 +190,7 @@ async def test_orchestrator_zero_selected_objects(test_schema):
         selector=MockSelector(selected=[]),  # 0 selected
     )
     orchestrator._schemas[DatabaseType.POSTGRESQL] = test_schema
-    from nl2anyquery.retrieval.bm25 import BM25Retriever
+    from query_processing.retrieval.bm25 import BM25Retriever
     orchestrator._bm25_indices[DatabaseType.POSTGRESQL] = BM25Retriever(test_schema)
 
     resp = await orchestrator.execute_pipeline("Show astronauts", database="postgres")

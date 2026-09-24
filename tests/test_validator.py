@@ -1,9 +1,9 @@
 """Tests for QueryValidator and deterministic schema AST verification."""
 
 import pytest
-from nl2anyquery.models.pipeline import GeneratedQuery, QueryPlan, RelevantSchema
-from nl2anyquery.models.schema import DatabaseType, Field, SchemaObject, SchemaObjectKind
-from nl2anyquery.pipeline.validator import QueryValidator, validate_sql_schema_references
+from query_processing.models.pipeline import GeneratedQuery, QueryPlan, RelevantSchema
+from query_processing.models.schema import DatabaseType, Field, SchemaObject, SchemaObjectKind
+from query_processing.pipeline.validator import QueryValidator, validate_sql_schema_references
 
 
 def test_deterministic_sql_schema_validation_success():

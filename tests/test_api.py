@@ -1,7 +1,7 @@
 """Tests for FastAPI endpoints."""
 
 from fastapi.testclient import TestClient
-from nl2anyquery.api.main import app
+from query_processing.api.main import app
 
 
 def test_health_endpoint():

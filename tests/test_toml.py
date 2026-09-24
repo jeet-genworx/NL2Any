@@ -1,6 +1,6 @@
 """Tests for TOML serialization and deserialization."""
 
-from nl2anyquery.models.schema import (
+from query_processing.models.schema import (
     DatabaseSchema,
     DatabaseType,
     Field,
@@ -8,7 +8,7 @@ from nl2anyquery.models.schema import (
     SchemaObject,
     SchemaObjectKind,
 )
-from nl2anyquery.schema.toml_store import (
+from ingestion.schema.toml_store import (
     dump_schema_to_toml,
     load_schema_from_toml,
 )

@@ -91,7 +91,7 @@ User Question
 * **Why spaCy?**
   Extracts linguistic parts-of-speech (nouns, noun chunks, verbs, entities like cities and dates) deterministically in microseconds, augmenting the retrieval query without relying on an LLM.
 * **Why TOML as the Canonical Semantic Schema?**
-  Live database introspection is slow and lacks business semantics. The TOML files (`schemas/postgres.toml`, `schemas/mongo.toml`) provide an offline, human-readable, single source of truth containing enriched table and column descriptions, data types, and verified foreign keys.
+  Live database introspection is slow and lacks business semantics. The TOML files (`ingestion/schemas/postgres.toml`, `ingestion/schemas/mongo.toml`) provide an offline, human-readable, single source of truth containing enriched table and column descriptions, data types, and verified foreign keys.
 * **Why Deterministic Safety Boundaries?**
   The SLM is **never** the final safety boundary. Generated SQL is parsed into an AST via `sqlglot` to verify that only a single `SELECT` statement is present, rejecting `INSERT`, `UPDATE`, `DELETE`, `DROP`, `ALTER`, and multi-statement queries before reaching the database driver.
 
@@ -99,74 +99,81 @@ User Question
 
 ## 3. Project Structure
 
+The codebase is split into three top-level packages by responsibility: **ingestion** (getting schema/data into the system), **query_processing** (the NL → query pipeline, retrieval, model provider, and API), and **frontend** (the Streamlit UI). `docker-compose.yml` builds one shared image and runs each layer as its own container.
+
 ```text
 nl2anyquery/
-├── .env.example              # Generic environment variable template
-├── .gitignore                # Ignores .env and build caches
-├── pyproject.toml            # Project dependencies and console entrypoints
-├── README.md                 # Complete documentation
+├── .env.example                  # Generic environment variable template
+├── .gitignore                    # Ignores .env and build caches
+├── pyproject.toml                # Project dependencies and console entrypoints
+├── README.md                     # Complete documentation
+├── docker-compose.yml            # postgres, mongo, seed, api, frontend services
+├── docker/
+│   ├── Dockerfile.app            # Image shared by seed/api/frontend containers
+│   ├── Dockerfile.postgres       # Postgres container definition
+│   └── seed.sh                   # Runs seed-postgres + seed-mongo on startup
 │
-├── frontend/
-│   └── app.py                # Streamlit UI with pipeline stage inspection
-│
-├── prompts/                  # Focused, single-responsibility prompt templates
-│   ├── guardrail.txt
-│   ├── semantic_analysis.txt
-│   ├── table_selection.txt
-│   ├── planner.txt
-│   ├── postgres_query_generator.txt
-│   ├── mongo_query_generator.txt
-│   ├── validator.txt
-│   └── schema_description.txt
-│
-├── schemas/                  # Canonical semantic schema TOML stores
-│   ├── postgres.toml
-│   └── mongo.toml
-│
-├── scripts/                  # Standalone CLI scripts
-│   ├── seed_postgres.py
-│   ├── seed_mongo.py
-│   └── init_schema.py
-│
-├── src/nl2anyquery/          # Application source code
-│   ├── api/                  # FastAPI web server (GET /health, POST /query, GET /schema/{db})
-│   │   └── main.py
-│   ├── core/                 # Settings and response cleaning utilities
-│   │   ├── config.py
-│   │   └── text_utils.py
-│   ├── databases/            # Deterministic database discovery adapters
+├── ingestion/                     # Getting schema & data INTO the system
+│   ├── databases/                 # Deterministic database discovery adapters
 │   │   ├── base.py
 │   │   ├── detector.py
 │   │   ├── postgres/
 │   │   ├── mongo/
-│   │   └── seed/
-│   ├── models/               # Pydantic data contracts
-│   │   ├── schema.py         # Normalized schema representation
-│   │   └── pipeline.py       # Pipeline stage outputs & trace models
-│   ├── nlp/                  # Deterministic spaCy linguistic analyzer
-│   │   └── linguistic.py
-│   ├── pipeline/             # Sequential pipeline stages
-│   │   ├── guardrail.py      # READ_QUERY, BASIC, REJECT classification
-│   │   ├── semantic.py       # Subjective/objective extraction
-│   │   ├── selector.py       # Candidate selection with strict TOML checks
-│   │   ├── expansion.py      # Foreign key & bridge table expansion
-│   │   ├── planner.py        # Syntax-free semantic query planning
-│   │   ├── generators/       # Postgres SQL & typed MongoQuery generators
-│   │   ├── validator.py      # AST schema verification + SLM validation
-│   │   ├── policy.py         # Non-negotiable read-only safety boundary
-│   │   ├── executor.py       # Safe DB driver execution with timeouts
-│   │   ├── results.py        # Bounded preview & CSV generation
-│   │   └── orchestrator.py   # Master pipeline runner & 3-attempt retry loop
-│   ├── providers/            # Local model provider abstraction
-│   │   └── model/
-│   ├── retrieval/            # In-memory BM25 schema search
-│   │   └── bm25.py
-│   └── schema/               # TOML serialization & SLM profiler
-│       ├── toml_store.py
-│       ├── profiler.py
-│       └── manager.py
+│   │   └── seed/                  # Synthetic demo data generators
+│   ├── schema/                    # TOML serialization & SLM profiler
+│   │   ├── toml_store.py
+│   │   ├── profiler.py
+│   │   └── manager.py
+│   ├── schemas/                   # Canonical semantic schema TOML stores
+│   │   ├── postgres.toml
+│   │   └── mongo.toml
+│   └── scripts/                   # Standalone CLI entrypoints
+│       ├── seed_postgres.py
+│       ├── seed_mongo.py
+│       └── init_schema.py
 │
-└── tests/                    # 57 comprehensive automated unit tests
+├── query_processing/              # The NL → safe query pipeline
+│   ├── api/                       # FastAPI web server (GET /health, POST /query, GET /schema/{db})
+│   │   └── main.py
+│   ├── core/                      # Settings and response cleaning utilities
+│   │   ├── config.py
+│   │   └── text_utils.py
+│   ├── models/                    # Pydantic data contracts
+│   │   ├── schema.py              # Normalized schema representation
+│   │   └── pipeline.py            # Pipeline stage outputs & trace models
+│   ├── nlp/                       # Deterministic spaCy linguistic analyzer
+│   │   └── linguistic.py
+│   ├── pipeline/                  # Sequential pipeline stages
+│   │   ├── guardrail.py           # READ_QUERY, BASIC, REJECT classification
+│   │   ├── semantic.py            # Subjective/objective extraction
+│   │   ├── selector.py            # Candidate selection with strict TOML checks
+│   │   ├── expansion.py           # Foreign key & bridge table expansion
+│   │   ├── planner.py             # Syntax-free semantic query planning
+│   │   ├── generators/            # Postgres SQL & typed MongoQuery generators
+│   │   ├── validator.py           # AST schema verification + SLM validation
+│   │   ├── policy.py              # Non-negotiable read-only safety boundary
+│   │   ├── executor.py            # Safe DB driver execution with timeouts
+│   │   ├── results.py             # Bounded preview & CSV generation
+│   │   └── orchestrator.py        # Master pipeline runner & 3-attempt retry loop
+│   ├── providers/                 # Local model provider abstraction
+│   │   └── model/
+│   ├── retrieval/                 # In-memory BM25 schema search
+│   │   └── bm25.py
+│   ├── prompts/                   # Focused, single-responsibility prompt templates
+│   │   ├── guardrail.txt
+│   │   ├── semantic_analysis.txt
+│   │   ├── table_selection.txt
+│   │   ├── planner.txt
+│   │   ├── postgres_query_generator.txt
+│   │   ├── mongo_query_generator.txt
+│   │   ├── validator.txt
+│   │   └── schema_description.txt
+│   └── cli.py                     # Unified `uv run` console entrypoints
+│
+├── frontend/
+│   └── app.py                     # Streamlit UI with pipeline stage inspection
+│
+└── tests/                         # 57 comprehensive automated unit tests
     ├── test_detector.py
     ├── test_schema.py
     ├── test_toml.py

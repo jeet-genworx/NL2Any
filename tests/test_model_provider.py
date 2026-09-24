@@ -3,15 +3,15 @@
 import json
 import httpx
 import pytest
-from nl2anyquery.models.schema import (
+from query_processing.models.schema import (
     DatabaseSchema,
     DatabaseType,
     Field,
     SchemaObject,
     SchemaObjectKind,
 )
-from nl2anyquery.providers.model.koboldcpp import KoboldCppProvider
-from nl2anyquery.schema.profiler import SchemaProfiler
+from query_processing.providers.model.koboldcpp import KoboldCppProvider
+from ingestion.schema.profiler import SchemaProfiler
 
 
 @pytest.mark.asyncio

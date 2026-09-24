@@ -1,6 +1,6 @@
 """Tests for spaCy deterministic linguistic analysis."""
 
-from nl2anyquery.nlp.linguistic import LinguisticAnalyzer
+from query_processing.nlp.linguistic import LinguisticAnalyzer
 
 
 def test_linguistic_analyzer_extraction():

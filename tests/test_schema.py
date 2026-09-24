@@ -1,7 +1,7 @@
 """Tests for normalized schema data models and consistency validation."""
 
 import pytest
-from nl2anyquery.models.schema import (
+from query_processing.models.schema import (
     DatabaseSchema,
     DatabaseType,
     Field,

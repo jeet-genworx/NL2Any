@@ -28,14 +28,14 @@ dev = [
 ]
 
 [project.scripts]
-seed-postgres = "nl2anyquery.cli:seed_postgres_cli"
-seed-mongo = "nl2anyquery.cli:seed_mongo_cli"
-init-schema = "nl2anyquery.cli:init_schema_cli"
-test-model = "nl2anyquery.cli:test_model_cli"
-test-bm25 = "nl2anyquery.cli:test_bm25_cli"
-test-nlp = "nl2anyquery.cli:test_nlp_cli"
-run-api = "nl2anyquery.cli:run_api_cli"
-run-ui = "nl2anyquery.cli:run_ui_cli"
+seed-postgres = "query_processing.cli:seed_postgres_cli"
+seed-mongo = "query_processing.cli:seed_mongo_cli"
+init-schema = "query_processing.cli:init_schema_cli"
+test-model = "query_processing.cli:test_model_cli"
+test-bm25 = "query_processing.cli:test_bm25_cli"
+test-nlp = "query_processing.cli:test_nlp_cli"
+run-api = "query_processing.cli:run_api_cli"
+run-ui = "query_processing.cli:run_ui_cli"
 
 [build-system]
 requires = ["hatchling"]
@@ -45,9 +45,9 @@ build-backend = "hatchling.build"
 allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/nl2anyquery"]
+packages = ["ingestion", "query_processing"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
-pythonpath = ["src"]
+pythonpath = ["."]

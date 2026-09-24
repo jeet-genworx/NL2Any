@@ -1,6 +1,6 @@
 """Tests for ResultProcessor."""
 
-from nl2anyquery.pipeline.results import ResultProcessor
+from query_processing.pipeline.results import ResultProcessor
 
 
 def test_result_processor_small_result():
