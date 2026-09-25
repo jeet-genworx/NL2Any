@@ -13,7 +13,8 @@ RULES:
    - "order_by": list of ordering rules with "field", "direction" ("asc" or "desc").
    - "limit": integer limit or null.
    - "relationships_used": known relationships used to connect sources.
-5. Output strictly valid JSON matching this schema:
+5. Keep thinking concise. Complete reasoning and output the JSON plan before reaching token limits.
+6. Output strictly valid JSON matching this schema:
 {{
   "operation": "select | aggregate | find",
   "sources": ["<object_name>"],

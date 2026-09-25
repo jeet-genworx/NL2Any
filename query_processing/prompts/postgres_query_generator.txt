@@ -6,7 +6,8 @@ RULES:
 3. Use ONLY the tables and columns present in the Relevant Schema.
 4. Use standard JOIN syntax when multiple tables are referenced.
 5. If feedback from a previous attempt is provided, correct the stated issues.
-6. Output ONLY the raw SQL query (inside a ```sql ... ``` code block or plain text). No conversational text.
+6. Keep thinking concise. Complete reasoning and output the SQL before reaching token limits.
+7. Output ONLY the raw SQL query (inside a ```sql ... ``` code block or plain text). No conversational text.
 
 User Question:
 {question}
