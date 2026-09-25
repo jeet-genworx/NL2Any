@@ -13,7 +13,7 @@ DEFAULT_SEMANTIC_PROMPT = Path("query_processing/prompts/semantic_analysis.txt")
 
 
 class SemanticAnalyzer:
-    """Extracts subjective concepts and objective constraints from the question."""
+    """Extracts  subjective concepts and objective constraints from the question."""
 
     def __init__(
         self,
