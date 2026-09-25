@@ -59,6 +59,11 @@ class Settings(BaseSettings):
         alias="POSTGRES_EMBEDDINGS_PATH",
         description="Path to precomputed table description embeddings for PostgreSQL",
     )
+    mongo_embeddings_path: str = Field(
+        default="./mongo_embeddings.json",
+        alias="MONGO_EMBEDDINGS_PATH",
+        description="Path to precomputed collection description embeddings for MongoDB",
+    )
     similarity_threshold: float = Field(
         default=0.25,
         alias="SIMILARITY_THRESHOLD",

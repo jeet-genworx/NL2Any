@@ -75,10 +75,10 @@ def test_save_embeddings_writes_table_name_keyed_json(tmp_path):
 
 
 def test_get_default_embeddings_path():
-    # Postgres writes to the exact file query_processing's live EmbeddingStore reads.
+    # Both write to the exact files query_processing's live EmbeddingStore reads.
     assert get_default_embeddings_path(DatabaseType.POSTGRESQL) == Path(
         settings.postgres_embeddings_path
     )
     assert get_default_embeddings_path(DatabaseType.MONGODB) == Path(
-        "query_processing/embeddings/mongo_embeddings.json"
+        settings.mongo_embeddings_path
     )

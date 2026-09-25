@@ -39,7 +39,6 @@ from query_processing.providers.embedding.base import EmbeddingProvider
 from query_processing.providers.embedding.koboldcpp import KoboldCppEmbeddingProvider
 from query_processing.providers.model.base import ModelProvider
 from query_processing.providers.model.koboldcpp import KoboldCppProvider
-from query_processing.retrieval.bm25 import BM25Retriever
 from query_processing.retrieval.store import EmbeddingStore
 from query_processing.retrieval.vector import VectorRetriever
 
@@ -88,7 +87,7 @@ class NL2AnyQueryOrchestrator:
         self.max_retries = max_retries if max_retries is not None else settings.max_retries
 
         self._schemas: dict[DatabaseType, DatabaseSchema] = {}
-        self._bm25_indices: dict[DatabaseType, BM25Retriever] = {}
+        self._vector_retrievers: dict[DatabaseType, VectorRetriever] = {}
 
     def get_or_load_schema(self, db_type: DatabaseType) -> DatabaseSchema:
         """Load and cache canonical schema from TOML file."""
@@ -101,17 +100,25 @@ class NL2AnyQueryOrchestrator:
             )
         schema = load_schema_file(schema_path)
         self._schemas[db_type] = schema
-        self._bm25_indices[db_type] = BM25Retriever(schema)
         return schema
 
-    def _get_or_load_vector_retriever(self) -> VectorRetriever:
-        """Get or initialize vector retriever for PostgreSQL table embeddings."""
+    def _get_or_load_vector_retriever(self, db_type: DatabaseType) -> VectorRetriever:
+        """Get or initialize the vector retriever for this database's embeddings.
+
+        An explicitly injected vector_retriever/embedding_store overrides for all
+        database types; otherwise each type lazily loads its own embeddings file.
+        """
         if self.vector_retriever is not None:
             return self.vector_retriever
-        if self.embedding_store is None:
-            self.embedding_store = EmbeddingStore(settings.postgres_embeddings_path)
-        self.vector_retriever = VectorRetriever(self.embedding_store)
-        return self.vector_retriever
+
+        if db_type not in self._vector_retrievers:
+            store = self.embedding_store or EmbeddingStore(
+                settings.postgres_embeddings_path
+                if db_type == DatabaseType.POSTGRESQL
+                else settings.mongo_embeddings_path
+            )
+            self._vector_retrievers[db_type] = VectorRetriever(store)
+        return self._vector_retrievers[db_type]
 
     def _build_response(
         self,
@@ -162,16 +169,17 @@ class NL2AnyQueryOrchestrator:
             error=error,
         )
 
-    async def _select_tables_postgres(
+    async def _select_tables_vector(
         self,
         question: str,
         analysis: QuestionAnalysis,
         query_vector: list[float],
         schema: DatabaseSchema,
+        db_type: DatabaseType,
     ) -> tuple[list[str], list[CandidateTable], int, str | None]:
         """Embedding-based table candidate retrieval + Table Selector SLM bounded retry."""
         try:
-            retriever = self._get_or_load_vector_retriever()
+            retriever = self._get_or_load_vector_retriever(db_type)
             initial_candidates = retriever.retrieve(query_vector)
         except Exception as err:
             logger.error("Vector retrieval failed: %s", err)
@@ -354,18 +362,11 @@ class NL2AnyQueryOrchestrator:
 
         # 3. Stages 2 & 3: Concurrent Embedding, Semantic SLM & spaCy Linguistic Analysis
         try:
-            if db_type == DatabaseType.POSTGRESQL:
-                query_vector, semantic_res, linguistic_res = await asyncio.gather(
-                    self.embedding_provider.embed(question),
-                    self.semantic.analyze(question),
-                    asyncio.to_thread(self.linguistic.analyze, question),
-                )
-            else:
-                semantic_res, linguistic_res = await asyncio.gather(
-                    self.semantic.analyze(question),
-                    asyncio.to_thread(self.linguistic.analyze, question),
-                )
-                query_vector = []
+            query_vector, semantic_res, linguistic_res = await asyncio.gather(
+                self.embedding_provider.embed(question),
+                self.semantic.analyze(question),
+                asyncio.to_thread(self.linguistic.analyze, question),
+            )
         except Exception as err:
             return self._build_response(
                 db_type=db_type,
@@ -384,34 +385,15 @@ class NL2AnyQueryOrchestrator:
         )
 
         # 4. Stages 5 & 6: Candidate Table Retrieval & Selection
-        if db_type == DatabaseType.POSTGRESQL:
-            selected_objs, candidates, sel_retries, sel_err = await self._select_tables_postgres(
-                question=question,
-                analysis=analysis,
-                query_vector=query_vector,
-                schema=schema,
-            )
-        else:
-            # MongoDB legacy BM25 candidate retrieval
-            retriever_bm25 = self._bm25_indices[db_type]
-            bm25_cands = retriever_bm25.retrieve(analysis.to_bm25_query())
-            candidates = [
-                CandidateTable(table_name=c.object_name, similarity=c.score, rank=r)
-                for r, c in enumerate(bm25_cands, start=1)
-            ]
-            if not candidates:
-                return self._build_response(
-                    db_type=db_type,
-                    question=question,
-                    guardrail=guardrail_result,
-                    semantic=semantic_res,
-                    linguistic=linguistic_res.model_dump(),
-                    error="I could not find any relevant tables or collections in the database schema matching your question.",
-                )
-            sel_res = await self.selector.select(question_analysis=analysis, candidates=candidates, schema=schema)
-            selected_objs = sel_res.selected_objects
-            sel_retries = 0
-            sel_err = None
+        # Both PostgreSQL and MongoDB retrieve candidates from their own
+        # precomputed description embeddings, produced by the ingestion pipeline.
+        selected_objs, candidates, sel_retries, sel_err = await self._select_tables_vector(
+            question=question,
+            analysis=analysis,
+            query_vector=query_vector,
+            schema=schema,
+            db_type=db_type,
+        )
 
         if sel_err or not selected_objs:
             return self._build_response(

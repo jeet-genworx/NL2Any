@@ -6,12 +6,10 @@ each description through the local sentence-transformer embedding model
 endpoint), storing the resulting vectors as a flat table_name -> embedding
 JSON file.
 
-For PostgreSQL, this writes directly to settings.postgres_embeddings_path --
-the same file query_processing.retrieval.store.EmbeddingStore reads at query
-time -- so running the ingestion pipeline feeds live retrieval directly, with
-no separate copy/sync step. MongoDB has no equivalent live consumer yet (its
-retrieval still uses the legacy BM25 path), so its embeddings are written
-under query_processing/embeddings/ for now.
+Writes directly to the same file query_processing.retrieval.store.EmbeddingStore
+reads at query time -- settings.postgres_embeddings_path for PostgreSQL and
+settings.mongo_embeddings_path for MongoDB -- so running the ingestion pipeline
+feeds live retrieval directly, with no separate copy/sync step.
 """
 
 import json
@@ -26,14 +24,12 @@ from query_processing.providers.model.embedding import KoboldCppEmbeddingProvide
 def get_default_embeddings_path(database_type: DatabaseType) -> Path:
     """Return canonical embeddings JSON path for the database type.
 
-    PostgreSQL: settings.postgres_embeddings_path, the exact file
-    query_processing's live EmbeddingStore/VectorRetriever read from.
-    MongoDB: query_processing/embeddings/mongo_embeddings.json (not yet
-    wired into a live consumer).
+    Both point at the exact files query_processing's live
+    EmbeddingStore/VectorRetriever read from.
     """
     if database_type == DatabaseType.POSTGRESQL:
         return Path(settings.postgres_embeddings_path)
-    return Path("query_processing/embeddings") / "mongo_embeddings.json"
+    return Path(settings.mongo_embeddings_path)
 
 
 async def embed_descriptions(

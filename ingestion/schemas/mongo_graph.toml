@@ -1,0 +1,72 @@
+edges = []
+
+[graph]
+database_type = "mongodb"
+database_name = "nl2anyquery_demo"
+generated_at = "2026-09-25T04:18:55.816849+00:00"
+node_count = 5
+edge_count = 0
+
+[[nodes]]
+id = "customers"
+kind = "collection"
+columns = [
+    { name = "_id", type = "string", nullable = false },
+    { name = "name", type = "string", nullable = false },
+    { name = "email", type = "string", nullable = false },
+    { name = "phone", type = "string", nullable = false },
+    { name = "address", type = "object", nullable = false },
+    { name = "created_at", type = "datetime", nullable = false },
+]
+
+[[nodes]]
+id = "employees"
+kind = "collection"
+columns = [
+    { name = "_id", type = "string", nullable = false },
+    { name = "name", type = "string", nullable = false },
+    { name = "email", type = "string", nullable = false },
+    { name = "department", type = "string", nullable = false },
+    { name = "role", type = "string", nullable = false },
+    { name = "city", type = "string", nullable = false },
+    { name = "hire_date", type = "datetime", nullable = false },
+]
+
+[[nodes]]
+id = "orders"
+kind = "collection"
+columns = [
+    { name = "_id", type = "string", nullable = false },
+    { name = "customer_id", type = "string", nullable = false },
+    { name = "created_at", type = "datetime", nullable = false },
+    { name = "status", type = "string", nullable = false },
+    { name = "total_amount", type = "number", nullable = false },
+    { name = "shipping_city", type = "string", nullable = false },
+    { name = "items", type = "array[object]", nullable = false },
+]
+
+[[nodes]]
+id = "products"
+kind = "collection"
+columns = [
+    { name = "_id", type = "string", nullable = false },
+    { name = "name", type = "string", nullable = false },
+    { name = "category", type = "string", nullable = false },
+    { name = "price", type = "number", nullable = false },
+    { name = "stock_quantity", type = "integer", nullable = false },
+    { name = "created_at", type = "datetime", nullable = false },
+]
+
+[[nodes]]
+id = "support_tickets"
+kind = "collection"
+columns = [
+    { name = "_id", type = "string", nullable = false },
+    { name = "customer_id", type = "string", nullable = false },
+    { name = "assigned_employee_id", type = "string", nullable = false },
+    { name = "subject", type = "string", nullable = false },
+    { name = "status", type = "string", nullable = false },
+    { name = "priority", type = "string", nullable = false },
+    { name = "created_at", type = "datetime", nullable = false },
+    { name = "resolved_at", type = "datetime", nullable = true },
+]

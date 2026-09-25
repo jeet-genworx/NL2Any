@@ -88,6 +88,7 @@ services:
       # POST /ingest land on the host and can be committed, and so they survive
       # container recreation instead of reverting to the image-baked copy.
       - ./postgres_embeddings.json:/app/postgres_embeddings.json
+      - ./mongo_embeddings.json:/app/mongo_embeddings.json
     ports:
       - "8000:8000"
     command: ["uvicorn", "query_processing.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
