@@ -8,21 +8,21 @@ A. One TABLE description. This is the text used for embedding-based semantic sea
 3. State what the table signifies -- what it represents in business terms and what it is typically used to look up or answer.
 Write it as natural flowing prose, not a bulleted list or a bare column dump. Use the given relationships to explain what the table connects to where relevant.
 
-B. One COLUMN description for EVERY column of that table. Each is a single short sentence stating what that column holds and what it is used for. Where a relationship below shows the column points at another table, say what it points at.
+B. One COLUMN description for EVERY column of that table. Keep these VERY short -- a noun phrase of at most 8 words, no full sentences, no trailing period. Where a relationship below shows the column points at another table, name that table instead, e.g. "FK to customers".
 
 RULES:
 1. Do NOT invent columns, tables, or relationships not given below.
 2. Do NOT omit any column, and do NOT rename or abbreviate them -- the keys under "columns" must match the given column names exactly.
 3. Do NOT replace column names with vague summaries such as "personal details" or "various attributes" -- name the actual columns.
 4. Provide exactly one entry per table listed below, keyed by its exact name.
-5. Keep each column description to one sentence; the longer prose belongs in the table description.
+5. Keep each column description to a short phrase of at most 8 words; the prose belongs in the table description only.
 6. Output strictly valid JSON matching this structure, and nothing else:
 {{
   "descriptions": {{
     "<exact table name>": {{
       "description": "<description naming the table, every column, and what it signifies>",
       "columns": {{
-        "<exact column name>": "<one sentence on what this column holds and what it is used for>"
+        "<exact column name>": "<short phrase, max 8 words>"
       }}
     }}
   }}

@@ -72,6 +72,52 @@ class _RecordingProvider:
         return "<think>reasoning</think>\n```json\n" + json.dumps({"descriptions": descriptions}) + "\n```"
 
 
+class _TruncatedThenValidProvider(_RecordingProvider):
+    """Returns unusable output for the first `fail_times` calls, then valid JSON.
+
+    Mimics a reasoning model whose <think> block consumes the whole token budget,
+    leaving nothing parseable once think-tags are stripped.
+    """
+
+    def __init__(self, fail_times: int) -> None:
+        super().__init__()
+        self.fail_times = fail_times
+        self.calls = 0
+
+    async def generate(self, prompt: str, **kwargs) -> str:
+        self.calls += 1
+        if self.calls <= self.fail_times:
+            self.prompts.append(prompt)
+            return "<think>reasoning that never finished"
+        return await super().generate(prompt, **kwargs)
+
+
+@pytest.mark.asyncio
+async def test_describe_tables_retries_when_response_has_no_parseable_json(tmp_path):
+    mst_path = tmp_path / "postgres_mst.toml"
+    mst_path.write_text(CHAIN_MST_TOML)
+    # Fail the very first call, then succeed: the batch must still be described.
+    provider = _TruncatedThenValidProvider(fail_times=1)
+
+    descriptions = await describe_tables(mst_path, provider=provider)
+
+    assert provider.calls == 3  # 1 failed + 1 retry for batch 1, + 1 for batch 2
+    assert descriptions["t1"].description == "Description of t1."
+    assert list(descriptions.keys()) == [f"t{i}" for i in range(1, 8)]
+
+
+@pytest.mark.asyncio
+async def test_describe_tables_gives_up_after_max_attempts(tmp_path):
+    mst_path = tmp_path / "postgres_mst.toml"
+    mst_path.write_text(CHAIN_MST_TOML)
+    provider = _TruncatedThenValidProvider(fail_times=99)
+
+    with pytest.raises(ValueError, match="after 3 attempts"):
+        await describe_tables(mst_path, provider=provider)
+
+    assert provider.calls == 3
+
+
 @pytest.mark.asyncio
 async def test_describe_tables_batches_in_groups_of_five(tmp_path):
     mst_path = tmp_path / "postgres_mst.toml"

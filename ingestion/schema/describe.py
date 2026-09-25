@@ -28,6 +28,7 @@ has no MST at all (no foreign-key concept), so it always uses the graph.
 """
 
 import json
+import logging
 import tomllib
 from datetime import datetime, timezone
 from pathlib import Path
@@ -40,6 +41,8 @@ from query_processing.models.schema import DatabaseSchema, DatabaseType
 from query_processing.providers.model.base import ModelProvider
 from query_processing.providers.model.koboldcpp import KoboldCppProvider
 
+logger = logging.getLogger(__name__)
+
 DEFAULT_DESCRIBE_PROMPT = Path("query_processing/prompts/table_description.txt")
 DEFAULT_BATCH_SIZE = 5
 # A batch asks for one verbose description per table (naming every column) *and*
@@ -49,6 +52,15 @@ DEFAULT_BATCH_SIZE = 5
 # Sized for the per-column output: ~5 tables x ~10 columns of extra JSON on top
 # of the table prose.
 DESCRIBE_MAX_TOKENS = 8000
+# How many times to ask the model for one batch before giving up. A reasoning
+# model's <think> block has no fixed length: for an identical prompt, completions
+# measured 2175 and 2870 tokens on consecutive runs. When that reasoning runs
+# long enough to exhaust the budget, generation is cut before any JSON is
+# emitted, strip_think_tags leaves an empty string, and parsing fails. Roughly
+# one batch in three hit this. Re-asking resamples a shorter reasoning pass, so
+# a retry -- not a bigger budget or a terser prompt -- is what makes this stage
+# reliable.
+DESCRIBE_MAX_ATTEMPTS = 3
 
 
 class TableDescription(BaseModel):
@@ -205,8 +217,26 @@ async def describe_tables(
             relationships_context=_format_relationships(batch_ids, edges),
         )
 
-        raw_response = await model_provider.generate(prompt, max_tokens=DESCRIBE_MAX_TOKENS)
-        parsed = extract_json_block(raw_response)
+        parsed: Any = None
+        for attempt in range(1, DESCRIBE_MAX_ATTEMPTS + 1):
+            raw_response = await model_provider.generate(prompt, max_tokens=DESCRIBE_MAX_TOKENS)
+            try:
+                parsed = extract_json_block(raw_response)
+                break
+            except ValueError as err:
+                if attempt == DESCRIBE_MAX_ATTEMPTS:
+                    raise ValueError(
+                        f"Could not get parseable JSON for tables {sorted(batch_ids)} "
+                        f"after {DESCRIBE_MAX_ATTEMPTS} attempts: {err}"
+                    ) from err
+                logger.warning(
+                    "Describe attempt %d/%d for tables %s returned no parseable JSON (%s). Retrying.",
+                    attempt,
+                    DESCRIBE_MAX_ATTEMPTS,
+                    sorted(batch_ids),
+                    err,
+                )
+
         batch_descriptions = parsed.get("descriptions", {}) if isinstance(parsed, dict) else {}
 
         for node in batch:
