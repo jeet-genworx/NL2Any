@@ -17,6 +17,31 @@ st.set_page_config(
 st.title("🔍 NL2AnyQuery")
 st.caption("Proof-of-Concept: Natural Language to Safe Database Query Pipeline")
 
+
+def run_ingestion(database: str, use_mst: bool, api_url: str) -> tuple[bool, object]:
+    """Run the ingestion pipeline for a database. Returns (ok, summary_or_error)."""
+    try:
+        resp = httpx.post(
+            f"{api_url}/ingest/{database}",
+            params={"use_mst": use_mst},
+            timeout=600.0,
+        )
+        resp.raise_for_status()
+        return True, resp.json()
+    except httpx.ConnectError:
+        return False, (
+            f"Could not connect to FastAPI backend at {api_url}. "
+            "Please make sure it is running via `uv run run-api`."
+        )
+    except httpx.HTTPStatusError as err:
+        try:
+            detail = err.response.json().get("detail", err.response.text)
+        except Exception:
+            detail = err.response.text
+        return False, f"Ingestion failed: {detail}"
+    except Exception as err:
+        return False, f"Ingestion failed: {err}"
+
 # Sidebar
 with st.sidebar:
     st.header("Settings")
@@ -40,39 +65,38 @@ with st.sidebar:
         ),
     )
     ingest_btn = st.button(
-        "⚙️ Initialize Database",
+        "🔄 Re-run Ingestion",
         use_container_width=True,
-        help="Extract metadata → build schema graph/MST → generate SLM table descriptions → embed them.",
+        help="Ingestion runs automatically when you select a database. Use this to "
+        "re-run it after the underlying schema changes, or after toggling the MST option.",
     )
 
-    if ingest_btn:
+    # Ingestion runs automatically whenever the selected database changes (including
+    # first load), so the embeddings query processing retrieves against always match
+    # the chosen database. Keyed on db_choice in session_state so it fires on actual
+    # selection changes only -- Streamlit reruns this script on every widget
+    # interaction, and re-ingesting on each of those would be needlessly expensive.
+    if st.session_state.get("ingested_db") != db_choice or ingest_btn:
         with st.spinner(f"Running ingestion pipeline for {db_choice}... this can take a minute."):
-            try:
-                ingest_resp = httpx.post(
-                    f"{api_url}/ingest/{db_choice}",
-                    params={"use_mst": use_mst},
-                    timeout=300.0,
-                )
-                ingest_resp.raise_for_status()
-                ingest_data = ingest_resp.json()
-                st.success(
-                    f"Ingested {ingest_data['table_count']} tables → "
-                    f"{ingest_data['description_count']} descriptions → "
-                    f"{ingest_data['embedding_count']} embeddings "
-                    f"({ingest_data['embedding_dimensions']}-dim, "
-                    f"MST used: {ingest_data['used_mst']})."
-                )
-                with st.expander("Ingestion details"):
-                    st.json(ingest_data)
-            except httpx.ConnectError:
-                st.error(
-                    f"Could not connect to FastAPI backend at {api_url}. "
-                    "Please make sure it is running via `uv run run-api`."
-                )
-            except httpx.HTTPStatusError as err:
-                st.error(f"Ingestion failed: {err.response.json().get('detail', err.response.text)}")
-            except Exception as err:
-                st.error(f"Ingestion failed: {err}")
+            ok, payload = run_ingestion(db_choice, use_mst, api_url)
+        st.session_state["ingested_db"] = db_choice if ok else None
+        st.session_state["ingestion_summary"] = payload if ok else None
+        st.session_state["ingestion_error"] = None if ok else payload
+
+    # Rendered from session_state so the status survives later reruns.
+    if st.session_state.get("ingestion_error"):
+        st.error(st.session_state["ingestion_error"])
+    elif st.session_state.get("ingestion_summary"):
+        summary = st.session_state["ingestion_summary"]
+        st.success(
+            f"Ingested {summary['table_count']} tables → "
+            f"{summary['description_count']} descriptions → "
+            f"{summary['embedding_count']} embeddings "
+            f"({summary['embedding_dimensions']}-dim, MST used: {summary['used_mst']})."
+        )
+        st.caption(f"Query retrieval uses: `{summary['embeddings_path']}`")
+        with st.expander("Ingestion details"):
+            st.json(summary)
 
     st.divider()
     st.markdown("### Example Questions")

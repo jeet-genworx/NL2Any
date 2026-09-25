@@ -28,6 +28,11 @@ from query_processing.providers.model.koboldcpp import KoboldCppProvider
 
 DEFAULT_DESCRIBE_PROMPT = Path("query_processing/prompts/table_description.txt")
 DEFAULT_BATCH_SIZE = 5
+# A batch asks for one verbose description per table (naming every column), and a
+# reasoning model spends part of its budget on <think> before emitting any JSON.
+# The global MODEL_MAX_TOKENS default (1500) truncates that mid-JSON, so this
+# stage asks for its own, larger budget.
+DESCRIBE_MAX_TOKENS = 4000
 
 
 def get_default_descriptions_path(database_type: DatabaseType) -> Path:
@@ -104,7 +109,7 @@ async def describe_tables(
             relationships_context=_format_relationships(batch_ids, edges),
         )
 
-        raw_response = await model_provider.generate(prompt)
+        raw_response = await model_provider.generate(prompt, max_tokens=DESCRIBE_MAX_TOKENS)
         parsed = extract_json_block(raw_response)
         batch_descriptions = parsed.get("descriptions", {}) if isinstance(parsed, dict) else {}
 
