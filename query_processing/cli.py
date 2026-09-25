@@ -11,13 +11,15 @@ from query_processing.nlp.linguistic import LinguisticAnalyzer
 from query_processing.providers.model.koboldcpp import KoboldCppProvider
 from query_processing.retrieval.semantic import SemanticRetriever
 from ingestion.schema.manager import get_default_schema_path
-from ingestion.schema.toml_store import load_schema_file
+from ingestion.schema.toml_store import load_schema_file, save_schema_file
 from ingestion.schema.graph import get_default_graph_path
 from ingestion.schema.mst import get_default_mst_path
 from ingestion.schema.describe import (
+    apply_descriptions,
     describe_tables,
     get_default_descriptions_path,
     save_descriptions,
+    table_descriptions,
 )
 from ingestion.schema.embed import (
     embed_descriptions,
@@ -99,12 +101,15 @@ def init_schema_cli() -> None:
 
 def describe_schema_cli() -> None:
     """CLI handler for describe-schema: generates an SLM description for each
-    table, processed in batches of connected tables so related tables are
-    described with relationship context, and saves the results as a flat
-    JSON table_name -> description mapping. Requires a running KoboldCpp
+    table and for each of its columns, processed in batches of connected tables
+    so related tables are described with relationship context. Table
+    descriptions are saved as a flat JSON table_name -> description mapping
+    (the embedding stage's input); table and column descriptions are both
+    written back into the canonical schema TOML. Requires a running KoboldCpp
     instance. Run init-schema first."""
     parser = argparse.ArgumentParser(
-        description="Generate per-table descriptions via the SLM, from the schema graph/MST."
+        description="Generate per-table and per-column descriptions via the SLM, "
+        "from the schema graph/MST."
     )
     parser.add_argument(
         "--database",
@@ -150,9 +155,30 @@ def describe_schema_cli() -> None:
 
         save_descriptions(descriptions, out_path)
 
-        print(f"\nGenerated {len(descriptions)} table descriptions, saved to: {out_path}")
-        for table_name, description in descriptions.items():
-            print(f"  {table_name}: {description}")
+        column_total = sum(len(table.columns) for table in descriptions.values())
+        print(
+            f"\nGenerated {len(descriptions)} table descriptions and {column_total} "
+            f"column descriptions, saved to: {out_path}"
+        )
+
+        # Fold table + column descriptions into the canonical schema TOML, which
+        # is where the per-column documentation lives (the JSON above carries
+        # only the table descriptions, since those are what get embedded).
+        schema_path = get_default_schema_path(db_type)
+        if schema_path.exists():
+            schema = load_schema_file(schema_path)
+            column_count = apply_descriptions(schema, descriptions)
+            save_schema_file(schema, schema_path)
+            print(f"Wrote {column_count} column descriptions into: {schema_path}")
+        else:
+            print(
+                f"Schema TOML not found at {schema_path}; skipped writing column "
+                "descriptions. Run 'uv run init-schema' first.",
+                file=sys.stderr,
+            )
+
+        for table_name, table in descriptions.items():
+            print(f"  {table_name} ({len(table.columns)} columns): {table.description}")
 
     asyncio.run(_run())
 
@@ -206,9 +232,12 @@ def embed_schema_cli() -> None:
             sys.exit(1)
 
         print(f"Embedding {len(descriptions)} table descriptions via: {settings.koboldcpp_embedding_model}")
+        print("Column descriptions in the file are not embedded.")
         print(f"Connecting to KoboldCpp at: {settings.koboldcpp_base_url}")
         try:
-            embeddings = await embed_descriptions(descriptions)
+            # Narrowed to table descriptions only -- column text stays out of
+            # the retrieval vectors.
+            embeddings = await embed_descriptions(table_descriptions(descriptions))
         except ConnectionError as err:
             print(f"Error connecting to KoboldCpp: {err}", file=sys.stderr)
             sys.exit(1)
@@ -260,6 +289,9 @@ def ingest_schema_cli() -> None:
               f"{summary['relationship_count']} relationships)")
         print(f"Used MST for description grouping: {summary['used_mst']}")
         print(f"Descriptions: {summary['description_count']} -> {summary['descriptions_path']}")
+        print(
+            f"Column descriptions: {summary['column_description_count']} -> {summary['schema_path']}"
+        )
         print(
             f"Embeddings: {summary['embedding_count']} "
             f"({summary['embedding_dimensions']} dimensions each) -> {summary['embeddings_path']}"

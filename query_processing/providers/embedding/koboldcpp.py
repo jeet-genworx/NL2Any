@@ -19,13 +19,15 @@ class KoboldCppEmbeddingProvider(EmbeddingProvider):
         self,
         base_url: str | None = None,
         model: str | None = None,
-        timeout: float = 30.0,
+        timeout: float | None = None,
         client: httpx.AsyncClient | None = None,
         expected_dim: int = EXPECTED_DIMENSION,
     ) -> None:
         self.base_url = (base_url or settings.koboldcpp_base_url).rstrip("/")
         self.model = model or settings.embedding_model
-        self.timeout = timeout
+        # Same KoboldCpp server as generation, so an embedding call can queue
+        # behind an in-flight completion; share the model timeout.
+        self.timeout = timeout if timeout is not None else float(settings.model_timeout_seconds)
         self._client = client
         self.expected_dim = expected_dim
 

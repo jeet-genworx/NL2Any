@@ -19,6 +19,7 @@ from query_processing.core.config import settings
 from query_processing.models.schema import DatabaseType
 from query_processing.providers.model.base import EmbeddingProvider
 from query_processing.providers.model.embedding import KoboldCppEmbeddingProvider
+from ingestion.schema.describe import TableDescription, parse_table_entry
 
 
 def get_default_embeddings_path(database_type: DatabaseType) -> Path:
@@ -52,14 +53,21 @@ async def embed_descriptions(
     return dict(zip(table_names, vectors))
 
 
-def load_descriptions(file_path: Path | str) -> dict[str, str]:
-    """Load a table_name -> description mapping from a JSON file on disk."""
+def load_descriptions(file_path: Path | str) -> dict[str, TableDescription]:
+    """Load the generated documentation from a JSON file on disk.
+
+    Accepts the current shape, where each table maps to its description plus a
+    description per column, as well as the older flat table_name -> description
+    shape, so descriptions files written before columns were generated still
+    load (they simply carry no column descriptions).
+    """
     path = Path(file_path)
     if not path.exists():
         raise FileNotFoundError(
             f"Descriptions file not found at: {path}. Run 'uv run describe-schema' first."
         )
-    return json.loads(path.read_text(encoding="utf-8"))
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    return {name: parse_table_entry(entry) for name, entry in raw.items()}
 
 
 def save_embeddings(embeddings: dict[str, list[float]], file_path: Path | str) -> None:

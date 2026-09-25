@@ -58,8 +58,18 @@ class _RecordingChatProvider:
     async def generate(self, prompt: str, **kwargs) -> str:
         self.prompts.append(prompt)
         tables_section = prompt.split("Tables in this batch:")[1].split("Relationships")[0]
-        names = [line.split(":")[0].strip("- ").strip() for line in tables_section.strip().splitlines()]
-        return "```json\n" + json.dumps({"descriptions": {n: f"Desc of {n}." for n in names}}) + "\n```"
+        descriptions = {}
+        for line in tables_section.strip().splitlines():
+            name, _, columns = line.strip("- ").partition(":")
+            descriptions[name.strip()] = {
+                "description": f"Desc of {name.strip()}.",
+                "columns": {
+                    col.split("(")[0].strip(): f"Col {col.split('(')[0].strip()}."
+                    for col in columns.split(",")
+                    if col.strip()
+                },
+            }
+        return "```json\n" + json.dumps({"descriptions": descriptions}) + "\n```"
 
 
 class _RecordingEmbeddingProvider:
@@ -99,6 +109,28 @@ async def test_run_ingestion_pipeline_postgres_uses_mst(tmp_path, monkeypatch):
     assert (tmp_path / "postgresql_descriptions.json").exists()
     assert (tmp_path / "postgresql_embeddings.json").exists()
 
+    # The descriptions JSON is the full record: table descriptions AND column
+    # descriptions. Only the embedding step narrows to table text.
+    assert json.loads((tmp_path / "postgresql_descriptions.json").read_text()) == {
+        "customers": {"description": "Desc of customers.", "columns": {"id": "Col id."}},
+        "orders": {
+            "description": "Desc of orders.",
+            "columns": {"id": "Col id.", "customer_id": "Col customer_id."},
+        },
+    }
+
+    # The embedded text is the table description alone -- the mock encodes each
+    # input's length, so this pins down that no column text was appended.
+    embeddings = json.loads((tmp_path / "postgresql_embeddings.json").read_text())
+    assert embeddings["customers"][1] == float(len("Desc of customers."))
+
+    # customers.id + orders.id + orders.customer_id
+    assert summary["column_description_count"] == 3
+    schema_toml = (tmp_path / "postgresql.toml").read_text()
+    assert "Desc of customers." in schema_toml
+    assert "Col customer_id." in schema_toml
+    assert 'description_generated_at = ""' not in schema_toml
+
 
 @pytest.mark.asyncio
 async def test_run_ingestion_pipeline_postgres_use_mst_false_reads_graph(tmp_path, monkeypatch):
@@ -125,3 +157,9 @@ async def test_run_ingestion_pipeline_mongo_always_uses_graph_no_mst(tmp_path, m
     assert summary["mst_path"] is None
     assert not (tmp_path / "mongodb_mst.toml").exists()
     assert (tmp_path / "mongodb_graph.toml").exists()
+
+    # Column descriptions land in the collections' schema TOML for Mongo too.
+    assert summary["column_description_count"] == 3
+    schema_toml = (tmp_path / "mongodb.toml").read_text()
+    assert "Desc of customers." in schema_toml
+    assert "Col customer_id." in schema_toml

@@ -92,7 +92,18 @@ class Settings(BaseSettings):
     query_timeout_seconds: int = Field(
         default=10,
         alias="QUERY_TIMEOUT_SECONDS",
-        description="Timeout for database queries and model calls",
+        description="Timeout for database query execution",
+    )
+    model_timeout_seconds: int = Field(
+        default=300,
+        alias="MODEL_TIMEOUT_SECONDS",
+        description=(
+            "Timeout for HTTP calls to KoboldCpp (generation and embeddings). Kept "
+            "separate from QUERY_TIMEOUT_SECONDS because a local SLM can legitimately "
+            "take minutes -- the ingestion describe stage asks for a table description "
+            "plus one per column for a whole batch -- while a database query that "
+            "hasn't returned in 10s should be abandoned."
+        ),
     )
     max_result_rows: int = Field(
         default=1000,

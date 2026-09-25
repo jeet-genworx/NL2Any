@@ -7,6 +7,7 @@ import pytest
 
 from query_processing.core.config import settings
 from query_processing.models.schema import DatabaseType
+from ingestion.schema.describe import table_descriptions
 from ingestion.schema.embed import (
     embed_descriptions,
     load_descriptions,
@@ -60,9 +61,51 @@ def test_load_descriptions_missing_file_raises(tmp_path):
 
 def test_load_descriptions_roundtrip(tmp_path):
     path = tmp_path / "postgres_descriptions.json"
+    path.write_text(
+        json.dumps(
+            {"customers": {"description": "desc", "columns": {"id": "Primary key."}}}
+        )
+    )
+
+    loaded = load_descriptions(path)
+
+    assert loaded["customers"].description == "desc"
+    assert loaded["customers"].columns == {"id": "Primary key."}
+
+
+def test_load_descriptions_accepts_legacy_flat_shape(tmp_path):
+    """Descriptions files written before column descriptions existed still load."""
+    path = tmp_path / "postgres_descriptions.json"
     path.write_text(json.dumps({"customers": "desc"}))
 
-    assert load_descriptions(path) == {"customers": "desc"}
+    loaded = load_descriptions(path)
+
+    assert loaded["customers"].description == "desc"
+    assert loaded["customers"].columns == {}
+
+
+def test_load_descriptions_then_embed_uses_table_text_only(tmp_path):
+    """The embedding input is the table description; column text is excluded."""
+    path = tmp_path / "postgres_descriptions.json"
+    path.write_text(
+        json.dumps(
+            {
+                "customers": {
+                    "description": "Customer records.",
+                    "columns": {"id": "Primary key.", "city": "Where they live."},
+                }
+            }
+        )
+    )
+    provider = _RecordingEmbeddingProvider()
+
+    import asyncio
+
+    asyncio.run(
+        embed_descriptions(table_descriptions(load_descriptions(path)), provider=provider)
+    )
+
+    assert provider.calls == [["Customer records."]]
 
 
 def test_save_embeddings_writes_table_name_keyed_json(tmp_path):

@@ -26,11 +26,10 @@ class KoboldCppProvider:
         self.default_max_tokens = (
             max_tokens if max_tokens is not None else settings.model_max_tokens
         )
-        # Allow adequate time for local SLM generation (at least 90s)
+        # Local SLM generation is slow, and long-form stages (ingestion's per-table
+        # plus per-column descriptions) can run for minutes on one batch.
         self.timeout = (
-            timeout
-            if timeout is not None
-            else max(90.0, float(settings.query_timeout_seconds))
+            timeout if timeout is not None else float(settings.model_timeout_seconds)
         )
         self._external_client = http_client
 

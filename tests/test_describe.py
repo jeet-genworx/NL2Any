@@ -1,15 +1,24 @@
-"""Tests for batched SLM table description generation from a graph/MST TOML."""
+"""Tests for batched SLM table/column description generation from a graph/MST TOML."""
 
 import json
 from pathlib import Path
 
 import pytest
 
-from query_processing.models.schema import DatabaseType
+from query_processing.models.schema import (
+    DatabaseSchema,
+    DatabaseType,
+    Field,
+    SchemaObject,
+    SchemaObjectKind,
+)
 from ingestion.schema.describe import (
+    TableDescription,
+    apply_descriptions,
     describe_tables,
     save_descriptions,
     get_default_descriptions_path,
+    table_descriptions,
 )
 
 # A chain of 7 tables: t1 -- t2 -- ... -- t7, connected in MST order.
@@ -31,6 +40,18 @@ CHAIN_MST_TOML = (
 )
 
 
+def _parse_batch_tables(prompt: str) -> dict[str, list[str]]:
+    """Read back the table -> column names the prompt listed for this batch."""
+    tables_section = prompt.split("Tables in this batch:")[1].split("Relationships")[0]
+    batch: dict[str, list[str]] = {}
+    for line in tables_section.strip().splitlines():
+        name, _, columns = line.strip("- ").partition(":")
+        batch[name.strip()] = [
+            col.split("(")[0].strip() for col in columns.split(",") if col.strip()
+        ]
+    return batch
+
+
 class _RecordingProvider:
     """Mock provider that records each prompt and returns batched JSON descriptions."""
 
@@ -39,10 +60,15 @@ class _RecordingProvider:
 
     async def generate(self, prompt: str, **kwargs) -> str:
         self.prompts.append(prompt)
-        # Echo back a description per table mentioned in this batch's "Tables in this batch:" section.
-        tables_section = prompt.split("Tables in this batch:")[1].split("Relationships")[0]
-        table_names = [line.split(":")[0].strip("- ").strip() for line in tables_section.strip().splitlines()]
-        descriptions = {name: f"Description of {name}." for name in table_names}
+        # Echo back a description per table, plus one per column, for the tables
+        # listed in this batch's "Tables in this batch:" section.
+        descriptions = {
+            name: {
+                "description": f"Description of {name}.",
+                "columns": {col: f"Column {col} of {name}." for col in columns},
+            }
+            for name, columns in _parse_batch_tables(prompt).items()
+        }
         return "<think>reasoning</think>\n```json\n" + json.dumps({"descriptions": descriptions}) + "\n```"
 
 
@@ -61,7 +87,8 @@ async def test_describe_tables_batches_in_groups_of_five(tmp_path):
 
     # All 7 tables described, in the MST's own sequential order.
     assert list(descriptions.keys()) == [f"t{i}" for i in range(1, 8)]
-    assert descriptions["t3"] == "Description of t3."
+    assert descriptions["t3"].description == "Description of t3."
+    assert descriptions["t3"].columns == {"id": "Column id of t3."}
 
 
 @pytest.mark.asyncio
@@ -110,13 +137,150 @@ async def test_describe_tables_reads_plain_graph_file(tmp_path):
     assert "orders.customer_id -> customers.id" in provider.prompts[0]
 
 
-def test_save_descriptions_writes_table_name_keyed_json(tmp_path):
+@pytest.mark.asyncio
+async def test_describe_tables_accepts_bare_string_entry(tmp_path):
+    """A model that collapses the object to a plain string still yields the
+    table description -- it just contributes no column descriptions."""
+
+    class _FlatProvider:
+        async def generate(self, prompt: str, **kwargs) -> str:
+            names = _parse_batch_tables(prompt).keys()
+            return json.dumps({"descriptions": {name: f"Flat {name}." for name in names}})
+
+    graph_path = tmp_path / "postgres_graph.toml"
+    graph_path.write_text(CHAIN_MST_TOML)
+
+    descriptions = await describe_tables(graph_path, provider=_FlatProvider())
+
+    assert descriptions["t1"].description == "Flat t1."
+    assert descriptions["t1"].columns == {}
+
+
+def test_table_descriptions_drops_columns():
+    result = {
+        "customers": TableDescription(
+            description="Customer records.", columns={"id": "The id."}
+        )
+    }
+    assert table_descriptions(result) == {"customers": "Customer records."}
+
+
+def test_apply_descriptions_writes_table_and_column_descriptions():
+    schema = DatabaseSchema(
+        database_type=DatabaseType.POSTGRESQL,
+        database_name="shop_db",
+        objects=[
+            SchemaObject(
+                name="customers",
+                kind=SchemaObjectKind.TABLE,
+                fields=[Field(name="id", type="integer"), Field(name="city", type="text")],
+            )
+        ],
+    )
+
+    applied = apply_descriptions(
+        schema,
+        {
+            "customers": TableDescription(
+                description="Customer records.",
+                columns={"id": "Primary key.", "city": "Where they live."},
+            )
+        },
+    )
+
+    assert applied == 2
+    customers = schema.get_object("customers")
+    assert customers.description == "Customer records."
+    assert customers.get_field("id").description == "Primary key."
+    assert customers.get_field("city").description == "Where they live."
+    assert schema.description_generated_at is not None
+
+
+def test_apply_descriptions_ignores_columns_not_in_schema():
+    """The SLM must never be able to add a field to the canonical schema."""
+    schema = DatabaseSchema(
+        database_type=DatabaseType.POSTGRESQL,
+        database_name="shop_db",
+        objects=[
+            SchemaObject(
+                name="customers",
+                kind=SchemaObjectKind.TABLE,
+                fields=[Field(name="id", type="integer")],
+            )
+        ],
+    )
+
+    applied = apply_descriptions(
+        schema,
+        {
+            "customers": TableDescription(
+                description="Customer records.",
+                columns={"id": "Primary key.", "invented_column": "Not real."},
+            )
+        },
+    )
+
+    assert applied == 1
+    customers = schema.get_object("customers")
+    assert [field.name for field in customers.fields] == ["id"]
+
+
+def test_apply_descriptions_resolves_nested_dotted_paths():
+    """MongoDB nested fields are addressed by dotted path."""
+    schema = DatabaseSchema(
+        database_type=DatabaseType.MONGODB,
+        database_name="shop_demo",
+        objects=[
+            SchemaObject(
+                name="customers",
+                kind=SchemaObjectKind.COLLECTION,
+                fields=[
+                    Field(
+                        name="address",
+                        type="object",
+                        nested=[Field(name="city", type="string")],
+                    )
+                ],
+            )
+        ],
+    )
+
+    applied = apply_descriptions(
+        schema,
+        {
+            "customers": TableDescription(
+                description="Customer documents.",
+                columns={"address.city": "City within the address subdocument."},
+            )
+        },
+    )
+
+    assert applied == 1
+    field = schema.get_object("customers").get_field("address.city")
+    assert field.description == "City within the address subdocument."
+
+
+def test_save_descriptions_writes_table_and_column_descriptions(tmp_path):
     out_path = tmp_path / "postgres_descriptions.json"
-    save_descriptions({"customers": "Customer records.", "orders": "Order records."}, out_path)
+    save_descriptions(
+        {
+            "customers": TableDescription(
+                description="Customer records.",
+                columns={"id": "Primary key.", "city": "Where they live."},
+            ),
+            "orders": TableDescription(description="Order records.", columns={}),
+        },
+        out_path,
+    )
 
     assert out_path.exists()
-    data = json.loads(out_path.read_text())
-    assert data == {"customers": "Customer records.", "orders": "Order records."}
+    assert json.loads(out_path.read_text()) == {
+        "customers": {
+            "description": "Customer records.",
+            "columns": {"id": "Primary key.", "city": "Where they live."},
+        },
+        "orders": {"description": "Order records.", "columns": {}},
+    }
 
 
 def test_get_default_descriptions_path():

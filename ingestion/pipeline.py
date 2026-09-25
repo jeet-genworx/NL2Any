@@ -1,7 +1,7 @@
 """Orchestrates the full ingestion flow for a database.
 
 extract metadata -> save schema/graph (+ MST, for Postgres) -> generate SLM
-table descriptions -> embed those descriptions. This is the single entrypoint
+table and column descriptions -> embed the table descriptions. This is the single entrypoint
 the API (and therefore the frontend, when a user selects a database) calls;
 the granular CLI commands (init-schema, describe-schema, embed-schema) call
 the same building blocks individually for manual/inspectable use.
@@ -21,9 +21,11 @@ from ingestion.schema.graph import get_default_graph_path, save_schema_graph
 from ingestion.schema.mst import get_default_mst_path, save_minimum_spanning_tree
 from ingestion.schema.describe import (
     DEFAULT_BATCH_SIZE,
+    apply_descriptions,
     describe_tables,
     get_default_descriptions_path,
     save_descriptions,
+    table_descriptions,
 )
 from ingestion.schema.embed import (
     embed_descriptions,
@@ -74,12 +76,15 @@ async def run_ingestion_pipeline(
 
     1. Extract metadata via the database adapter, save the schema + graph TOML
        (and MST TOML, for Postgres).
-    2. Generate an SLM description for every table, batched with relationship
-       context. Reads from the MST (tree order, reduced edges) when `use_mst`
-       is true and the database has one; otherwise reads straight from the
-       plain graph (extraction order, full edge set). MongoDB always uses the
-       graph, since it has no foreign-key concept and therefore no MST.
-    3. Embed each description via the local sentence-transformer model.
+    2. Generate an SLM description for every table *and* for every one of its
+       columns, batched with relationship context. Reads from the MST (tree
+       order, reduced edges) when `use_mst` is true and the database has one;
+       otherwise reads straight from the plain graph (extraction order, full
+       edge set). MongoDB always uses the graph, since it has no foreign-key
+       concept and therefore no MST. Both the table and the column descriptions
+       are written to the descriptions JSON and into the canonical schema TOML.
+    3. Embed the table descriptions via the local sentence-transformer model.
+       Column descriptions are not embedded.
 
     This is exactly the flow triggered when a user selects a database in the
     frontend and clicks "Initialize Database".
@@ -90,10 +95,23 @@ async def run_ingestion_pipeline(
     source_path = mst_path if used_mst else graph_path
 
     descriptions = await describe_tables(source_path, batch_size=batch_size)
+    table_only = table_descriptions(descriptions)
+
+    # The descriptions JSON holds the full record: each table's description and
+    # every column description.
     descriptions_path = get_default_descriptions_path(db_type)
     save_descriptions(descriptions, descriptions_path)
 
-    embeddings = await embed_descriptions(descriptions)
+    # Fold both the table and the column descriptions back into the canonical
+    # schema TOML -- the file query processing reads -- and re-save it. Stage 1
+    # wrote that file before any description existed, so this is what actually
+    # populates the `description` fields and `description_generated_at`.
+    column_description_count = apply_descriptions(schema, descriptions)
+    save_schema_file(schema, schema_path)
+
+    # Only the table description is embedded. Column descriptions are
+    # documentation in the schema TOML and stay out of the retrieval vectors.
+    embeddings = await embed_descriptions(table_only)
     embeddings_path = get_default_embeddings_path(db_type)
     save_embeddings(embeddings, embeddings_path)
 
@@ -104,6 +122,7 @@ async def run_ingestion_pipeline(
         "relationship_count": len(schema.relationships),
         "used_mst": used_mst,
         "description_count": len(descriptions),
+        "column_description_count": column_description_count,
         "embedding_count": len(embeddings),
         "embedding_dimensions": len(next(iter(embeddings.values()))) if embeddings else 0,
         "schema_path": str(schema_path),
