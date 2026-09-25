@@ -90,7 +90,7 @@ class BM25Retriever:
         if not self.bm25 or not self.objects:
             return []
 
-        k = top_k if top_k is not None else settings.bm25_top_k
+        k = top_k if top_k is not None else settings.retrieval_top_k
         tokenized_query = _tokenize(query)
         if not tokenized_query:
             # Return top k default objects if query has no tokens
