@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 
 def _get_validator_prompt_path() -> Path:
-    p = Path("backend/src/code/query_processing/prompts/validator.txt")
+    p = Path("backend/src/core/query_processing/prompts/validator.txt")
     if p.exists():
         return p
     alt = Path(__file__).resolve().parents[1] / "prompts" / "validator.txt"

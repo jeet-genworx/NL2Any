@@ -7,8 +7,8 @@ import pytest
 
 from backend.src.config import settings
 from backend.src.data.models.schema import DatabaseType
-from backend.src.code.ingestion.schema.describe import table_descriptions
-from backend.src.code.ingestion.schema.embed import (
+from backend.src.core.ingestion.schema.describe import table_descriptions
+from backend.src.core.ingestion.schema.embed import (
     embed_descriptions,
     load_descriptions,
     save_embeddings,

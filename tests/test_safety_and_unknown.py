@@ -17,9 +17,9 @@ from backend.src.data.models.schema import (
     SchemaObject,
     SchemaObjectKind,
 )
-from backend.src.code.query_processing.pipeline.guardrail import GuardrailClassifier
-from backend.src.code.query_processing.pipeline.orchestrator import NL2AnyQueryOrchestrator
-from backend.src.code.query_processing.pipeline.policy import SafetyPolicyValidator
+from backend.src.core.query_processing.pipeline.guardrail import GuardrailClassifier
+from backend.src.core.query_processing.pipeline.orchestrator import NL2AnyQueryOrchestrator
+from backend.src.core.query_processing.pipeline.policy import SafetyPolicyValidator
 from tests.test_orchestrator import (
     MockEmbeddingProvider,
     MockExecutor,
@@ -126,7 +126,7 @@ async def test_policy_rejects_multi_statement(mock_shop_schema):
 async def test_validator_rejects_unsafe_operations():
     """Validator SLM/deterministic check must reject destructive operations as UNSAFE."""
     from backend.src.schemas.pipeline import QueryPlan, RelevantSchema
-    from backend.src.code.query_processing.pipeline.validator import QueryValidator
+    from backend.src.core.query_processing.pipeline.validator import QueryValidator
 
     validator = QueryValidator()
     plan = QueryPlan(sources=["customers"], projections=["*"])

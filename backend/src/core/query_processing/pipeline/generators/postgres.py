@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 def _get_postgres_prompt_path() -> Path:
-    p = Path("backend/src/code/query_processing/prompts/postgres_query_generator.txt")
+    p = Path("backend/src/core/query_processing/prompts/postgres_query_generator.txt")
     if p.exists():
         return p
     alt = Path(__file__).resolve().parents[2] / "prompts" / "postgres_query_generator.txt"

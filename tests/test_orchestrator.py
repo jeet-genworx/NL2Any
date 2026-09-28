@@ -20,7 +20,7 @@ from backend.src.data.models.schema import (
     SchemaObject,
     SchemaObjectKind,
 )
-from backend.src.code.query_processing.pipeline.orchestrator import NL2AnyQueryOrchestrator
+from backend.src.core.query_processing.pipeline.orchestrator import NL2AnyQueryOrchestrator
 
 
 class MockEmbeddingProvider:

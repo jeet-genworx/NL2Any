@@ -4,8 +4,8 @@ import math
 from unittest.mock import MagicMock
 import pytest
 
-from backend.src.code.query_processing.retrieval.store import EmbeddingStore
-from backend.src.code.query_processing.retrieval.vector import VectorRetriever, cosine_similarity
+from backend.src.core.query_processing.retrieval.store import EmbeddingStore
+from backend.src.core.query_processing.retrieval.vector import VectorRetriever, cosine_similarity
 
 
 def test_cosine_similarity_identical():

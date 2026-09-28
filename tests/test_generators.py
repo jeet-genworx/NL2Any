@@ -3,8 +3,8 @@
 import pytest
 from backend.src.schemas.pipeline import MongoQuery, QueryPlan, RelevantSchema
 from backend.src.data.models.schema import DatabaseType, Field, SchemaObject, SchemaObjectKind
-from backend.src.code.query_processing.pipeline.generators.mongo import MongoQueryGenerator
-from backend.src.code.query_processing.pipeline.generators.postgres import PostgresQueryGenerator
+from backend.src.core.query_processing.pipeline.generators.mongo import MongoQueryGenerator
+from backend.src.core.query_processing.pipeline.generators.postgres import PostgresQueryGenerator
 
 
 class MockPostgresProvider:

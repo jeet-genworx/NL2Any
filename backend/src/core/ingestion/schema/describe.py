@@ -46,7 +46,7 @@ logger = logging.getLogger(__name__)
 
 
 def _get_describe_prompt_path() -> Path:
-    p = Path("backend/src/code/query_processing/prompts/table_description.txt")
+    p = Path("backend/src/core/query_processing/prompts/table_description.txt")
     if p.exists():
         return p
     alt = Path(__file__).resolve().parents[2] / "query_processing" / "prompts" / "table_description.txt"

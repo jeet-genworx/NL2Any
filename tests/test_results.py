@@ -1,6 +1,6 @@
 """Tests for ResultProcessor."""
 
-from backend.src.code.query_processing.pipeline.results import ResultProcessor
+from backend.src.core.query_processing.pipeline.results import ResultProcessor
 
 
 def test_result_processor_small_result():

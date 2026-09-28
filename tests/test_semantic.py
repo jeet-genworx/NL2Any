@@ -1,7 +1,7 @@
 """Tests for SemanticAnalyzer stage."""
 
 import pytest
-from backend.src.code.query_processing.pipeline.semantic import SemanticAnalyzer
+from backend.src.core.query_processing.pipeline.semantic import SemanticAnalyzer
 
 
 class MockSemanticProvider:

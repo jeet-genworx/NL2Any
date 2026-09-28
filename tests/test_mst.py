@@ -11,7 +11,7 @@ from backend.src.data.models.schema import (
     SchemaObject,
     SchemaObjectKind,
 )
-from backend.src.code.ingestion.schema.mst import (
+from backend.src.core.ingestion.schema.mst import (
     compute_minimum_spanning_tree,
     save_minimum_spanning_tree,
     get_default_mst_path,

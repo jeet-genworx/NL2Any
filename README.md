@@ -139,7 +139,7 @@ nl-anyql/
 │       │           ├── health.py               # Health check endpoint
 │       │           └── query.py                # Ingest, Query, and Schema endpoints
 │       │
-│       ├── code/                               # Pipeline logic
+│       ├── core/                               # Pipeline logic
 │       │   ├── ingestion/
 │       │   │   ├── pipeline.py
 │       │   │   └── schema/

@@ -3,7 +3,7 @@
 import pytest
 from backend.src.schemas.pipeline import QuestionAnalysis, RelevantSchema
 from backend.src.data.models.schema import DatabaseType, Field, SchemaObject, SchemaObjectKind
-from backend.src.code.query_processing.pipeline.planner import QueryPlanner
+from backend.src.core.query_processing.pipeline.planner import QueryPlanner
 
 
 class MockPlannerProvider:

@@ -12,7 +12,7 @@ from backend.src.data.models.schema import (
     SchemaObject,
     SchemaObjectKind,
 )
-from backend.src.code.ingestion.schema.describe import (
+from backend.src.core.ingestion.schema.describe import (
     TableDescription,
     apply_descriptions,
     describe_tables,

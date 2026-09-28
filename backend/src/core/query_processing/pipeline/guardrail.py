@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 def _get_guardrail_prompt_path() -> Path:
-    p = Path("backend/src/code/query_processing/prompts/guardrail.txt")
+    p = Path("backend/src/core/query_processing/prompts/guardrail.txt")
     if p.exists():
         return p
     alt = Path(__file__).resolve().parents[1] / "prompts" / "guardrail.txt"

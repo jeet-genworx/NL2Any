@@ -9,7 +9,7 @@ from backend.src.data.models.schema import (
     SchemaObject,
     SchemaObjectKind,
 )
-from backend.src.code.query_processing.retrieval.semantic import SemanticRetriever
+from backend.src.core.query_processing.retrieval.semantic import SemanticRetriever
 
 
 class _FakeEmbeddingProvider:
