@@ -1,7 +1,7 @@
 """FastAPI dependency injection and parameter resolution."""
 
 from fastapi import HTTPException
-from backend.src.code.query_processing.pipeline.orchestrator import NL2AnyQueryOrchestrator
+from backend.src.core.query_processing.pipeline.orchestrator import NL2AnyQueryOrchestrator
 from backend.src.data.models.schema import DatabaseType
 
 _orchestrator_instance: NL2AnyQueryOrchestrator | None = None

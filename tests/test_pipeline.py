@@ -1,6 +1,7 @@
 """Tests for the full ingestion pipeline orchestrator."""
 
 import json
+import tomllib
 
 import pytest
 
@@ -12,7 +13,7 @@ from backend.src.data.models.schema import (
     SchemaObject,
     SchemaObjectKind,
 )
-from backend.src.code.ingestion.pipeline import run_ingestion_pipeline
+from backend.src.core.ingestion.pipeline import run_ingestion_pipeline
 
 
 def _fake_schema(db_type: DatabaseType) -> DatabaseSchema:
@@ -77,23 +78,33 @@ class _RecordingEmbeddingProvider:
         return [[float(i), float(len(t))] for i, t in enumerate(texts)]
 
 
+# Artifact path resolver -> the filename suffix it produces.
+_ARTIFACT_PATHS = {
+    "schema_path": ".toml",
+    "graph_path": "_graph.toml",
+    "mst_path": "_mst.toml",
+    "descriptions_path": "_descriptions.toml",
+    "embeddings_path": "_embeddings.json",
+}
+
+
 def _patch_default_paths(monkeypatch, tmp_path) -> None:
-    """Redirect every get_default_*_path() the pipeline uses into tmp_path,
-    without changing the process CWD (prompt loading is still CWD-relative
-    to the real repo, same as in production)."""
-    monkeypatch.setattr("backend.src.code.ingestion.pipeline.get_default_schema_path", lambda db_type: tmp_path / f"{db_type.value}.toml")
-    monkeypatch.setattr("backend.src.code.ingestion.pipeline.get_default_graph_path", lambda db_type: tmp_path / f"{db_type.value}_graph.toml")
-    monkeypatch.setattr("backend.src.code.ingestion.pipeline.get_default_mst_path", lambda db_type: tmp_path / f"{db_type.value}_mst.toml")
-    monkeypatch.setattr("backend.src.code.ingestion.pipeline.get_default_descriptions_path", lambda db_type: tmp_path / f"{db_type.value}_descriptions.json")
-    monkeypatch.setattr("backend.src.code.ingestion.pipeline.get_default_embeddings_path", lambda db_type: tmp_path / f"{db_type.value}_embeddings.json")
-    monkeypatch.setattr("backend.src.code.ingestion.schema.describe.KoboldCppProvider", lambda: _RecordingChatProvider())
-    monkeypatch.setattr("backend.src.code.ingestion.schema.embed.KoboldCppEmbeddingProvider", lambda: _RecordingEmbeddingProvider())
+    """Redirect every canonical artifact path into tmp_path, without changing
+    the process CWD (prompt loading is still CWD-relative to the real repo,
+    same as in production)."""
+    for resolver, suffix in _ARTIFACT_PATHS.items():
+        monkeypatch.setattr(
+            f"backend.src.data.repositories.paths.{resolver}",
+            lambda db_type, suffix=suffix: tmp_path / f"{db_type.value}{suffix}",
+        )
+    monkeypatch.setattr("backend.src.core.ingestion.schema.describe.KoboldCppProvider", lambda: _RecordingChatProvider())
+    monkeypatch.setattr("backend.src.core.ingestion.schema.embed.KoboldCppEmbeddingProvider", lambda: _RecordingEmbeddingProvider())
 
 
 @pytest.mark.asyncio
 async def test_run_ingestion_pipeline_postgres_uses_mst(tmp_path, monkeypatch):
     schema = _fake_schema(DatabaseType.POSTGRESQL)
-    monkeypatch.setattr("backend.src.code.ingestion.pipeline.get_adapter", lambda db_type: _FakeAdapter(schema))
+    monkeypatch.setattr("backend.src.core.ingestion.pipeline.get_adapter", lambda db_type: _FakeAdapter(schema))
     _patch_default_paths(monkeypatch, tmp_path)
 
     summary = await run_ingestion_pipeline(DatabaseType.POSTGRESQL, use_mst=True)
@@ -106,12 +117,14 @@ async def test_run_ingestion_pipeline_postgres_uses_mst(tmp_path, monkeypatch):
     assert (tmp_path / "postgresql.toml").exists()
     assert (tmp_path / "postgresql_graph.toml").exists()
     assert (tmp_path / "postgresql_mst.toml").exists()
-    assert (tmp_path / "postgresql_descriptions.json").exists()
+    assert (tmp_path / "postgresql_descriptions.toml").exists()
     assert (tmp_path / "postgresql_embeddings.json").exists()
 
-    # The descriptions JSON is the full record: table descriptions AND column
+    # The documentation TOML is the full record: table descriptions AND column
     # descriptions. Only the embedding step narrows to table text.
-    assert json.loads((tmp_path / "postgresql_descriptions.json").read_text()) == {
+    document = tomllib.loads((tmp_path / "postgresql_descriptions.toml").read_text())
+    assert document["database"]["type"] == "postgresql"
+    assert document["tables"] == {
         "customers": {"description": "Desc of customers.", "columns": {"id": "Col id."}},
         "orders": {
             "description": "Desc of orders.",
@@ -135,7 +148,7 @@ async def test_run_ingestion_pipeline_postgres_uses_mst(tmp_path, monkeypatch):
 @pytest.mark.asyncio
 async def test_run_ingestion_pipeline_postgres_use_mst_false_reads_graph(tmp_path, monkeypatch):
     schema = _fake_schema(DatabaseType.POSTGRESQL)
-    monkeypatch.setattr("backend.src.code.ingestion.pipeline.get_adapter", lambda db_type: _FakeAdapter(schema))
+    monkeypatch.setattr("backend.src.core.ingestion.pipeline.get_adapter", lambda db_type: _FakeAdapter(schema))
     _patch_default_paths(monkeypatch, tmp_path)
 
     summary = await run_ingestion_pipeline(DatabaseType.POSTGRESQL, use_mst=False)
@@ -147,7 +160,7 @@ async def test_run_ingestion_pipeline_postgres_use_mst_false_reads_graph(tmp_pat
 @pytest.mark.asyncio
 async def test_run_ingestion_pipeline_mongo_always_uses_graph_no_mst(tmp_path, monkeypatch):
     schema = _fake_schema(DatabaseType.MONGODB)
-    monkeypatch.setattr("backend.src.code.ingestion.pipeline.get_adapter", lambda db_type: _FakeAdapter(schema))
+    monkeypatch.setattr("backend.src.core.ingestion.pipeline.get_adapter", lambda db_type: _FakeAdapter(schema))
     _patch_default_paths(monkeypatch, tmp_path)
 
     # use_mst=True requested, but Mongo has no MST, so it must fall back to the graph.

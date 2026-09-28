@@ -2,7 +2,7 @@
 
 import pytest
 from backend.src.schemas.pipeline import GuardrailDecision
-from backend.src.code.query_processing.pipeline.guardrail import GuardrailClassifier
+from backend.src.core.query_processing.pipeline.guardrail import GuardrailClassifier
 
 
 class MockModelProvider:

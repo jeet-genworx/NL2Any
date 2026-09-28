@@ -11,7 +11,8 @@ from backend.src.data.models.schema import (
     SchemaObject,
     SchemaObjectKind,
 )
-from backend.src.code.ingestion.schema.graph import build_schema_graph, save_schema_graph, get_default_graph_path
+from backend.src.core.ingestion.schema.graph import build_schema_graph
+from backend.src.data.repositories import graph_repository, paths
 
 
 def _sample_schema() -> DatabaseSchema:
@@ -69,9 +70,9 @@ def test_build_schema_graph_nodes_and_edges():
     assert edge["type"] == "many_to_one"
 
 
-def test_save_schema_graph_writes_valid_toml(tmp_path):
+def test_save_graph_document_writes_valid_toml(tmp_path):
     out_path = tmp_path / "postgres_graph.toml"
-    save_schema_graph(_sample_schema(), out_path)
+    graph_repository.save_graph_document(build_schema_graph(_sample_schema()), out_path)
 
     assert out_path.exists()
     parsed = tomllib.loads(out_path.read_text())
@@ -79,6 +80,6 @@ def test_save_schema_graph_writes_valid_toml(tmp_path):
     assert len(parsed["edges"]) == 1
 
 
-def test_get_default_graph_path():
-    assert get_default_graph_path(DatabaseType.POSTGRESQL) == Path("backend/src/data/schemas/postgres_graph.toml")
-    assert get_default_graph_path(DatabaseType.MONGODB) == Path("backend/src/data/schemas/mongo_graph.toml")
+def test_graph_path():
+    assert paths.graph_path(DatabaseType.POSTGRESQL) == Path("backend/src/data/schemas/postgres_graph.toml")
+    assert paths.graph_path(DatabaseType.MONGODB) == Path("backend/src/data/schemas/mongo_graph.toml")

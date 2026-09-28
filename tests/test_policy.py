@@ -2,7 +2,7 @@
 
 from backend.src.schemas.pipeline import GeneratedQuery, MongoQuery
 from backend.src.data.models.schema import DatabaseType
-from backend.src.code.query_processing.pipeline.policy import SafetyPolicyValidator
+from backend.src.core.query_processing.pipeline.policy import SafetyPolicyValidator
 
 
 def test_sql_policy_allow_select():

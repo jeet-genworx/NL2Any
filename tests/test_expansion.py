@@ -8,7 +8,7 @@ from backend.src.data.models.schema import (
     SchemaObject,
     SchemaObjectKind,
 )
-from backend.src.code.query_processing.pipeline.expansion import SchemaExpander
+from backend.src.core.query_processing.pipeline.expansion import SchemaExpander
 
 
 def test_schema_expander_with_bridge_table():

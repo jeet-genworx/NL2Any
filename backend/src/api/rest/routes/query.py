@@ -1,13 +1,11 @@
-"""Query, ingestion, and schema API routes."""
+"""Query and ingestion API routes."""
 
 from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 
 from backend.src.api.rest.dependencies import get_orchestrator, resolve_db_type
-from backend.src.code.ingestion.pipeline import run_ingestion_pipeline
-from backend.src.code.ingestion.schema.manager import get_default_schema_path
-from backend.src.code.ingestion.schema.toml_store import load_schema_file
-from backend.src.code.query_processing.pipeline.orchestrator import NL2AnyQueryOrchestrator
+from backend.src.core.ingestion.pipeline import run_ingestion_pipeline
+from backend.src.core.query_processing.pipeline.orchestrator import NL2AnyQueryOrchestrator
 from backend.src.schemas.pipeline import PipelineResponse
 from backend.src.schemas.request import QueryRequest
 
@@ -48,53 +46,3 @@ async def query_endpoint(
         return response
     except Exception as err:
         raise HTTPException(status_code=500, detail=str(err))
-
-
-@router.get("/schema/{database_type}")
-def get_schema_endpoint(database_type: str) -> dict[str, Any]:
-    """Retrieve canonical semantic schema information."""
-    db_type = resolve_db_type(database_type)
-
-    schema_path = get_default_schema_path(db_type)
-    if not schema_path.exists():
-        raise HTTPException(
-            status_code=404,
-            detail=f"Schema file not found at {schema_path}. Run 'init-schema' first.",
-        )
-
-    schema = load_schema_file(schema_path)
-    return {
-        "database_type": schema.database_type.value,
-        "database_name": schema.database_name,
-        "schema_version": schema.schema_version,
-        "last_updated": schema.last_updated,
-        "description_generated_at": schema.description_generated_at,
-        "object_count": len(schema.objects),
-        "objects": [
-            {
-                "name": obj.name,
-                "kind": obj.kind.value,
-                "description": obj.description,
-                "fields": [
-                    {
-                        "name": f.name,
-                        "type": f.type,
-                        "description": f.description,
-                        "nullable": f.nullable,
-                    }
-                    for f in obj.fields
-                ],
-            }
-            for obj in schema.objects
-        ],
-        "relationships": [
-            {
-                "from_object": r.from_object,
-                "from_field": r.from_field,
-                "to_object": r.to_object,
-                "to_field": r.to_field,
-                "type": r.relationship_type,
-            }
-            for r in schema.relationships
-        ],
-    }

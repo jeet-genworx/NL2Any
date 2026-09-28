@@ -1,7 +1,7 @@
 """FastAPI application initialization and setup."""
 
 from fastapi import FastAPI
-from backend.src.api.rest.routes import health_router, query_router
+from backend.src.api.rest.routes import health_router, query_router, schema_router
 
 
 def create_app() -> FastAPI:
@@ -15,6 +15,7 @@ def create_app() -> FastAPI:
     # Register routers (no middleware layer as per architecture specification)
     app.include_router(health_router)
     app.include_router(query_router)
+    app.include_router(schema_router)
 
     return app
 

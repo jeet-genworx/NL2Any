@@ -8,7 +8,7 @@ from backend.src.data.models.schema import (
     SchemaObject,
     SchemaObjectKind,
 )
-from backend.src.code.ingestion.schema.toml_store import (
+from backend.src.data.repositories.schema_repository import (
     dump_schema_to_toml,
     load_schema_from_toml,
 )

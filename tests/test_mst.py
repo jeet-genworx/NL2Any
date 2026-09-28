@@ -11,11 +11,8 @@ from backend.src.data.models.schema import (
     SchemaObject,
     SchemaObjectKind,
 )
-from backend.src.code.ingestion.schema.mst import (
-    compute_minimum_spanning_tree,
-    save_minimum_spanning_tree,
-    get_default_mst_path,
-)
+from backend.src.core.ingestion.schema.mst import compute_minimum_spanning_tree
+from backend.src.data.repositories import graph_repository, paths
 
 
 def _table(name: str) -> SchemaObject:
@@ -64,7 +61,7 @@ def test_mst_produces_forest_for_disconnected_graph():
     assert mst["graph"]["component_count"] == 2  # {customers, orders} and {products}
 
 
-def test_save_minimum_spanning_tree_writes_valid_toml(tmp_path):
+def test_save_mst_document_writes_valid_toml(tmp_path):
     schema = DatabaseSchema(
         database_type=DatabaseType.POSTGRESQL,
         database_name="shop_db",
@@ -74,7 +71,7 @@ def test_save_minimum_spanning_tree_writes_valid_toml(tmp_path):
         ],
     )
     out_path = tmp_path / "postgres_mst.toml"
-    save_minimum_spanning_tree(schema, out_path)
+    graph_repository.save_graph_document(compute_minimum_spanning_tree(schema), out_path)
 
     assert out_path.exists()
     parsed = tomllib.loads(out_path.read_text())
@@ -118,6 +115,6 @@ def test_mst_node_order_groups_each_component_together():
     assert [node["id"] for node in mst["nodes"]] == ["customers", "orders", "products"]
 
 
-def test_get_default_mst_path():
-    assert get_default_mst_path(DatabaseType.POSTGRESQL) == Path("backend/src/data/schemas/postgres_mst.toml")
-    assert get_default_mst_path(DatabaseType.MONGODB) == Path("backend/src/data/schemas/mongo_mst.toml")
+def test_mst_path():
+    assert paths.mst_path(DatabaseType.POSTGRESQL) == Path("backend/src/data/schemas/postgres_mst.toml")
+    assert paths.mst_path(DatabaseType.MONGODB) == Path("backend/src/data/schemas/mongo_mst.toml")

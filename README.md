@@ -191,10 +191,10 @@ nl-anyql/
 │       │   │   └── postgres.py
 │       │   ├── schemas/                        # Canonical TOMLs, graphs, descriptions
 │       │   │   ├── mongo.toml
-│       │   │   ├── mongo_descriptions.json
+│       │   │   ├── mongo_descriptions.toml
 │       │   │   ├── mongo_graph.toml
 │       │   │   ├── postgres.toml
-│       │   │   ├── postgres_descriptions.json
+│       │   │   ├── postgres_descriptions.toml
 │       │   │   ├── postgres_graph.toml
 │       │   │   └── postgres_mst.toml
 │       │   └── embeddings/                     # Precomputed embeddings artifacts

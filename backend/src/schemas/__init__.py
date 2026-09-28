@@ -8,6 +8,7 @@ from backend.src.data.models.schema import (
     SchemaObject,
     SchemaObjectKind,
 )
+from backend.src.schemas.ingestion import TableDescription
 from backend.src.schemas.pipeline import (
     CandidateTable,
     EmbeddingRetrievalResult,
@@ -55,6 +56,7 @@ __all__ = [
     "SemanticAnalysisResult",
     "SemanticFilter",
     "SemanticOrdering",
+    "TableDescription",
     "TableSelectionResult",
     "ValidationErrorType",
     "ValidationResult",

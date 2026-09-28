@@ -7,13 +7,11 @@ import pytest
 
 from backend.src.config import settings
 from backend.src.data.models.schema import DatabaseType
-from backend.src.code.ingestion.schema.describe import table_descriptions
-from backend.src.code.ingestion.schema.embed import (
-    embed_descriptions,
-    load_descriptions,
-    save_embeddings,
-    get_default_embeddings_path,
-)
+from backend.src.core.ingestion.schema.describe import table_descriptions
+from backend.src.core.ingestion.schema.embed import embed_descriptions
+from backend.src.data.repositories import paths
+from backend.src.data.repositories.description_repository import load_descriptions
+from backend.src.data.repositories.embedding_repository import save_embeddings
 
 
 class _RecordingEmbeddingProvider:
@@ -56,15 +54,16 @@ async def test_embed_descriptions_empty_input_returns_empty():
 
 def test_load_descriptions_missing_file_raises(tmp_path):
     with pytest.raises(FileNotFoundError):
-        load_descriptions(tmp_path / "missing.json")
+        load_descriptions(tmp_path / "missing.toml")
 
 
 def test_load_descriptions_roundtrip(tmp_path):
-    path = tmp_path / "postgres_descriptions.json"
+    path = tmp_path / "postgres_descriptions.toml"
     path.write_text(
-        json.dumps(
-            {"customers": {"description": "desc", "columns": {"id": "Primary key."}}}
-        )
+        '[tables.customers]\n'
+        'description = "desc"\n'
+        '[tables.customers.columns]\n'
+        'id = "Primary key."\n'
     )
 
     loaded = load_descriptions(path)
@@ -73,10 +72,44 @@ def test_load_descriptions_roundtrip(tmp_path):
     assert loaded["customers"].columns == {"id": "Primary key."}
 
 
-def test_load_descriptions_accepts_legacy_flat_shape(tmp_path):
-    """Descriptions files written before column descriptions existed still load."""
-    path = tmp_path / "postgres_descriptions.json"
-    path.write_text(json.dumps({"customers": "desc"}))
+def test_load_descriptions_reads_collections_section(tmp_path):
+    """MongoDB documentation is stored under [collections.*]; the caller does
+    not have to know which section it was written to."""
+    path = tmp_path / "mongo_descriptions.toml"
+    path.write_text(
+        '[collections.customers]\n'
+        'description = "Customer documents."\n'
+        '[collections.customers.columns]\n'
+        '"address.city" = "City of residence."\n'
+    )
+
+    loaded = load_descriptions(path)
+
+    assert loaded["customers"].description == "Customer documents."
+    assert loaded["customers"].columns == {"address.city": "City of residence."}
+
+
+def test_load_descriptions_skips_undescribed_columns(tmp_path):
+    """Column slots still awaiting a description are dropped on load, so an
+    empty string never reaches the schema TOML as a description."""
+    path = tmp_path / "postgres_descriptions.toml"
+    path.write_text(
+        '[tables.customers]\n'
+        'description = "desc"\n'
+        '[tables.customers.columns]\n'
+        'id = "Primary key."\n'
+        'city = ""\n'
+    )
+
+    loaded = load_descriptions(path)
+
+    assert loaded["customers"].columns == {"id": "Primary key."}
+
+
+def test_load_descriptions_accepts_flat_string_shape(tmp_path):
+    """A table mapped straight to a string still loads, carrying no columns."""
+    path = tmp_path / "postgres_descriptions.toml"
+    path.write_text('[tables]\ncustomers = "desc"\n')
 
     loaded = load_descriptions(path)
 
@@ -86,16 +119,13 @@ def test_load_descriptions_accepts_legacy_flat_shape(tmp_path):
 
 def test_load_descriptions_then_embed_uses_table_text_only(tmp_path):
     """The embedding input is the table description; column text is excluded."""
-    path = tmp_path / "postgres_descriptions.json"
+    path = tmp_path / "postgres_descriptions.toml"
     path.write_text(
-        json.dumps(
-            {
-                "customers": {
-                    "description": "Customer records.",
-                    "columns": {"id": "Primary key.", "city": "Where they live."},
-                }
-            }
-        )
+        '[tables.customers]\n'
+        'description = "Customer records."\n'
+        '[tables.customers.columns]\n'
+        'id = "Primary key."\n'
+        'city = "Where they live."\n'
     )
     provider = _RecordingEmbeddingProvider()
 
@@ -117,11 +147,11 @@ def test_save_embeddings_writes_table_name_keyed_json(tmp_path):
     assert data == {"customers": [0.1, 0.2], "orders": [0.3, 0.4]}
 
 
-def test_get_default_embeddings_path():
+def test_embeddings_path():
     # Both write to the exact files query_processing's live EmbeddingStore reads.
-    assert get_default_embeddings_path(DatabaseType.POSTGRESQL) == Path(
+    assert paths.embeddings_path(DatabaseType.POSTGRESQL) == Path(
         settings.postgres_embeddings_path
     )
-    assert get_default_embeddings_path(DatabaseType.MONGODB) == Path(
+    assert paths.embeddings_path(DatabaseType.MONGODB) == Path(
         settings.mongo_embeddings_path
     )

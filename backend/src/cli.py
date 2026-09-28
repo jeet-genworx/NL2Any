@@ -7,28 +7,45 @@ import sys
 
 from backend.src.config import settings
 from backend.src.data.models.schema import DatabaseType
-from backend.src.code.query_processing.nlp.linguistic import LinguisticAnalyzer
+from backend.src.core.query_processing.nlp.linguistic import LinguisticAnalyzer
 from backend.src.control.providers.model.koboldcpp import KoboldCppProvider
-from backend.src.code.query_processing.retrieval.semantic import SemanticRetriever
-from backend.src.code.ingestion.schema.manager import get_default_schema_path
-from backend.src.code.ingestion.schema.toml_store import load_schema_file, save_schema_file
-from backend.src.code.ingestion.schema.graph import get_default_graph_path
-from backend.src.code.ingestion.schema.mst import get_default_mst_path
-from backend.src.code.ingestion.schema.describe import (
+from backend.src.core.query_processing.retrieval.semantic import SemanticRetriever
+from backend.src.core.ingestion.pipeline import extract_and_save_schema, run_ingestion_pipeline
+from backend.src.core.ingestion.schema.describe import (
     apply_descriptions,
     describe_tables,
-    get_default_descriptions_path,
-    save_descriptions,
     table_descriptions,
 )
-from backend.src.code.ingestion.schema.embed import (
-    embed_descriptions,
-    get_default_embeddings_path,
-    load_descriptions,
-    load_embeddings,
-    save_embeddings,
+from backend.src.core.ingestion.schema.embed import embed_descriptions
+from backend.src.data.repositories import (
+    description_repository,
+    embedding_repository,
+    paths,
+    schema_repository,
 )
-from backend.src.code.ingestion.pipeline import extract_and_save_schema, run_ingestion_pipeline
+
+_DATABASE_CHOICES = ("postgres", "postgresql", "mongo", "mongodb")
+
+
+def _add_database_argument(parser: argparse.ArgumentParser, *, required: bool = False) -> None:
+    """Add the --database/-d option every ingestion command shares."""
+    parser.add_argument(
+        "--database",
+        "-d",
+        choices=_DATABASE_CHOICES,
+        required=required,
+        default=None if required else "postgres",
+        help="Target database type",
+    )
+
+
+def _database_type(value: str) -> DatabaseType:
+    """Map a --database argument onto its DatabaseType."""
+    return (
+        DatabaseType.POSTGRESQL
+        if value.lower() in ("postgres", "postgresql")
+        else DatabaseType.MONGODB
+    )
 
 
 def seed_postgres_cli() -> None:
@@ -71,17 +88,10 @@ def init_schema_cli() -> None:
     adapter and writes the canonical schema TOML, graph TOML, and (Postgres
     only) MST TOML consumed by query processing and by describe-schema."""
     parser = argparse.ArgumentParser(description="Initialize database schema TOML.")
-    parser.add_argument(
-        "--database",
-        "-d",
-        choices=["postgres", "postgresql", "mongo", "mongodb"],
-        required=True,
-        help="Target database type",
-    )
+    _add_database_argument(parser, required=True)
     args = parser.parse_args()
 
-    db_arg = args.database.lower()
-    db_type = DatabaseType.POSTGRESQL if db_arg in ("postgres", "postgresql") else DatabaseType.MONGODB
+    db_type = _database_type(args.database)
 
     print(f"Extracting authoritative metadata for {db_type.value}...")
     schema, schema_path, graph_path, mst_path = extract_and_save_schema(db_type)
@@ -103,21 +113,15 @@ def describe_schema_cli() -> None:
     """CLI handler for describe-schema: generates an SLM description for each
     table and for each of its columns, processed in batches of connected tables
     so related tables are described with relationship context. Table
-    descriptions are saved as a flat JSON table_name -> description mapping
-    (the embedding stage's input); table and column descriptions are both
-    written back into the canonical schema TOML. Requires a running KoboldCpp
+    Table and column descriptions are saved as a documentation TOML (the
+    embedding stage's input) and are also written back into the canonical
+    schema TOML. Requires a running KoboldCpp
     instance. Run init-schema first."""
     parser = argparse.ArgumentParser(
         description="Generate per-table and per-column descriptions via the SLM, "
         "from the schema graph/MST."
     )
-    parser.add_argument(
-        "--database",
-        "-d",
-        choices=["postgres", "postgresql", "mongo", "mongodb"],
-        default="postgres",
-        help="Target database type",
-    )
+    _add_database_argument(parser)
     parser.add_argument(
         "--use-mst",
         action=argparse.BooleanOptionalAction,
@@ -130,16 +134,14 @@ def describe_schema_cli() -> None:
         "-o",
         type=str,
         default=None,
-        help="Output JSON file path (defaults to backend/src/data/schemas/<db>_descriptions.json)",
+        help="Output TOML file path (defaults to backend/src/data/schemas/<db>_descriptions.toml)",
     )
     args = parser.parse_args()
 
-    db_type = (
-        DatabaseType.POSTGRESQL if args.database.lower() in ("postgres", "postgresql") else DatabaseType.MONGODB
-    )
+    db_type = _database_type(args.database)
     use_mst = args.use_mst and db_type == DatabaseType.POSTGRESQL
-    source_path = get_default_mst_path(db_type) if use_mst else get_default_graph_path(db_type)
-    out_path = Path(args.output) if args.output else get_default_descriptions_path(db_type)
+    source_path = paths.mst_path(db_type) if use_mst else paths.graph_path(db_type)
+    out_path = Path(args.output) if args.output else paths.descriptions_path(db_type)
 
     async def _run() -> None:
         print(f"Reading {'MST' if use_mst else 'graph'} from: {source_path}")
@@ -153,29 +155,38 @@ def describe_schema_cli() -> None:
             print(f"Error connecting to KoboldCpp: {err}", file=sys.stderr)
             sys.exit(1)
 
-        save_descriptions(descriptions, out_path)
+        # Loaded up front so the documentation file can record which database
+        # these descriptions came from.
+        schema_path = paths.schema_path(db_type)
+        schema = schema_repository.load_schema(schema_path) if schema_path.exists() else None
+
+        # Fold both into the canonical schema TOML, the file query processing
+        # reads, before writing the documentation from it.
+        if schema is not None:
+            column_count = apply_descriptions(schema, descriptions)
+            schema_repository.save_schema(schema, schema_path)
+            print(f"Wrote {column_count} column descriptions into: {schema_path}")
+        else:
+            print(
+                f"Schema TOML not found at {schema_path}; the documentation file "
+                "will list only the columns the model returned. "
+                "Run 'uv run init-schema' first.",
+                file=sys.stderr,
+            )
+
+        description_repository.save_descriptions(
+            descriptions,
+            out_path,
+            database_type=db_type,
+            database_name=schema.database_name if schema else "",
+            schema=schema,
+        )
 
         column_total = sum(len(table.columns) for table in descriptions.values())
         print(
             f"\nGenerated {len(descriptions)} table descriptions and {column_total} "
             f"column descriptions, saved to: {out_path}"
         )
-
-        # Fold table + column descriptions into the canonical schema TOML, which
-        # is where the per-column documentation lives (the JSON above carries
-        # only the table descriptions, since those are what get embedded).
-        schema_path = get_default_schema_path(db_type)
-        if schema_path.exists():
-            schema = load_schema_file(schema_path)
-            column_count = apply_descriptions(schema, descriptions)
-            save_schema_file(schema, schema_path)
-            print(f"Wrote {column_count} column descriptions into: {schema_path}")
-        else:
-            print(
-                f"Schema TOML not found at {schema_path}; skipped writing column "
-                "descriptions. Run 'uv run init-schema' first.",
-                file=sys.stderr,
-            )
 
         for table_name, table in descriptions.items():
             print(f"  {table_name} ({len(table.columns)} columns): {table.description}")
@@ -192,18 +203,12 @@ def embed_schema_cli() -> None:
     parser = argparse.ArgumentParser(
         description="Embed per-table descriptions via the local embedding model."
     )
-    parser.add_argument(
-        "--database",
-        "-d",
-        choices=["postgres", "postgresql", "mongo", "mongodb"],
-        default="postgres",
-        help="Target database type",
-    )
+    _add_database_argument(parser)
     parser.add_argument(
         "--descriptions-file",
         type=str,
         default=None,
-        help="Custom path to the descriptions JSON file (defaults to backend/src/data/schemas/<db>_descriptions.json)",
+        help="Custom path to the descriptions TOML file (defaults to backend/src/data/schemas/<db>_descriptions.toml)",
     )
     parser.add_argument(
         "--output",
@@ -215,18 +220,16 @@ def embed_schema_cli() -> None:
     )
     args = parser.parse_args()
 
-    db_type = (
-        DatabaseType.POSTGRESQL if args.database.lower() in ("postgres", "postgresql") else DatabaseType.MONGODB
-    )
+    db_type = _database_type(args.database)
     descriptions_path = (
-        Path(args.descriptions_file) if args.descriptions_file else get_default_descriptions_path(db_type)
+        Path(args.descriptions_file) if args.descriptions_file else paths.descriptions_path(db_type)
     )
-    out_path = Path(args.output) if args.output else get_default_embeddings_path(db_type)
+    out_path = Path(args.output) if args.output else paths.embeddings_path(db_type)
 
     async def _run() -> None:
         print(f"Reading descriptions from: {descriptions_path}")
         try:
-            descriptions = load_descriptions(descriptions_path)
+            descriptions = description_repository.load_descriptions(descriptions_path)
         except FileNotFoundError as err:
             print(str(err), file=sys.stderr)
             sys.exit(1)
@@ -242,7 +245,7 @@ def embed_schema_cli() -> None:
             print(f"Error connecting to KoboldCpp: {err}", file=sys.stderr)
             sys.exit(1)
 
-        save_embeddings(embeddings, out_path)
+        embedding_repository.save_embeddings(embeddings, out_path)
 
         dims = len(next(iter(embeddings.values()))) if embeddings else 0
         print(f"\nGenerated {len(embeddings)} table embeddings ({dims} dimensions each), saved to: {out_path}")
@@ -257,13 +260,7 @@ def ingest_schema_cli() -> None:
     selects a database in the frontend. Requires a running KoboldCpp
     instance with an embeddings model loaded."""
     parser = argparse.ArgumentParser(description="Run the full ingestion pipeline for a database.")
-    parser.add_argument(
-        "--database",
-        "-d",
-        choices=["postgres", "postgresql", "mongo", "mongodb"],
-        required=True,
-        help="Target database type",
-    )
+    _add_database_argument(parser, required=True)
     parser.add_argument(
         "--use-mst",
         action=argparse.BooleanOptionalAction,
@@ -273,9 +270,7 @@ def ingest_schema_cli() -> None:
     )
     args = parser.parse_args()
 
-    db_type = (
-        DatabaseType.POSTGRESQL if args.database.lower() in ("postgres", "postgresql") else DatabaseType.MONGODB
-    )
+    db_type = _database_type(args.database)
 
     async def _run() -> None:
         print(f"Running full ingestion pipeline for {db_type.value}...")
@@ -313,13 +308,7 @@ def test_retrieval_cli() -> None:
         required=True,
         help="Natural language query",
     )
-    parser.add_argument(
-        "--database",
-        "-d",
-        choices=["postgres", "postgresql", "mongo", "mongodb"],
-        default="postgres",
-        help="Schema database type (defaults to postgres)",
-    )
+    _add_database_argument(parser)
     parser.add_argument(
         "--schema-file",
         "-s",
@@ -342,14 +331,10 @@ def test_retrieval_cli() -> None:
     )
     args = parser.parse_args()
 
-    db_type = (
-        DatabaseType.POSTGRESQL
-        if args.database.lower() in ("postgres", "postgresql")
-        else DatabaseType.MONGODB
-    )
-    schema_path = Path(args.schema_file) if args.schema_file else get_default_schema_path(db_type)
+    db_type = _database_type(args.database)
+    schema_path = Path(args.schema_file) if args.schema_file else paths.schema_path(db_type)
     embeddings_path = (
-        Path(args.embeddings_file) if args.embeddings_file else get_default_embeddings_path(db_type)
+        Path(args.embeddings_file) if args.embeddings_file else paths.embeddings_path(db_type)
     )
 
     if not schema_path.exists():
@@ -362,12 +347,12 @@ def test_retrieval_cli() -> None:
 
     async def _run() -> None:
         try:
-            embeddings = load_embeddings(embeddings_path)
+            embeddings = embedding_repository.load_embeddings(embeddings_path)
         except FileNotFoundError as err:
             print(str(err), file=sys.stderr)
             sys.exit(1)
 
-        schema = load_schema_file(schema_path)
+        schema = schema_repository.load_schema(schema_path)
         retriever = SemanticRetriever(schema, embeddings)
         try:
             results = await retriever.retrieve(args.query, top_k=args.top_k)

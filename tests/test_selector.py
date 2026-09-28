@@ -4,7 +4,7 @@ import json
 import pytest
 from backend.src.schemas.pipeline import CandidateTable, QuestionAnalysis
 from backend.src.data.models.schema import DatabaseSchema, DatabaseType, Field, SchemaObject, SchemaObjectKind
-from backend.src.code.query_processing.pipeline.selector import TableSelector
+from backend.src.core.query_processing.pipeline.selector import TableSelector
 
 
 class MockSelectorProvider:

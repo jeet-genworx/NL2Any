@@ -1,6 +1,7 @@
 """Tests for batched SLM table/column description generation from a graph/MST TOML."""
 
 import json
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -12,14 +13,14 @@ from backend.src.data.models.schema import (
     SchemaObject,
     SchemaObjectKind,
 )
-from backend.src.code.ingestion.schema.describe import (
-    TableDescription,
+from backend.src.core.ingestion.schema.describe import (
     apply_descriptions,
     describe_tables,
-    save_descriptions,
-    get_default_descriptions_path,
     table_descriptions,
 )
+from backend.src.data.repositories import paths
+from backend.src.data.repositories.description_repository import save_descriptions
+from backend.src.schemas.ingestion import TableDescription
 
 # A chain of 7 tables: t1 -- t2 -- ... -- t7, connected in MST order.
 # With batch_size=5, this should split into batches of [t1..t5] and [t6, t7].
@@ -307,7 +308,7 @@ def test_apply_descriptions_resolves_nested_dotted_paths():
 
 
 def test_save_descriptions_writes_table_and_column_descriptions(tmp_path):
-    out_path = tmp_path / "postgres_descriptions.json"
+    out_path = tmp_path / "postgres_descriptions.toml"
     save_descriptions(
         {
             "customers": TableDescription(
@@ -317,10 +318,15 @@ def test_save_descriptions_writes_table_and_column_descriptions(tmp_path):
             "orders": TableDescription(description="Order records.", columns={}),
         },
         out_path,
+        database_type=DatabaseType.POSTGRESQL,
+        database_name="shop_db",
     )
 
     assert out_path.exists()
-    assert json.loads(out_path.read_text()) == {
+    document = tomllib.loads(out_path.read_text())
+    assert document["database"]["type"] == "postgresql"
+    assert document["database"]["name"] == "shop_db"
+    assert document["tables"] == {
         "customers": {
             "description": "Customer records.",
             "columns": {"id": "Primary key.", "city": "Where they live."},
@@ -329,7 +335,31 @@ def test_save_descriptions_writes_table_and_column_descriptions(tmp_path):
     }
 
 
-def test_get_default_descriptions_path():
-    assert get_default_descriptions_path(DatabaseType.POSTGRESQL) == Path(
-        "backend/src/data/schemas/postgres_descriptions.json"
+def test_save_descriptions_mongo_uses_collections_and_dotted_field_keys(tmp_path):
+    """MongoDB objects land under [collections.*], with subdocument fields
+    flattened to dotted keys that TOML quotes and reads back verbatim."""
+    out_path = tmp_path / "mongo_descriptions.toml"
+    save_descriptions(
+        {
+            "customers": TableDescription(
+                description="Customer documents.",
+                columns={"_id": "Document id.", "address.city": "City of residence."},
+            )
+        },
+        out_path,
+        database_type=DatabaseType.MONGODB,
+        database_name="shop_demo",
+    )
+
+    document = tomllib.loads(out_path.read_text())
+    assert "tables" not in document
+    assert document["collections"]["customers"]["columns"] == {
+        "_id": "Document id.",
+        "address.city": "City of residence.",
+    }
+
+
+def test_descriptions_path():
+    assert paths.descriptions_path(DatabaseType.POSTGRESQL) == Path(
+        "backend/src/data/schemas/postgres_descriptions.toml"
     )
