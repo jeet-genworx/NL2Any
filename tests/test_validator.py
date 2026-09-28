@@ -1,14 +1,14 @@
 """Tests for QueryValidator and error type classification."""
 
 import pytest
-from query_processing.models.pipeline import (
+from backend.src.schemas.pipeline import (
     GeneratedQuery,
     QueryPlan,
     RelevantSchema,
     ValidationErrorType,
 )
-from query_processing.models.schema import DatabaseType, Field, SchemaObject, SchemaObjectKind
-from query_processing.pipeline.validator import QueryValidator, validate_sql_schema_references
+from backend.src.data.models.schema import DatabaseType, Field, SchemaObject, SchemaObjectKind
+from backend.src.code.query_processing.pipeline.validator import QueryValidator, validate_sql_schema_references
 
 
 class MockValidatorProvider:

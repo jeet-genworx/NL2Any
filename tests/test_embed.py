@@ -5,10 +5,10 @@ from pathlib import Path
 
 import pytest
 
-from query_processing.core.config import settings
-from query_processing.models.schema import DatabaseType
-from ingestion.schema.describe import table_descriptions
-from ingestion.schema.embed import (
+from backend.src.config import settings
+from backend.src.data.models.schema import DatabaseType
+from backend.src.code.ingestion.schema.describe import table_descriptions
+from backend.src.code.ingestion.schema.embed import (
     embed_descriptions,
     load_descriptions,
     save_embeddings,

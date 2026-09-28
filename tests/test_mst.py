@@ -3,7 +3,7 @@
 from pathlib import Path
 import tomllib
 
-from query_processing.models.schema import (
+from backend.src.data.models.schema import (
     DatabaseSchema,
     DatabaseType,
     Field,
@@ -11,7 +11,7 @@ from query_processing.models.schema import (
     SchemaObject,
     SchemaObjectKind,
 )
-from ingestion.schema.mst import (
+from backend.src.code.ingestion.schema.mst import (
     compute_minimum_spanning_tree,
     save_minimum_spanning_tree,
     get_default_mst_path,
@@ -119,5 +119,5 @@ def test_mst_node_order_groups_each_component_together():
 
 
 def test_get_default_mst_path():
-    assert get_default_mst_path(DatabaseType.POSTGRESQL) == Path("ingestion/schemas/postgres_mst.toml")
-    assert get_default_mst_path(DatabaseType.MONGODB) == Path("ingestion/schemas/mongo_mst.toml")
+    assert get_default_mst_path(DatabaseType.POSTGRESQL) == Path("backend/src/data/schemas/postgres_mst.toml")
+    assert get_default_mst_path(DatabaseType.MONGODB) == Path("backend/src/data/schemas/mongo_mst.toml")

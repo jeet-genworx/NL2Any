@@ -1,7 +1,7 @@
 """Tests for end-to-end NL2AnyQueryOrchestrator with targeted retries and mocks."""
 
 import pytest
-from query_processing.models.pipeline import (
+from backend.src.schemas.pipeline import (
     CandidateTable,
     GeneratedQuery,
     GuardrailDecision,
@@ -13,14 +13,14 @@ from query_processing.models.pipeline import (
     ValidationErrorType,
     ValidationResult,
 )
-from query_processing.models.schema import (
+from backend.src.data.models.schema import (
     DatabaseSchema,
     DatabaseType,
     Field,
     SchemaObject,
     SchemaObjectKind,
 )
-from query_processing.pipeline.orchestrator import NL2AnyQueryOrchestrator
+from backend.src.code.query_processing.pipeline.orchestrator import NL2AnyQueryOrchestrator
 
 
 class MockEmbeddingProvider:

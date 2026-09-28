@@ -5,14 +5,14 @@ from pathlib import Path
 
 import pytest
 
-from query_processing.models.schema import (
+from backend.src.data.models.schema import (
     DatabaseSchema,
     DatabaseType,
     Field,
     SchemaObject,
     SchemaObjectKind,
 )
-from ingestion.schema.describe import (
+from backend.src.code.ingestion.schema.describe import (
     TableDescription,
     apply_descriptions,
     describe_tables,
@@ -331,5 +331,5 @@ def test_save_descriptions_writes_table_and_column_descriptions(tmp_path):
 
 def test_get_default_descriptions_path():
     assert get_default_descriptions_path(DatabaseType.POSTGRESQL) == Path(
-        "ingestion/schemas/postgres_descriptions.json"
+        "backend/src/data/schemas/postgres_descriptions.json"
     )

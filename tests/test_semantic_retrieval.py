@@ -2,14 +2,14 @@
 
 import pytest
 
-from query_processing.models.schema import (
+from backend.src.data.models.schema import (
     DatabaseSchema,
     DatabaseType,
     Field,
     SchemaObject,
     SchemaObjectKind,
 )
-from query_processing.retrieval.semantic import SemanticRetriever
+from backend.src.code.query_processing.retrieval.semantic import SemanticRetriever
 
 
 class _FakeEmbeddingProvider:

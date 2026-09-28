@@ -4,7 +4,7 @@ import httpx
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 
-from query_processing.providers.embedding.koboldcpp import KoboldCppEmbeddingProvider
+from backend.src.control.providers.embedding.koboldcpp import KoboldCppEmbeddingProvider
 
 
 @pytest.mark.asyncio

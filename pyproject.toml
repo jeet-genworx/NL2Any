@@ -27,18 +27,18 @@ dev = [
 ]
 
 [project.scripts]
-seed-postgres = "query_processing.cli:seed_postgres_cli"
-seed-mongo = "query_processing.cli:seed_mongo_cli"
-init-schema = "query_processing.cli:init_schema_cli"
-describe-schema = "query_processing.cli:describe_schema_cli"
-embed-schema = "query_processing.cli:embed_schema_cli"
-ingest-schema = "query_processing.cli:ingest_schema_cli"
-test-model = "query_processing.cli:test_model_cli"
-test-retrieval = "query_processing.cli:test_retrieval_cli"
-test-nlp = "query_processing.cli:test_nlp_cli"
-run-api = "query_processing.cli:run_api_cli"
-run-ui = "query_processing.cli:run_ui_cli"
-generate-test-embeddings = "query_processing.cli:generate_test_embeddings_cli"
+seed-postgres = "backend.src.cli:seed_postgres_cli"
+seed-mongo = "backend.src.cli:seed_mongo_cli"
+init-schema = "backend.src.cli:init_schema_cli"
+describe-schema = "backend.src.cli:describe_schema_cli"
+embed-schema = "backend.src.cli:embed_schema_cli"
+ingest-schema = "backend.src.cli:ingest_schema_cli"
+test-model = "backend.src.cli:test_model_cli"
+test-retrieval = "backend.src.cli:test_retrieval_cli"
+test-nlp = "backend.src.cli:test_nlp_cli"
+run-api = "backend.src.cli:run_api_cli"
+run-ui = "backend.src.cli:run_ui_cli"
+generate-test-embeddings = "backend.src.cli:generate_test_embeddings_cli"
 
 [build-system]
 requires = ["hatchling"]
@@ -48,9 +48,9 @@ build-backend = "hatchling.build"
 allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
-packages = ["ingestion", "query_processing"]
+packages = ["backend"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
-pythonpath = ["."]
+pythonpath = [".", "backend"]

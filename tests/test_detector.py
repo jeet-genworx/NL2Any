@@ -1,8 +1,8 @@
 """Tests for deterministic database detection."""
 
 import pytest
-from ingestion.databases.detector import detect_database_type
-from query_processing.models.schema import DatabaseType
+from backend.src.data.clients.detector import detect_database_type
+from backend.src.data.models.schema import DatabaseType
 
 
 def test_detect_postgresql_schemes():

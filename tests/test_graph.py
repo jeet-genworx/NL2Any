@@ -3,7 +3,7 @@
 from pathlib import Path
 import tomllib
 
-from query_processing.models.schema import (
+from backend.src.data.models.schema import (
     DatabaseSchema,
     DatabaseType,
     Field,
@@ -11,7 +11,7 @@ from query_processing.models.schema import (
     SchemaObject,
     SchemaObjectKind,
 )
-from ingestion.schema.graph import build_schema_graph, save_schema_graph, get_default_graph_path
+from backend.src.code.ingestion.schema.graph import build_schema_graph, save_schema_graph, get_default_graph_path
 
 
 def _sample_schema() -> DatabaseSchema:
@@ -80,5 +80,5 @@ def test_save_schema_graph_writes_valid_toml(tmp_path):
 
 
 def test_get_default_graph_path():
-    assert get_default_graph_path(DatabaseType.POSTGRESQL) == Path("ingestion/schemas/postgres_graph.toml")
-    assert get_default_graph_path(DatabaseType.MONGODB) == Path("ingestion/schemas/mongo_graph.toml")
+    assert get_default_graph_path(DatabaseType.POSTGRESQL) == Path("backend/src/data/schemas/postgres_graph.toml")
+    assert get_default_graph_path(DatabaseType.MONGODB) == Path("backend/src/data/schemas/mongo_graph.toml")

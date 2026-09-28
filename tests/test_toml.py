@@ -1,6 +1,6 @@
 """Tests for TOML serialization and deserialization."""
 
-from query_processing.models.schema import (
+from backend.src.data.models.schema import (
     DatabaseSchema,
     DatabaseType,
     Field,
@@ -8,7 +8,7 @@ from query_processing.models.schema import (
     SchemaObject,
     SchemaObjectKind,
 )
-from ingestion.schema.toml_store import (
+from backend.src.code.ingestion.schema.toml_store import (
     dump_schema_to_toml,
     load_schema_from_toml,
 )

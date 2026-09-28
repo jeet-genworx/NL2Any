@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 import pytest
 
-from query_processing.retrieval.store import EmbeddingStore
+from backend.src.code.query_processing.retrieval.store import EmbeddingStore
 
 
 def test_embedding_store_valid_json(tmp_path: Path):

@@ -3,8 +3,8 @@
 import json
 import httpx
 import pytest
-from query_processing.providers.model.koboldcpp import KoboldCppProvider
-from query_processing.providers.model.embedding import KoboldCppEmbeddingProvider
+from backend.src.control.providers.model.koboldcpp import KoboldCppProvider
+from backend.src.control.providers.model.embedding import KoboldCppEmbeddingProvider
 
 
 @pytest.mark.asyncio

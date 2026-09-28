@@ -1,7 +1,7 @@
 """Unit tests for Unknown Schema questions and Safety/Guardrail enforcement."""
 
 import pytest
-from query_processing.models.pipeline import (
+from backend.src.schemas.pipeline import (
     CandidateTable,
     GeneratedQuery,
     GuardrailDecision,
@@ -10,16 +10,16 @@ from query_processing.models.pipeline import (
     ValidationErrorType,
     ValidationResult,
 )
-from query_processing.models.schema import (
+from backend.src.data.models.schema import (
     DatabaseSchema,
     DatabaseType,
     Field,
     SchemaObject,
     SchemaObjectKind,
 )
-from query_processing.pipeline.guardrail import GuardrailClassifier
-from query_processing.pipeline.orchestrator import NL2AnyQueryOrchestrator
-from query_processing.pipeline.policy import SafetyPolicyValidator
+from backend.src.code.query_processing.pipeline.guardrail import GuardrailClassifier
+from backend.src.code.query_processing.pipeline.orchestrator import NL2AnyQueryOrchestrator
+from backend.src.code.query_processing.pipeline.policy import SafetyPolicyValidator
 from tests.test_orchestrator import (
     MockEmbeddingProvider,
     MockExecutor,
@@ -125,8 +125,8 @@ async def test_policy_rejects_multi_statement(mock_shop_schema):
 @pytest.mark.asyncio
 async def test_validator_rejects_unsafe_operations():
     """Validator SLM/deterministic check must reject destructive operations as UNSAFE."""
-    from query_processing.models.pipeline import QueryPlan, RelevantSchema
-    from query_processing.pipeline.validator import QueryValidator
+    from backend.src.schemas.pipeline import QueryPlan, RelevantSchema
+    from backend.src.code.query_processing.pipeline.validator import QueryValidator
 
     validator = QueryValidator()
     plan = QueryPlan(sources=["customers"], projections=["*"])

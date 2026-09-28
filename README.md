@@ -122,81 +122,99 @@ User Question
 ## 3. Project Structure
 
 ```text
-nl2anyquery/
-├── .env.example                  # Generic environment variable template
-├── .gitignore                    # Ignores .env and build caches
-├── pyproject.toml                # Project dependencies and console entrypoints
-├── README.md                     # Complete documentation
-├── docker-compose.yml            # postgres, mongo, seed, api, frontend services
-├── postgres_embeddings.json      # Precomputed 384-d table embeddings (committed, used by retrieval/vector.py)
+nl-anyql/
+├── frontend/                                   # Unchanged Streamlit UI
+│   └── app.py
+│
+├── backend/
+│   ├── Dockerfile
+│   ├── requirements/
+│   │   └── requirements.txt
+│   └── src/
+│       ├── api/
+│       │   └── rest/
+│       │       ├── app.py                      # FastAPI app setup
+│       │       ├── dependencies.py             # Dependency injection
+│       │       └── routes/
+│       │           ├── health.py               # Health check endpoint
+│       │           └── query.py                # Ingest, Query, and Schema endpoints
+│       │
+│       ├── code/                               # Pipeline logic
+│       │   ├── ingestion/
+│       │   │   ├── pipeline.py
+│       │   │   └── schema/
+│       │   │       ├── describe.py
+│       │   │       ├── embed.py
+│       │   │       ├── graph.py
+│       │   │       ├── manager.py
+│       │   │       ├── mst.py
+│       │   │       └── toml_store.py
+│       │   └── query_processing/
+│       │       ├── nlp/
+│       │       │   └── linguistic.py
+│       │       ├── pipeline/
+│       │       │   ├── executor.py
+│       │       │   ├── expansion.py
+│       │       │   ├── guardrail.py
+│       │       │   ├── orchestrator.py
+│       │       │   ├── planner.py
+│       │       │   ├── policy.py
+│       │       │   ├── results.py
+│       │       │   ├── selector.py
+│       │       │   ├── semantic.py
+│       │       │   ├── validator.py
+│       │       │   └── generators/
+│       │       │       ├── base.py
+│       │       │       ├── mongo.py
+│       │       │       └── postgres.py
+│       │       ├── prompts/                    # Query processing and describe prompts
+│       │       └── retrieval/
+│       │           ├── semantic.py
+│       │           ├── store.py
+│       │           └── vector.py
+│       │
+│       ├── control/
+│       │   └── providers/
+│       │       ├── embedding/
+│       │       └── model/
+│       │
+│       ├── data/
+│       │   ├── clients/                        # Database adapters and metadata extractors
+│       │   │   ├── base.py
+│       │   │   ├── detector.py
+│       │   │   ├── mongo/
+│       │   │   └── postgres/
+│       │   ├── models/                         # Database schema models
+│       │   │   └── schema.py
+│       │   ├── seed/                           # Postgres & Mongo data seeders
+│       │   │   ├── mongo.py
+│       │   │   └── postgres.py
+│       │   ├── schemas/                        # Canonical TOMLs, graphs, descriptions
+│       │   │   ├── mongo.toml
+│       │   │   ├── mongo_descriptions.json
+│       │   │   ├── mongo_graph.toml
+│       │   │   ├── postgres.toml
+│       │   │   ├── postgres_descriptions.json
+│       │   │   ├── postgres_graph.toml
+│       │   │   └── postgres_mst.toml
+│       │   └── embeddings/                     # Precomputed embeddings artifacts
+│       │       ├── mongo_embeddings.json
+│       │       └── postgres_embeddings.json
+│       │
+│       ├── schemas/                            # Pipeline & API Pydantic schemas
+│       │   ├── pipeline.py
+│       │   └── request.py
+│       ├── config/                             # Settings & configuration
+│       │   └── config.py
+│       ├── utils/                              # Text & JSON manipulation utilities
+│       │   └── text_utils.py
+│       ├── cli.py                              # CLI entrypoints
+│       └── main.py                             # API server entrypoint
+│
 ├── docker/
-│   ├── Dockerfile.app            # Image shared by seed/api/frontend containers
-│   ├── Dockerfile.postgres       # Postgres container definition
-│   └── seed.sh                   # Runs seed-postgres + seed-mongo on startup
-│
-├── ingestion/                     # Getting schema & data INTO the system
-│   ├── pipeline.py                 # Full orchestrator: metadata → graph/MST → SLM descriptions → embeddings
-│   ├── databases/                 # Deterministic database discovery adapters
-│   │   ├── base.py
-│   │   ├── detector.py
-│   │   ├── postgres/               # information_schema-based extraction (universal, no hardcoding)
-│   │   ├── mongo/                  # Document-sampling-based extraction
-│   │   └── seed/                  # Synthetic demo data generators
-│   ├── schema/
-│   │   ├── manager.py             # get_default_schema_path(), shared with query_processing
-│   │   ├── toml_store.py          # Canonical schema TOML serialization
-│   │   ├── graph.py                # Nodes/edges graph view (tables + columns + relationships)
-│   │   ├── mst.py                  # Minimum spanning tree/forest reduction of the graph
-│   │   ├── describe.py             # Batched SLM table descriptions (MST or plain graph order)
-│   │   └── embed.py                # Embeds descriptions via the local MiniLM model
-│   └── schemas/                   # Canonical schema/graph/MST TOML + descriptions JSON (generated, not committed)
-│
-├── query_processing/              # The NL → safe query pipeline
-│   ├── api/                       # FastAPI web server (GET /health, POST /query, GET /schema/{db}, POST /ingest/{db})
-│   │   └── main.py
-│   ├── core/                      # Settings and response cleaning utilities
-│   │   ├── config.py
-│   │   └── text_utils.py
-│   ├── models/                    # Pydantic data contracts
-│   │   ├── schema.py              # Normalized schema representation
-│   │   └── pipeline.py            # Pipeline stage outputs & trace models
-│   ├── nlp/                       # Deterministic spaCy linguistic analyzer
-│   │   └── linguistic.py
-│   ├── pipeline/                  # Sequential pipeline stages
-│   │   ├── guardrail.py           # READ_QUERY, BASIC, REJECT classification
-│   │   ├── semantic.py            # Subjective/objective extraction
-│   │   ├── selector.py            # Candidate selection with strict TOML checks + targeted retries
-│   │   ├── expansion.py           # Foreign key & bridge table expansion
-│   │   ├── planner.py             # Syntax-free semantic query planning
-│   │   ├── generators/            # Postgres SQL & typed MongoQuery generators
-│   │   ├── validator.py           # AST schema verification + SLM validation
-│   │   ├── policy.py              # Non-negotiable read-only safety boundary
-│   │   ├── executor.py            # Safe DB driver execution with timeouts
-│   │   ├── results.py             # Bounded preview & CSV generation
-│   │   └── orchestrator.py        # Master pipeline runner with bounded, targeted retries
-│   ├── providers/
-│   │   ├── model/                 # KoboldCpp chat + embedding provider used by the ingestion pipeline
-│   │   └── embedding/             # KoboldCpp embedding provider used live by retrieval/vector.py
-│   ├── retrieval/                 # Embedding-based schema search
-│   │   ├── vector.py               # Live retriever: reads the committed postgres_embeddings.json
-│   │   ├── store.py                # Embedding store backing vector.py
-│   │   └── semantic.py             # Alternate retriever reading query_processing/embeddings/ (ingestion pipeline output; not currently wired into the orchestrator)
-│   ├── prompts/                   # Focused, single-responsibility prompt templates
-│   │   ├── guardrail.txt
-│   │   ├── semantic_analysis.txt
-│   │   ├── table_selection.txt
-│   │   ├── planner.txt
-│   │   ├── postgres_query_generator.txt
-│   │   ├── mongo_query_generator.txt
-│   │   ├── validator.txt
-│   │   └── table_description.txt  # Batched per-table SLM description prompt (ingestion pipeline)
-│   ├── embeddings/                 # table_name -> vector JSON from the ingestion pipeline (generated, not committed)
-│   └── cli.py                     # Unified `uv run` console entrypoints
-│
-├── frontend/
-│   └── app.py                     # Streamlit UI with pipeline stage inspection + database ingestion controls
-│
-└── tests/                         # Comprehensive automated unit tests
+├── docker-compose.yml
+├── pyproject.toml
+└── tests/                                      # All 144 tests passing
 ```
 
 ---

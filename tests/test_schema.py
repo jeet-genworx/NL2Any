@@ -1,7 +1,7 @@
 """Tests for normalized schema data models and consistency validation."""
 
 import pytest
-from query_processing.models.schema import (
+from backend.src.data.models.schema import (
     DatabaseSchema,
     DatabaseType,
     Field,

@@ -1,9 +1,9 @@
 """Tests for QueryPlanner stage."""
 
 import pytest
-from query_processing.models.pipeline import QuestionAnalysis, RelevantSchema
-from query_processing.models.schema import DatabaseType, Field, SchemaObject, SchemaObjectKind
-from query_processing.pipeline.planner import QueryPlanner
+from backend.src.schemas.pipeline import QuestionAnalysis, RelevantSchema
+from backend.src.data.models.schema import DatabaseType, Field, SchemaObject, SchemaObjectKind
+from backend.src.code.query_processing.pipeline.planner import QueryPlanner
 
 
 class MockPlannerProvider:

@@ -1,8 +1,8 @@
 """Tests for Guardrail classifier and deterministic basic handling."""
 
 import pytest
-from query_processing.models.pipeline import GuardrailDecision
-from query_processing.pipeline.guardrail import GuardrailClassifier
+from backend.src.schemas.pipeline import GuardrailDecision
+from backend.src.code.query_processing.pipeline.guardrail import GuardrailClassifier
 
 
 class MockModelProvider:

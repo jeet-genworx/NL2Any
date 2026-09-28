@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from query_processing.models.schema import (
+from backend.src.data.models.schema import (
     DatabaseSchema,
     DatabaseType,
     Field,
@@ -12,7 +12,7 @@ from query_processing.models.schema import (
     SchemaObject,
     SchemaObjectKind,
 )
-from ingestion.pipeline import run_ingestion_pipeline
+from backend.src.code.ingestion.pipeline import run_ingestion_pipeline
 
 
 def _fake_schema(db_type: DatabaseType) -> DatabaseSchema:
@@ -81,19 +81,19 @@ def _patch_default_paths(monkeypatch, tmp_path) -> None:
     """Redirect every get_default_*_path() the pipeline uses into tmp_path,
     without changing the process CWD (prompt loading is still CWD-relative
     to the real repo, same as in production)."""
-    monkeypatch.setattr("ingestion.pipeline.get_default_schema_path", lambda db_type: tmp_path / f"{db_type.value}.toml")
-    monkeypatch.setattr("ingestion.pipeline.get_default_graph_path", lambda db_type: tmp_path / f"{db_type.value}_graph.toml")
-    monkeypatch.setattr("ingestion.pipeline.get_default_mst_path", lambda db_type: tmp_path / f"{db_type.value}_mst.toml")
-    monkeypatch.setattr("ingestion.pipeline.get_default_descriptions_path", lambda db_type: tmp_path / f"{db_type.value}_descriptions.json")
-    monkeypatch.setattr("ingestion.pipeline.get_default_embeddings_path", lambda db_type: tmp_path / f"{db_type.value}_embeddings.json")
-    monkeypatch.setattr("ingestion.schema.describe.KoboldCppProvider", lambda: _RecordingChatProvider())
-    monkeypatch.setattr("ingestion.schema.embed.KoboldCppEmbeddingProvider", lambda: _RecordingEmbeddingProvider())
+    monkeypatch.setattr("backend.src.code.ingestion.pipeline.get_default_schema_path", lambda db_type: tmp_path / f"{db_type.value}.toml")
+    monkeypatch.setattr("backend.src.code.ingestion.pipeline.get_default_graph_path", lambda db_type: tmp_path / f"{db_type.value}_graph.toml")
+    monkeypatch.setattr("backend.src.code.ingestion.pipeline.get_default_mst_path", lambda db_type: tmp_path / f"{db_type.value}_mst.toml")
+    monkeypatch.setattr("backend.src.code.ingestion.pipeline.get_default_descriptions_path", lambda db_type: tmp_path / f"{db_type.value}_descriptions.json")
+    monkeypatch.setattr("backend.src.code.ingestion.pipeline.get_default_embeddings_path", lambda db_type: tmp_path / f"{db_type.value}_embeddings.json")
+    monkeypatch.setattr("backend.src.code.ingestion.schema.describe.KoboldCppProvider", lambda: _RecordingChatProvider())
+    monkeypatch.setattr("backend.src.code.ingestion.schema.embed.KoboldCppEmbeddingProvider", lambda: _RecordingEmbeddingProvider())
 
 
 @pytest.mark.asyncio
 async def test_run_ingestion_pipeline_postgres_uses_mst(tmp_path, monkeypatch):
     schema = _fake_schema(DatabaseType.POSTGRESQL)
-    monkeypatch.setattr("ingestion.pipeline.get_adapter", lambda db_type: _FakeAdapter(schema))
+    monkeypatch.setattr("backend.src.code.ingestion.pipeline.get_adapter", lambda db_type: _FakeAdapter(schema))
     _patch_default_paths(monkeypatch, tmp_path)
 
     summary = await run_ingestion_pipeline(DatabaseType.POSTGRESQL, use_mst=True)
@@ -135,7 +135,7 @@ async def test_run_ingestion_pipeline_postgres_uses_mst(tmp_path, monkeypatch):
 @pytest.mark.asyncio
 async def test_run_ingestion_pipeline_postgres_use_mst_false_reads_graph(tmp_path, monkeypatch):
     schema = _fake_schema(DatabaseType.POSTGRESQL)
-    monkeypatch.setattr("ingestion.pipeline.get_adapter", lambda db_type: _FakeAdapter(schema))
+    monkeypatch.setattr("backend.src.code.ingestion.pipeline.get_adapter", lambda db_type: _FakeAdapter(schema))
     _patch_default_paths(monkeypatch, tmp_path)
 
     summary = await run_ingestion_pipeline(DatabaseType.POSTGRESQL, use_mst=False)
@@ -147,7 +147,7 @@ async def test_run_ingestion_pipeline_postgres_use_mst_false_reads_graph(tmp_pat
 @pytest.mark.asyncio
 async def test_run_ingestion_pipeline_mongo_always_uses_graph_no_mst(tmp_path, monkeypatch):
     schema = _fake_schema(DatabaseType.MONGODB)
-    monkeypatch.setattr("ingestion.pipeline.get_adapter", lambda db_type: _FakeAdapter(schema))
+    monkeypatch.setattr("backend.src.code.ingestion.pipeline.get_adapter", lambda db_type: _FakeAdapter(schema))
     _patch_default_paths(monkeypatch, tmp_path)
 
     # use_mst=True requested, but Mongo has no MST, so it must fall back to the graph.
