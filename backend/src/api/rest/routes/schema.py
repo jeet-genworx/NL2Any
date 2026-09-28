@@ -10,8 +10,10 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException
 
-from backend.src.api.rest.dependencies import resolve_db_type
-from backend.src.data.models.schema import DatabaseSchema, DatabaseType
+from backend.src.api.rest.dependencies import resolve_db_target
+from backend.src.core.ingestion.pipeline import existing_ingestion
+from backend.src.data.models.schema import DatabaseSchema
+from backend.src.data.models.targets import TARGETS, DatabaseTarget
 from backend.src.data.repositories import (
     description_repository,
     paths,
@@ -22,9 +24,35 @@ from backend.src.schemas.metadata import TableDescriptionResponse
 router = APIRouter(tags=["Schema"])
 
 
-def _load_schema(db_type: DatabaseType) -> DatabaseSchema:
+@router.get("/databases")
+def list_databases_endpoint() -> dict[str, Any]:
+    """List the selectable databases.
+
+    Drives the frontend picker, so it stays in step with the target registry
+    rather than hardcoding a list. `configured` is false when a target has no
+    connection string set, which lets the picker say why a database is unusable
+    instead of failing only once someone selects it.
+    """
+    return {
+        "databases": [
+            {
+                "key": target.key,
+                "label": target.label,
+                "database_type": target.db_type.value,
+                "configured": target.configured,
+                # Same test the pipeline uses to decide whether to skip, so the
+                # picker never claims a database is ready when a re-run would
+                # still ingest it (an empty embeddings file does not count).
+                "ingested": existing_ingestion(target) is not None,
+            }
+            for target in TARGETS.values()
+        ]
+    }
+
+
+def _load_schema(target: DatabaseTarget) -> DatabaseSchema:
     """Load the canonical schema, or fail with a 404 naming the fix."""
-    schema_path = paths.schema_path(db_type)
+    schema_path = paths.schema_path(target)
     if not schema_path.exists():
         raise HTTPException(
             status_code=404,
@@ -36,7 +64,7 @@ def _load_schema(db_type: DatabaseType) -> DatabaseSchema:
 @router.get("/schema/{database_type}")
 def get_schema_endpoint(database_type: str) -> dict[str, Any]:
     """Retrieve canonical semantic schema information."""
-    schema = _load_schema(resolve_db_type(database_type))
+    schema = _load_schema(resolve_db_target(database_type))
     return {
         "database_type": schema.database_type.value,
         "database_name": schema.database_name,
@@ -91,11 +119,11 @@ def get_table_description_endpoint(
     Every column of the table is listed -- MongoDB subdocument fields as dotted
     paths -- with an empty string where a description has not been generated yet.
     """
-    db_type = resolve_db_type(database_type)
+    target = resolve_db_target(database_type)
 
     try:
         documentation = description_repository.load_documentation(
-            paths.descriptions_path(db_type)
+            paths.descriptions_path(target)
         )
     except FileNotFoundError as err:
         raise HTTPException(status_code=404, detail=str(err))
@@ -105,7 +133,7 @@ def get_table_description_endpoint(
         raise HTTPException(
             status_code=404,
             detail=(
-                f"'{table_name}' not found in the {db_type.value} documentation. "
+                f"'{table_name}' not found in the {target.key} documentation. "
                 f"Available: {', '.join(sorted(documentation.objects))}."
             ),
         )

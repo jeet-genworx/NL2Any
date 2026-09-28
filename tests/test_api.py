@@ -136,3 +136,39 @@ def test_repeated_requests_parse_the_file_once(monkeypatch):
         assert client.get("/descriptions/postgres/customers").status_code == 200
 
     assert len(parses) == 1
+
+
+def test_databases_endpoint_lists_finops():
+    response = TestClient(app).get("/databases")
+
+    assert response.status_code == 200
+    rows = {row["key"]: row for row in response.json()["databases"]}
+    assert set(rows) == {"postgres", "mongo", "finops"}
+    assert rows["finops"]["label"] == "FinOps (PostgreSQL)"
+    assert rows["finops"]["database_type"] == "postgresql"
+    # The picker needs to know whether a target is usable and whether it has
+    # been ingested yet.
+    assert set(rows["finops"]) == {"key", "label", "database_type", "configured", "ingested"}
+
+
+def test_schema_endpoint_serves_finops_separately_from_postgres():
+    """finops and postgres share an engine but must not share a schema."""
+    client = TestClient(app)
+    finops = client.get("/schema/finops").json()
+    postgres = client.get("/schema/postgres").json()
+
+    assert finops["database_name"] == "finopsiq_be"
+    assert postgres["database_name"] == "nl2anyquery_db"
+    assert finops["database_type"] == postgres["database_type"] == "postgresql"
+    assert finops["object_count"] != postgres["object_count"]
+
+
+def test_schema_endpoint_accepts_finops_aliases():
+    client = TestClient(app)
+    for alias in ("finops", "finopsiq", "finopsiq_be"):
+        assert client.get(f"/schema/{alias}").status_code == 200
+
+
+def test_unknown_database_error_lists_finops():
+    detail = TestClient(app).get("/schema/nope").json()["detail"]
+    assert "finops" in detail

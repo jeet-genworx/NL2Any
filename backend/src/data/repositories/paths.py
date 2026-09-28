@@ -12,6 +12,9 @@ from pathlib import Path
 
 from backend.src.config import settings
 from backend.src.data.models.schema import DatabaseType
+from backend.src.data.models.targets import DatabaseTarget, as_target
+
+TargetLike = DatabaseTarget | DatabaseType
 
 # backend/src, used to locate packaged files when the process was not started
 # from the repository root (containers, editors, pytest invoked elsewhere).
@@ -31,9 +34,13 @@ def _resolve(relative: str) -> Path:
     return from_package if from_package.exists() else from_cwd
 
 
-def _slug(database_type: DatabaseType) -> str:
-    """Filename stem for a database type: the prefix every artifact shares."""
-    return "postgres" if database_type == DatabaseType.POSTGRESQL else "mongo"
+def _slug(database: TargetLike) -> str:
+    """Filename stem for a database: the prefix every artifact shares.
+
+    Comes from the target, not the engine type, because two PostgreSQL targets
+    must not share one set of schema and embedding files.
+    """
+    return as_target(database).file_stem
 
 
 def schemas_dir() -> Path:
@@ -41,40 +48,38 @@ def schemas_dir() -> Path:
     return _resolve("data/schemas")
 
 
-def schema_path(database_type: DatabaseType) -> Path:
+def schema_path(database: TargetLike) -> Path:
     """Canonical schema TOML -- the file query processing reads."""
-    return schemas_dir() / f"{_slug(database_type)}.toml"
+    return schemas_dir() / f"{_slug(database)}.toml"
 
 
-def graph_path(database_type: DatabaseType) -> Path:
+def graph_path(database: TargetLike) -> Path:
     """Nodes/edges graph view of the schema."""
-    return schemas_dir() / f"{_slug(database_type)}_graph.toml"
+    return schemas_dir() / f"{_slug(database)}_graph.toml"
 
 
-def mst_path(database_type: DatabaseType) -> Path:
+def mst_path(database: TargetLike) -> Path:
     """Minimum spanning forest over the schema graph.
 
-    Only written for PostgreSQL: MongoDB has no foreign keys, so its graph has
-    no edges to reduce.
+    Only written for PostgreSQL targets: MongoDB has no foreign keys, so its
+    graph has no edges to reduce.
     """
-    return schemas_dir() / f"{_slug(database_type)}_mst.toml"
+    return schemas_dir() / f"{_slug(database)}_mst.toml"
 
 
-def descriptions_path(database_type: DatabaseType) -> Path:
+def descriptions_path(database: TargetLike) -> Path:
     """Generated table and column descriptions, as TOML."""
-    return schemas_dir() / f"{_slug(database_type)}_descriptions.toml"
+    return schemas_dir() / f"{_slug(database)}_descriptions.toml"
 
 
-def embeddings_path(database_type: DatabaseType) -> Path:
+def embeddings_path(database: TargetLike) -> Path:
     """Table description vectors.
 
     Configurable, unlike the artifacts above, because query processing's
     EmbeddingStore reads this same file at query time and docker-compose
     bind-mounts it so regenerated vectors survive a container rebuild.
     """
-    if database_type == DatabaseType.POSTGRESQL:
-        return Path(settings.postgres_embeddings_path)
-    return Path(settings.mongo_embeddings_path)
+    return Path(as_target(database).embeddings_path)
 
 
 def describe_prompt_path() -> Path:

@@ -18,12 +18,41 @@ st.title("🔍 NL2AnyQuery")
 st.caption("Proof-of-Concept: Natural Language to Safe Database Query Pipeline")
 
 
-def run_ingestion(database: str, use_mst: bool, api_url: str) -> tuple[bool, object]:
+DEFAULT_DATABASES = {
+    "postgres": "PostgreSQL (Relational)",
+    "mongo": "MongoDB (Document)",
+    "finops": "FinOps (PostgreSQL)",
+}
+
+
+@st.cache_data(ttl=60)
+def fetch_databases(api_url: str) -> tuple[list[str], dict[str, str]]:
+    """Fetch selectable database targets from the API.
+
+    Unconfigured targets (no connection string set) are labelled so the reason a
+    database is unusable is visible in the picker rather than only on failure.
+    """
+    try:
+        resp = httpx.get(f"{api_url}/databases", timeout=5.0)
+        resp.raise_for_status()
+        rows = resp.json()["databases"]
+    except Exception:
+        return list(DEFAULT_DATABASES), dict(DEFAULT_DATABASES)
+
+    keys = [row["key"] for row in rows]
+    labels = {
+        row["key"]: row["label"] if row.get("configured", True) else f"{row['label']} - not configured"
+        for row in rows
+    }
+    return keys, labels
+
+
+def run_ingestion(database: str, use_mst: bool, api_url: str, force: bool = False) -> tuple[bool, object]:
     """Run the ingestion pipeline for a database. Returns (ok, summary_or_error)."""
     try:
         resp = httpx.post(
             f"{api_url}/ingest/{database}",
-            params={"use_mst": use_mst},
+            params={"use_mst": use_mst, "force": force},
             timeout=600.0,
         )
         resp.raise_for_status()
@@ -45,10 +74,14 @@ def run_ingestion(database: str, use_mst: bool, api_url: str) -> tuple[bool, obj
 # Sidebar
 with st.sidebar:
     st.header("Settings")
+    # Fetched from the API so the picker stays in step with the target registry
+    # rather than hardcoding a list here; falls back to the built-in targets if
+    # the backend is not up yet.
+    db_options, db_labels = fetch_databases(API_BASE_URL)
     db_choice = st.selectbox(
         "Database",
-        options=["postgres", "mongo"],
-        format_func=lambda x: "PostgreSQL (Relational)" if x == "postgres" else "MongoDB (Document)",
+        options=db_options,
+        format_func=lambda key: db_labels.get(key, key),
     )
     api_url = st.text_input("FastAPI Backend URL", value=API_BASE_URL)
 
@@ -78,7 +111,9 @@ with st.sidebar:
     # interaction, and re-ingesting on each of those would be needlessly expensive.
     if st.session_state.get("ingested_db") != db_choice or ingest_btn:
         with st.spinner(f"Running ingestion pipeline for {db_choice}... this can take a minute."):
-            ok, payload = run_ingestion(db_choice, use_mst, api_url)
+            # The button means "do it again"; an automatic run on selection
+            # reuses existing embeddings instead of re-ingesting.
+            ok, payload = run_ingestion(db_choice, use_mst, api_url, force=ingest_btn)
         st.session_state["ingested_db"] = db_choice if ok else None
         st.session_state["ingestion_summary"] = payload if ok else None
         st.session_state["ingestion_error"] = None if ok else payload

@@ -7,6 +7,7 @@ import sys
 
 from backend.src.config import settings
 from backend.src.data.models.schema import DatabaseType
+from backend.src.data.models.targets import TARGETS, resolve_target
 from backend.src.core.query_processing.nlp.linguistic import LinguisticAnalyzer
 from backend.src.control.providers.model.koboldcpp import KoboldCppProvider
 from backend.src.core.query_processing.retrieval.semantic import SemanticRetriever
@@ -24,7 +25,7 @@ from backend.src.data.repositories import (
     schema_repository,
 )
 
-_DATABASE_CHOICES = ("postgres", "postgresql", "mongo", "mongodb")
+_DATABASE_CHOICES = ("postgres", "postgresql", "mongo", "mongodb", "finops")
 
 
 def _add_database_argument(parser: argparse.ArgumentParser, *, required: bool = False) -> None:
@@ -39,13 +40,14 @@ def _add_database_argument(parser: argparse.ArgumentParser, *, required: bool = 
     )
 
 
+def _database_target(value: str):
+    """Map a --database argument onto its DatabaseTarget."""
+    return resolve_target(value)
+
+
 def _database_type(value: str) -> DatabaseType:
-    """Map a --database argument onto its DatabaseType."""
-    return (
-        DatabaseType.POSTGRESQL
-        if value.lower() in ("postgres", "postgresql")
-        else DatabaseType.MONGODB
-    )
+    """Map a --database argument onto its engine type."""
+    return resolve_target(value).db_type
 
 
 def seed_postgres_cli() -> None:
@@ -91,9 +93,9 @@ def init_schema_cli() -> None:
     _add_database_argument(parser, required=True)
     args = parser.parse_args()
 
-    db_type = _database_type(args.database)
+    db_type = _database_target(args.database)
 
-    print(f"Extracting authoritative metadata for {db_type.value}...")
+    print(f"Extracting authoritative metadata for {db_type.key}...")
     schema, schema_path, graph_path, mst_path = extract_and_save_schema(db_type)
 
     print(f"\nGenerated schema saved to: {schema_path}")
@@ -138,8 +140,8 @@ def describe_schema_cli() -> None:
     )
     args = parser.parse_args()
 
-    db_type = _database_type(args.database)
-    use_mst = args.use_mst and db_type == DatabaseType.POSTGRESQL
+    db_type = _database_target(args.database)
+    use_mst = args.use_mst and db_type.has_mst
     source_path = paths.mst_path(db_type) if use_mst else paths.graph_path(db_type)
     out_path = Path(args.output) if args.output else paths.descriptions_path(db_type)
 
@@ -220,7 +222,7 @@ def embed_schema_cli() -> None:
     )
     args = parser.parse_args()
 
-    db_type = _database_type(args.database)
+    db_type = _database_target(args.database)
     descriptions_path = (
         Path(args.descriptions_file) if args.descriptions_file else paths.descriptions_path(db_type)
     )
@@ -268,17 +270,34 @@ def ingest_schema_cli() -> None:
         help="Use the MST for contextual table grouping instead of the plain graph. "
         "Ignored for MongoDB, which has no MST.",
     )
+    parser.add_argument(
+        "--force",
+        "-f",
+        action="store_true",
+        help="Re-ingest even if this database already has embeddings on disk "
+        "(the default is to reuse them and skip the run).",
+    )
     args = parser.parse_args()
 
-    db_type = _database_type(args.database)
+    db_type = _database_target(args.database)
 
     async def _run() -> None:
-        print(f"Running full ingestion pipeline for {db_type.value}...")
+        print(f"Running full ingestion pipeline for {db_type.key}...")
         try:
-            summary = await run_ingestion_pipeline(db_type, use_mst=args.use_mst)
+            summary = await run_ingestion_pipeline(
+                db_type, use_mst=args.use_mst, force=args.force
+            )
         except ConnectionError as err:
             print(f"Error connecting to KoboldCpp: {err}", file=sys.stderr)
             sys.exit(1)
+
+        if summary.get("skipped"):
+            print(
+                f"\nSkipped: {summary['database_name']} already has "
+                f"{summary['embedding_count']} embeddings at {summary['embeddings_path']}.\n"
+                "Re-run with --force to regenerate."
+            )
+            return
 
         print(f"\nDatabase: {summary['database_name']} ({summary['table_count']} tables, "
               f"{summary['relationship_count']} relationships)")
@@ -331,7 +350,7 @@ def test_retrieval_cli() -> None:
     )
     args = parser.parse_args()
 
-    db_type = _database_type(args.database)
+    db_type = _database_target(args.database)
     schema_path = Path(args.schema_file) if args.schema_file else paths.schema_path(db_type)
     embeddings_path = (
         Path(args.embeddings_file) if args.embeddings_file else paths.embeddings_path(db_type)
@@ -340,7 +359,7 @@ def test_retrieval_cli() -> None:
     if not schema_path.exists():
         print(
             f"Schema file not found at: {schema_path}. "
-            f"Run 'uv run init-schema --database {db_type.value}' first.",
+            f"Run 'uv run init-schema --database {db_type.key}' first.",
             file=sys.stderr,
         )
         sys.exit(1)

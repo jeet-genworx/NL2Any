@@ -3,7 +3,7 @@
 from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 
-from backend.src.api.rest.dependencies import get_orchestrator, resolve_db_type
+from backend.src.api.rest.dependencies import get_orchestrator, resolve_db_target
 from backend.src.core.ingestion.pipeline import run_ingestion_pipeline
 from backend.src.core.query_processing.pipeline.orchestrator import NL2AnyQueryOrchestrator
 from backend.src.schemas.pipeline import PipelineResponse
@@ -13,17 +13,24 @@ router = APIRouter(tags=["Query & Ingestion"])
 
 
 @router.post("/ingest/{database_type}")
-async def ingest_endpoint(database_type: str, use_mst: bool = True) -> dict[str, Any]:
+async def ingest_endpoint(
+    database_type: str,
+    use_mst: bool = True,
+    force: bool = False,
+) -> dict[str, Any]:
     """Run the full ingestion pipeline for a database: extract metadata, build
     the schema graph (and MST, for Postgres), generate SLM table descriptions,
     and embed them. Triggered when a user selects a database in the frontend
     and clicks "Initialize Database". Requires a running KoboldCpp instance
     with an embeddings model loaded; this call blocks until the whole
     pipeline finishes (can take from several seconds to a couple of minutes).
+
+    Returns immediately with `"skipped": true` when this database already has
+    embeddings on disk. Pass `force=true` to re-ingest regardless.
     """
-    db_type = resolve_db_type(database_type)
+    target = resolve_db_target(database_type)
     try:
-        return await run_ingestion_pipeline(db_type, use_mst=use_mst)
+        return await run_ingestion_pipeline(target, use_mst=use_mst, force=force)
     except FileNotFoundError as err:
         raise HTTPException(status_code=404, detail=str(err))
     except ConnectionError as err:

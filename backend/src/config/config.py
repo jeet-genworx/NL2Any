@@ -28,6 +28,15 @@ class Settings(BaseSettings):
         alias="POSTGRES_DSN",
         description="PostgreSQL connection string DSN",
     )
+    finops_dsn: str = Field(
+        default="",
+        alias="FINOPS_DSN",
+        description=(
+            "PostgreSQL DSN for the FinOps database. Shares the PostgreSQL engine "
+            "with the demo database but is a separate target with its own schema "
+            "and embeddings; empty means the target is not configured."
+        ),
+    )
     mongodb_uri: str = Field(
         default="mongodb://localhost:27017",
         alias="MONGODB_URI",
@@ -63,6 +72,11 @@ class Settings(BaseSettings):
         default="backend/src/data/embeddings/mongo_embeddings.json",
         alias="MONGO_EMBEDDINGS_PATH",
         description="Path to precomputed collection description embeddings for MongoDB",
+    )
+    finops_embeddings_path: str = Field(
+        default="backend/src/data/embeddings/finops_embeddings.json",
+        alias="FINOPS_EMBEDDINGS_PATH",
+        description="Path to precomputed table description embeddings for the FinOps database",
     )
     similarity_threshold: float = Field(
         default=0.25,

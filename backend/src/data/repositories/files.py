@@ -59,13 +59,24 @@ def clear_cache() -> None:
 
 
 def require(path: PathLike, *, hint: str = "") -> Path:
-    """Return `path` as a Path, raising FileNotFoundError when it is missing.
+    """Return `path` as a Path, raising FileNotFoundError unless a file is there.
 
     `hint` is the recovery advice appended to the message -- usually the CLI
     command that produces the missing file.
+
+    A directory counts as missing, and says so explicitly: docker-compose
+    creates a directory in place of a bind-mounted file when the host path does
+    not exist, and the resulting IsADirectoryError deep inside a read is very
+    hard to trace back to the mount.
     """
     resolved = Path(path)
-    if not resolved.exists():
+    if resolved.is_dir():
+        raise FileNotFoundError(
+            f"Expected a file at {resolved} but found a directory. A bind mount "
+            f"creates one when the host file is missing -- create the file, then "
+            f"recreate the container. {hint}".strip()
+        )
+    if not resolved.is_file():
         raise FileNotFoundError(f"File not found at: {resolved}. {hint}".strip())
     return resolved
 

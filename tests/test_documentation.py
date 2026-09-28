@@ -143,3 +143,17 @@ def test_load_descriptions_drops_undescribed_columns(tmp_path):
         "address.city": "",
     }
     assert dr.load_descriptions(path)["customers"].columns == {"id": "Key."}
+
+
+def test_require_reports_a_directory_distinctly(tmp_path):
+    """docker-compose creates a directory where a bind-mounted file is missing.
+    The resulting error must name that cause, not just say 'not found'."""
+    import pytest
+
+    (tmp_path / "postgres_embeddings.json").mkdir()
+
+    with pytest.raises(FileNotFoundError) as err:
+        files.require(tmp_path / "postgres_embeddings.json")
+
+    assert "found a directory" in str(err.value)
+    assert "bind mount" in str(err.value)

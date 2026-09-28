@@ -1,0 +1,5746 @@
+[database]
+type = "postgresql"
+name = "finopsiq_be"
+schema_version = "1.0"
+last_updated = "2026-09-25T10:10:19.405953+00:00"
+description_generated_at = ""
+
+[tables."auth.alembic_version"]
+kind = "table"
+description = ""
+
+[tables."auth.alembic_version".columns.version_num]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."auth.default_idp_config"]
+kind = "table"
+description = ""
+
+[tables."auth.default_idp_config".columns.id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."auth.default_idp_config".columns.provider]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."auth.default_idp_config".columns.tenant_id]
+type = "text"
+description = ""
+nullable = true
+
+[tables."auth.default_idp_config".columns.client_id]
+type = "text"
+description = ""
+nullable = false
+
+[tables."auth.default_idp_config".columns.redirect_uri]
+type = "text"
+description = ""
+nullable = false
+
+[tables."auth.default_idp_config".columns.is_enabled]
+type = "boolean"
+description = ""
+nullable = false
+
+[tables."auth.default_idp_config".columns.created_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."auth.default_idp_config".columns.updated_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."auth.default_idp_config".columns.created_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."auth.default_idp_config".columns.updated_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."auth.default_idp_config".columns.client_secret]
+type = "text"
+description = ""
+nullable = true
+
+[tables."auth.org_custom_role_privileges"]
+kind = "table"
+description = ""
+
+[tables."auth.org_custom_role_privileges".columns.id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."auth.org_custom_role_privileges".columns.role_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."auth.org_custom_role_privileges".columns.privilege_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."auth.org_custom_role_privileges".columns.created_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."auth.org_custom_role_privileges".columns.created_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."auth.org_custom_roles"]
+kind = "table"
+description = ""
+
+[tables."auth.org_custom_roles".columns.id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."auth.org_custom_roles".columns.organisation_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."auth.org_custom_roles".columns.product]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."auth.org_custom_roles".columns.name]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."auth.org_custom_roles".columns.description]
+type = "text"
+description = ""
+nullable = true
+
+[tables."auth.org_custom_roles".columns.is_default]
+type = "boolean"
+description = ""
+nullable = false
+
+[tables."auth.org_custom_roles".columns.created_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."auth.org_custom_roles".columns.created_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."auth.org_custom_roles".columns.updated_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."auth.org_custom_roles".columns.updated_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."auth.org_domains"]
+kind = "table"
+description = ""
+
+[tables."auth.org_domains".columns.id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."auth.org_domains".columns.organisation_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."auth.org_domains".columns.domain]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."auth.org_domains".columns.created_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."auth.org_domains".columns.updated_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."auth.org_domains".columns.created_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."auth.org_domains".columns.updated_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."auth.org_group_members"]
+kind = "table"
+description = ""
+
+[tables."auth.org_group_members".columns.id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."auth.org_group_members".columns.group_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."auth.org_group_members".columns.user_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."auth.org_group_members".columns.created_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."auth.org_group_members".columns.created_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."auth.org_groups"]
+kind = "table"
+description = ""
+
+[tables."auth.org_groups".columns.id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."auth.org_groups".columns.organisation_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."auth.org_groups".columns.name]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."auth.org_groups".columns.description]
+type = "text"
+description = ""
+nullable = true
+
+[tables."auth.org_groups".columns.metadata]
+type = "jsonb"
+description = ""
+nullable = false
+
+[tables."auth.org_groups".columns.created_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."auth.org_groups".columns.created_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."auth.org_groups".columns.updated_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."auth.org_groups".columns.updated_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."auth.org_idp_config"]
+kind = "table"
+description = ""
+
+[tables."auth.org_idp_config".columns.id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."auth.org_idp_config".columns.organisation_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."auth.org_idp_config".columns.provider]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."auth.org_idp_config".columns.tenant_id]
+type = "text"
+description = ""
+nullable = true
+
+[tables."auth.org_idp_config".columns.client_id]
+type = "text"
+description = ""
+nullable = false
+
+[tables."auth.org_idp_config".columns.redirect_uri]
+type = "text"
+description = ""
+nullable = false
+
+[tables."auth.org_idp_config".columns.is_enabled]
+type = "boolean"
+description = ""
+nullable = false
+
+[tables."auth.org_idp_config".columns.created_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."auth.org_idp_config".columns.updated_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."auth.org_idp_config".columns.created_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."auth.org_idp_config".columns.updated_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."auth.org_idp_config".columns.client_secret]
+type = "text"
+description = ""
+nullable = true
+
+[tables."auth.org_token_version"]
+kind = "table"
+description = ""
+
+[tables."auth.org_token_version".columns.org_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."auth.org_token_version".columns.version]
+type = "integer"
+description = ""
+nullable = false
+
+[tables."auth.org_token_version".columns.updated_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."auth.organisations"]
+kind = "table"
+description = ""
+
+[tables."auth.organisations".columns.id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."auth.organisations".columns.name]
+type = "text"
+description = ""
+nullable = false
+
+[tables."auth.organisations".columns.slug]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."auth.organisations".columns.status]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."auth.organisations".columns.created_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."auth.organisations".columns.updated_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."auth.organisations".columns.created_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."auth.organisations".columns.updated_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."auth.organisations".columns.plan]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."auth.organisations".columns.plan_status]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."auth.organisations".columns.trial_ends_at]
+type = "timestamp with time zone"
+description = ""
+nullable = true
+
+[tables."auth.organisations".columns.seat_limit]
+type = "integer"
+description = ""
+nullable = true
+
+[tables."auth.organisations".columns.billing_customer_id]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."auth.organisations".columns.billing_email]
+type = "text"
+description = ""
+nullable = true
+
+[tables."auth.organisations".columns.stripe_subscription_id]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."auth.organisations".columns.metadata]
+type = "jsonb"
+description = ""
+nullable = false
+
+[tables."auth.organisations".columns.custom_domain]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."auth.otp_codes"]
+kind = "table"
+description = ""
+
+[tables."auth.otp_codes".columns.id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."auth.otp_codes".columns.user_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."auth.otp_codes".columns.purpose]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."auth.otp_codes".columns.code_hash]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."auth.otp_codes".columns.expires_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."auth.otp_codes".columns.consumed_at]
+type = "timestamp with time zone"
+description = ""
+nullable = true
+
+[tables."auth.otp_codes".columns.attempts]
+type = "integer"
+description = ""
+nullable = false
+
+[tables."auth.otp_codes".columns.last_resend_at]
+type = "timestamp with time zone"
+description = ""
+nullable = true
+
+[tables."auth.otp_codes".columns.created_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."auth.otp_codes".columns.updated_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."auth.otp_codes".columns.created_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."auth.otp_codes".columns.updated_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."auth.plans"]
+kind = "table"
+description = ""
+
+[tables."auth.plans".columns.id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."auth.plans".columns.name]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."auth.plans".columns.seat_limit]
+type = "integer"
+description = ""
+nullable = false
+
+[tables."auth.plans".columns.products]
+type = "jsonb"
+description = ""
+nullable = false
+
+[tables."auth.plans".columns.is_platform_default]
+type = "boolean"
+description = ""
+nullable = false
+
+[tables."auth.plans".columns.metadata]
+type = "jsonb"
+description = ""
+nullable = false
+
+[tables."auth.plans".columns.created_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."auth.plans".columns.created_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."auth.plans".columns.updated_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."auth.plans".columns.updated_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."auth.product_privileges"]
+kind = "table"
+description = ""
+
+[tables."auth.product_privileges".columns.id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."auth.product_privileges".columns.product]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."auth.product_privileges".columns.key]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."auth.product_privileges".columns.label]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."auth.product_privileges".columns.group_name]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."auth.product_privileges".columns.risk]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."auth.product_privileges".columns.order]
+type = "integer"
+description = ""
+nullable = false
+
+[tables."auth.product_privileges".columns.is_deprecated]
+type = "boolean"
+description = ""
+nullable = false
+
+[tables."auth.product_privileges".columns.created_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."auth.product_privileges".columns.updated_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."auth.refresh_tokens"]
+kind = "table"
+description = ""
+
+[tables."auth.refresh_tokens".columns.id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."auth.refresh_tokens".columns.user_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."auth.refresh_tokens".columns.token_hash]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."auth.refresh_tokens".columns.expires_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."auth.refresh_tokens".columns.revoked_at]
+type = "timestamp with time zone"
+description = ""
+nullable = true
+
+[tables."auth.refresh_tokens".columns.rotated_from]
+type = "uuid"
+description = ""
+nullable = true
+
+[tables."auth.refresh_tokens".columns.created_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."auth.refresh_tokens".columns.updated_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."auth.refresh_tokens".columns.created_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."auth.refresh_tokens".columns.revoked_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."auth.refresh_tokens".columns.last_used_at]
+type = "timestamp with time zone"
+description = ""
+nullable = true
+
+[tables."auth.roles"]
+kind = "table"
+description = ""
+
+[tables."auth.roles".columns.id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."auth.roles".columns.name]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."auth.roles".columns.description]
+type = "text"
+description = ""
+nullable = true
+
+[tables."auth.roles".columns.created_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."auth.roles".columns.updated_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."auth.roles".columns.created_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."auth.roles".columns.updated_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."auth.service_clients"]
+kind = "table"
+description = ""
+
+[tables."auth.service_clients".columns.id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."auth.service_clients".columns.client_id]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."auth.service_clients".columns.description]
+type = "text"
+description = ""
+nullable = true
+
+[tables."auth.service_clients".columns.secret_hash]
+type = "text"
+description = ""
+nullable = false
+
+[tables."auth.service_clients".columns.is_active]
+type = "boolean"
+description = ""
+nullable = false
+
+[tables."auth.service_clients".columns.last_used_at]
+type = "timestamp with time zone"
+description = ""
+nullable = true
+
+[tables."auth.service_clients".columns.created_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."auth.service_clients".columns.updated_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."auth.service_clients".columns.created_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."auth.service_clients".columns.updated_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."auth.user_custom_roles"]
+kind = "table"
+description = ""
+
+[tables."auth.user_custom_roles".columns.id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."auth.user_custom_roles".columns.user_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."auth.user_custom_roles".columns.role_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."auth.user_custom_roles".columns.organisation_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."auth.user_custom_roles".columns.product]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."auth.user_custom_roles".columns.created_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."auth.user_custom_roles".columns.created_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."auth.user_roles"]
+kind = "table"
+description = ""
+
+[tables."auth.user_roles".columns.id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."auth.user_roles".columns.user_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."auth.user_roles".columns.role_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."auth.user_roles".columns.created_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."auth.user_roles".columns.created_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."auth.users"]
+kind = "table"
+description = ""
+
+[tables."auth.users".columns.id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."auth.users".columns.email]
+type = "text"
+description = ""
+nullable = false
+
+[tables."auth.users".columns.full_name]
+type = "text"
+description = ""
+nullable = true
+
+[tables."auth.users".columns.organisation_id]
+type = "uuid"
+description = ""
+nullable = true
+
+[tables."auth.users".columns.password_hash]
+type = "text"
+description = ""
+nullable = true
+
+[tables."auth.users".columns.external_id]
+type = "text"
+description = ""
+nullable = true
+
+[tables."auth.users".columns.auth_provider]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."auth.users".columns.status]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."auth.users".columns.failed_login_attempts]
+type = "integer"
+description = ""
+nullable = false
+
+[tables."auth.users".columns.locked_until]
+type = "timestamp with time zone"
+description = ""
+nullable = true
+
+[tables."auth.users".columns.invite_token_hash]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."auth.users".columns.invite_expires_at]
+type = "timestamp with time zone"
+description = ""
+nullable = true
+
+[tables."auth.users".columns.created_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."auth.users".columns.updated_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."auth.users".columns.created_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."auth.users".columns.updated_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."connector_service.connector_alembic_version"]
+kind = "table"
+description = ""
+
+[tables."connector_service.connector_alembic_version".columns.version_num]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."connector_service.connectors"]
+kind = "table"
+description = ""
+
+[tables."connector_service.connectors".columns.id]
+type = "integer"
+description = ""
+nullable = false
+
+[tables."connector_service.connectors".columns.name]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."connector_service.connectors".columns.key]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."connector_service.connectors".columns.client_id]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."connector_service.connectors".columns.client_secret]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."connector_service.connectors".columns.scope]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."connector_service.connectors".columns.enables_single_login]
+type = "boolean"
+description = ""
+nullable = false
+
+[tables."connector_service.connectors".columns.webhook_secret_id]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."connector_service.connectors".columns.is_active]
+type = "boolean"
+description = ""
+nullable = false
+
+[tables."connector_service.connectors".columns.created_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."connector_service.connectors".columns.updated_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."connector_service.connectors".columns.created_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."connector_service.connectors".columns.updated_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."connector_service.email_context"]
+kind = "table"
+description = ""
+
+[tables."connector_service.email_context".columns.id]
+type = "text"
+description = ""
+nullable = false
+
+[tables."connector_service.email_context".columns.sender_email]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."connector_service.email_context".columns.tenant_id]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."connector_service.email_context".columns.content]
+type = "jsonb"
+description = ""
+nullable = true
+
+[tables."connector_service.email_context".columns.category]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."connector_service.email_context".columns.status]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."connector_service.email_context".columns.received_time]
+type = "timestamp with time zone"
+description = ""
+nullable = true
+
+[tables."connector_service.email_context".columns.created_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."connector_service.email_context".columns.updated_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."connector_service.email_context".columns.created_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."connector_service.email_context".columns.updated_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."connector_service.oauth_state"]
+kind = "table"
+description = ""
+
+[tables."connector_service.oauth_state".columns.state]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."connector_service.oauth_state".columns.tenant_id]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."connector_service.oauth_state".columns.connector_id]
+type = "integer"
+description = ""
+nullable = false
+
+[tables."connector_service.oauth_state".columns.expires_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."connector_service.oauth_state".columns.created_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."connector_service.oauth_state".columns.updated_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."connector_service.oauth_state".columns.created_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."connector_service.oauth_state".columns.updated_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."connector_service.outlook_subscriptions"]
+kind = "table"
+description = ""
+
+[tables."connector_service.outlook_subscriptions".columns.id]
+type = "integer"
+description = ""
+nullable = false
+
+[tables."connector_service.outlook_subscriptions".columns.tenant_id]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."connector_service.outlook_subscriptions".columns.connector_id]
+type = "integer"
+description = ""
+nullable = false
+
+[tables."connector_service.outlook_subscriptions".columns.subscription_id]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."connector_service.outlook_subscriptions".columns.ms_tenant_id]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."connector_service.outlook_subscriptions".columns.user_id]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."connector_service.outlook_subscriptions".columns.user_email]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."connector_service.outlook_subscriptions".columns.folder_id]
+type = "text"
+description = ""
+nullable = true
+
+[tables."connector_service.outlook_subscriptions".columns.folder_name]
+type = "text"
+description = ""
+nullable = true
+
+[tables."connector_service.outlook_subscriptions".columns.folder_type]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."connector_service.outlook_subscriptions".columns.last_synced_at]
+type = "timestamp with time zone"
+description = ""
+nullable = true
+
+[tables."connector_service.outlook_subscriptions".columns.resource]
+type = "text"
+description = ""
+nullable = false
+
+[tables."connector_service.outlook_subscriptions".columns.change_type]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."connector_service.outlook_subscriptions".columns.notification_url]
+type = "text"
+description = ""
+nullable = false
+
+[tables."connector_service.outlook_subscriptions".columns.expires_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."connector_service.outlook_subscriptions".columns.is_active]
+type = "boolean"
+description = ""
+nullable = false
+
+[tables."connector_service.outlook_subscriptions".columns.last_webhook_at]
+type = "timestamp with time zone"
+description = ""
+nullable = true
+
+[tables."connector_service.outlook_subscriptions".columns.last_webhook_status]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."connector_service.outlook_subscriptions".columns.created_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."connector_service.outlook_subscriptions".columns.updated_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."connector_service.outlook_subscriptions".columns.created_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."connector_service.outlook_subscriptions".columns.updated_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."connector_service.sync_jobs"]
+kind = "table"
+description = ""
+
+[tables."connector_service.sync_jobs".columns.id]
+type = "bigint"
+description = ""
+nullable = false
+
+[tables."connector_service.sync_jobs".columns.tenant_id]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."connector_service.sync_jobs".columns.connector_id]
+type = "integer"
+description = ""
+nullable = false
+
+[tables."connector_service.sync_jobs".columns.external_realm_id]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."connector_service.sync_jobs".columns.user_email]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."connector_service.sync_jobs".columns.entity_type]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."connector_service.sync_jobs".columns.sync_type]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."connector_service.sync_jobs".columns.status]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."connector_service.sync_jobs".columns.total_records]
+type = "integer"
+description = ""
+nullable = false
+
+[tables."connector_service.sync_jobs".columns.processed_records]
+type = "integer"
+description = ""
+nullable = false
+
+[tables."connector_service.sync_jobs".columns.new_records]
+type = "integer"
+description = ""
+nullable = false
+
+[tables."connector_service.sync_jobs".columns.updated_records]
+type = "integer"
+description = ""
+nullable = false
+
+[tables."connector_service.sync_jobs".columns.failed_records]
+type = "integer"
+description = ""
+nullable = false
+
+[tables."connector_service.sync_jobs".columns.error_message]
+type = "text"
+description = ""
+nullable = true
+
+[tables."connector_service.sync_jobs".columns.triggered_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."connector_service.sync_jobs".columns.started_at]
+type = "bigint"
+description = ""
+nullable = true
+
+[tables."connector_service.sync_jobs".columns.completed_at]
+type = "bigint"
+description = ""
+nullable = true
+
+[tables."connector_service.sync_jobs".columns.created_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."connector_service.sync_jobs".columns.updated_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."connector_service.sync_jobs".columns.created_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."connector_service.sync_jobs".columns.updated_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."connector_service.tenant_connector_auth"]
+kind = "table"
+description = ""
+
+[tables."connector_service.tenant_connector_auth".columns.id]
+type = "integer"
+description = ""
+nullable = false
+
+[tables."connector_service.tenant_connector_auth".columns.tenant_id]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."connector_service.tenant_connector_auth".columns.connector_id]
+type = "integer"
+description = ""
+nullable = false
+
+[tables."connector_service.tenant_connector_auth".columns.external_realm_id]
+type = "bigint"
+description = ""
+nullable = true
+
+[tables."connector_service.tenant_connector_auth".columns.access_token]
+type = "text"
+description = ""
+nullable = true
+
+[tables."connector_service.tenant_connector_auth".columns.refresh_token]
+type = "text"
+description = ""
+nullable = true
+
+[tables."connector_service.tenant_connector_auth".columns.token_type]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."connector_service.tenant_connector_auth".columns.access_expires_at]
+type = "timestamp with time zone"
+description = ""
+nullable = true
+
+[tables."connector_service.tenant_connector_auth".columns.refresh_expires_at]
+type = "timestamp with time zone"
+description = ""
+nullable = true
+
+[tables."connector_service.tenant_connector_auth".columns.is_active]
+type = "boolean"
+description = ""
+nullable = false
+
+[tables."connector_service.tenant_connector_auth".columns.disconnected_at]
+type = "timestamp with time zone"
+description = ""
+nullable = true
+
+[tables."connector_service.tenant_connector_auth".columns.organization_name]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."connector_service.tenant_connector_auth".columns.last_token_refreshed_at]
+type = "timestamp with time zone"
+description = ""
+nullable = true
+
+[tables."connector_service.tenant_connector_auth".columns.created_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."connector_service.tenant_connector_auth".columns.updated_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."connector_service.tenant_connector_auth".columns.created_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."connector_service.tenant_connector_auth".columns.updated_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.alembic_version_finopsiq"]
+kind = "table"
+description = ""
+
+[tables."finopsiq.alembic_version_finopsiq".columns.version_num]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."finopsiq.contracts"]
+kind = "table"
+description = ""
+
+[tables."finopsiq.contracts".columns.contract_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.contracts".columns.request_for_proposal_number]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.contracts".columns.original_file_name]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.contracts".columns.purchasing_contact_name_or_department]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.contracts".columns.official_document_title]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."finopsiq.contracts".columns.assigned_contract_number]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.contracts".columns.agreement_signed_date]
+type = "date"
+description = ""
+nullable = true
+
+[tables."finopsiq.contracts".columns.start_date]
+type = "date"
+description = ""
+nullable = true
+
+[tables."finopsiq.contracts".columns.start_date_description_text]
+type = "text"
+description = ""
+nullable = true
+
+[tables."finopsiq.contracts".columns.expiry_date]
+type = "date"
+description = ""
+nullable = true
+
+[tables."finopsiq.contracts".columns.term_in_months]
+type = "integer"
+description = ""
+nullable = false
+
+[tables."finopsiq.contracts".columns.overall_contract_term_description]
+type = "text"
+description = ""
+nullable = true
+
+[tables."finopsiq.contracts".columns.renewal_term_description]
+type = "text"
+description = ""
+nullable = true
+
+[tables."finopsiq.contracts".columns.termination_notice_period_description]
+type = "text"
+description = ""
+nullable = true
+
+[tables."finopsiq.contracts".columns.total_contract_amount_value]
+type = "numeric"
+description = ""
+nullable = true
+
+[tables."finopsiq.contracts".columns.total_contract_amount_derivation_info]
+type = "jsonb"
+description = ""
+nullable = true
+
+[tables."finopsiq.contracts".columns.renewal_contract_amount_value]
+type = "numeric"
+description = ""
+nullable = true
+
+[tables."finopsiq.contracts".columns.initial_annual_fee_value]
+type = "numeric"
+description = ""
+nullable = true
+
+[tables."finopsiq.contracts".columns.price_escalation_terms_description]
+type = "text"
+description = ""
+nullable = true
+
+[tables."finopsiq.contracts".columns.payment_terms_description]
+type = "text"
+description = ""
+nullable = true
+
+[tables."finopsiq.contracts".columns.tenant_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.contracts".columns.vendor_id]
+type = "uuid"
+description = ""
+nullable = true
+
+[tables."finopsiq.contracts".columns.customer_id]
+type = "uuid"
+description = ""
+nullable = true
+
+[tables."finopsiq.contracts".columns.invoice_id]
+type = "uuid"
+description = ""
+nullable = true
+
+[tables."finopsiq.contracts".columns.source]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.contracts".columns.internet_message_id]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.contracts".columns.file_id]
+type = "uuid"
+description = ""
+nullable = true
+
+[tables."finopsiq.contracts".columns.contract_intelligence]
+type = "jsonb"
+description = ""
+nullable = true
+
+[tables."finopsiq.contracts".columns.sync_hash]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.contracts".columns.contract_type]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.contracts".columns.is_deleted]
+type = "boolean"
+description = ""
+nullable = false
+
+[tables."finopsiq.contracts".columns.deleted_at]
+type = "timestamp with time zone"
+description = ""
+nullable = true
+
+[tables."finopsiq.contracts".columns.created_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.contracts".columns.updated_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.contracts".columns.created_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.contracts".columns.updated_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.currency_rates"]
+kind = "table"
+description = ""
+
+[tables."finopsiq.currency_rates".columns.currency]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."finopsiq.currency_rates".columns.usd_rate]
+type = "numeric"
+description = ""
+nullable = false
+
+[tables."finopsiq.currency_rates".columns.source]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."finopsiq.currency_rates".columns.updated_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.currency_rates".columns.created_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.currency_rates".columns.rate_date]
+type = "date"
+description = ""
+nullable = false
+
+[tables."finopsiq.customers"]
+kind = "table"
+description = ""
+
+[tables."finopsiq.customers".columns.customer_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.customers".columns.tenant_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.customers".columns.connector_id]
+type = "integer"
+description = ""
+nullable = true
+
+[tables."finopsiq.customers".columns.external_realm_id]
+type = "bigint"
+description = ""
+nullable = true
+
+[tables."finopsiq.customers".columns.external_customer_id]
+type = "bigint"
+description = ""
+nullable = true
+
+[tables."finopsiq.customers".columns.source]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.customers".columns.title]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.customers".columns.given_name]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.customers".columns.middle_name]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.customers".columns.family_name]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.customers".columns.company_name]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.customers".columns.display_name]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.customers".columns.name]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.customers".columns.phone]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.customers".columns.email]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.customers".columns.tin]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.customers".columns.balance]
+type = "numeric"
+description = ""
+nullable = true
+
+[tables."finopsiq.customers".columns.is_active]
+type = "boolean"
+description = ""
+nullable = false
+
+[tables."finopsiq.customers".columns.is_taxable]
+type = "boolean"
+description = ""
+nullable = false
+
+[tables."finopsiq.customers".columns.shipping_address]
+type = "jsonb"
+description = ""
+nullable = true
+
+[tables."finopsiq.customers".columns.billing_address]
+type = "jsonb"
+description = ""
+nullable = true
+
+[tables."finopsiq.customers".columns.sync_hash]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.customers".columns.created_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.customers".columns.updated_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.customers".columns.updated_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.customers".columns.created_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.discrepancies_details"]
+kind = "table"
+description = ""
+
+[tables."finopsiq.discrepancies_details".columns.discrepancies_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.discrepancies_details".columns.tenant_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.discrepancies_details".columns.match_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.discrepancies_details".columns.match_type]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."finopsiq.discrepancies_details".columns.has_discrepancy]
+type = "boolean"
+description = ""
+nullable = false
+
+[tables."finopsiq.discrepancies_details".columns.confidence_score]
+type = "numeric"
+description = ""
+nullable = false
+
+[tables."finopsiq.discrepancies_details".columns.confidence_breakdown]
+type = "jsonb"
+description = ""
+nullable = false
+
+[tables."finopsiq.discrepancies_details".columns.comparison_discrepancies_details]
+type = "jsonb"
+description = ""
+nullable = false
+
+[tables."finopsiq.discrepancies_details".columns.basic_validation_details]
+type = "jsonb"
+description = ""
+nullable = false
+
+[tables."finopsiq.discrepancies_details".columns.missing_relevant_documents]
+type = "boolean"
+description = ""
+nullable = false
+
+[tables."finopsiq.discrepancies_details".columns.missing_relevant_documents_info]
+type = "jsonb"
+description = ""
+nullable = true
+
+[tables."finopsiq.discrepancies_details".columns.matched_details]
+type = "jsonb"
+description = ""
+nullable = false
+
+[tables."finopsiq.discrepancies_details".columns.discrepancy_summary]
+type = "jsonb"
+description = ""
+nullable = false
+
+[tables."finopsiq.discrepancies_details".columns.processing_metadata]
+type = "jsonb"
+description = ""
+nullable = false
+
+[tables."finopsiq.discrepancies_details".columns.enriched_findings]
+type = "jsonb"
+description = ""
+nullable = true
+
+[tables."finopsiq.discrepancies_details".columns.pre_revalidation_details]
+type = "jsonb"
+description = ""
+nullable = true
+
+[tables."finopsiq.discrepancies_details".columns.created_by_user_id]
+type = "uuid"
+description = ""
+nullable = true
+
+[tables."finopsiq.discrepancies_details".columns.resolved_by_user_id]
+type = "uuid"
+description = ""
+nullable = true
+
+[tables."finopsiq.discrepancies_details".columns.created_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.discrepancies_details".columns.updated_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.discrepancies_details".columns.dra_trigger_status]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."finopsiq.discrepancies_details".columns.dra_claimed_at]
+type = "timestamp with time zone"
+description = ""
+nullable = true
+
+[tables."finopsiq.discrepancies_details".columns.dra_completed_at]
+type = "timestamp with time zone"
+description = ""
+nullable = true
+
+[tables."finopsiq.discrepancies_details".columns.dra_attempts]
+type = "integer"
+description = ""
+nullable = false
+
+[tables."finopsiq.discrepancy_resolution"]
+kind = "table"
+description = ""
+
+[tables."finopsiq.discrepancy_resolution".columns.discrepancy_id]
+type = "uuid"
+description = ""
+nullable = true
+
+[tables."finopsiq.discrepancy_resolution".columns.resolution_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.discrepancy_resolution".columns.match_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.discrepancy_resolution".columns.invoice_type]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.discrepancy_resolution".columns.discrepancy_type]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."finopsiq.discrepancy_resolution".columns.vendor_email]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."finopsiq.discrepancy_resolution".columns.finance_admin_id]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."finopsiq.discrepancy_resolution".columns.status]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."finopsiq.discrepancy_resolution".columns.retry_count]
+type = "integer"
+description = ""
+nullable = false
+
+[tables."finopsiq.discrepancy_resolution".columns.trigger_time]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.discrepancy_resolution".columns.resolution_time]
+type = "timestamp with time zone"
+description = ""
+nullable = true
+
+[tables."finopsiq.discrepancy_resolution".columns.resolution_notes]
+type = "text"
+description = ""
+nullable = true
+
+[tables."finopsiq.discrepancy_resolution".columns.created_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.discrepancy_resolution".columns.updated_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.dra_mailbox_config"]
+kind = "table"
+description = ""
+
+[tables."finopsiq.dra_mailbox_config".columns.tenant_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.dra_mailbox_config".columns.mailbox_address]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.dra_mailbox_config".columns.status]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."finopsiq.dra_mailbox_config".columns.validated_at]
+type = "timestamp with time zone"
+description = ""
+nullable = true
+
+[tables."finopsiq.dra_mailbox_config".columns.validation_error]
+type = "text"
+description = ""
+nullable = true
+
+[tables."finopsiq.dra_mailbox_config".columns.graph_subscription_id]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.dra_mailbox_config".columns.graph_subscription_expires_at]
+type = "timestamp with time zone"
+description = ""
+nullable = true
+
+[tables."finopsiq.dra_mailbox_config".columns.created_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.dra_mailbox_config".columns.updated_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.dra_mailbox_config".columns.created_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.dra_mailbox_config".columns.updated_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.email_context"]
+kind = "table"
+description = ""
+
+[tables."finopsiq.email_context".columns.id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.email_context".columns.internet_message_id]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."finopsiq.email_context".columns.tenant_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.email_context".columns.conversation_id]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."finopsiq.email_context".columns.subject]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.email_context".columns.sender]
+type = "text"
+description = ""
+nullable = false
+
+[tables."finopsiq.email_context".columns.recipients]
+type = "ARRAY"
+description = ""
+nullable = false
+
+[tables."finopsiq.email_context".columns.intent_category]
+type = "text"
+description = ""
+nullable = false
+
+[tables."finopsiq.email_context".columns.intent_type]
+type = "text"
+description = ""
+nullable = true
+
+[tables."finopsiq.email_context".columns.context_summary]
+type = "text"
+description = ""
+nullable = true
+
+[tables."finopsiq.email_context".columns.extracted_references]
+type = "ARRAY"
+description = ""
+nullable = true
+
+[tables."finopsiq.email_context".columns.pending_link]
+type = "boolean"
+description = ""
+nullable = false
+
+[tables."finopsiq.email_context".columns.received_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.email_context".columns.body_text]
+type = "text"
+description = ""
+nullable = true
+
+[tables."finopsiq.email_context".columns.body_html]
+type = "text"
+description = ""
+nullable = true
+
+[tables."finopsiq.email_context".columns.body_tables]
+type = "jsonb"
+description = ""
+nullable = true
+
+[tables."finopsiq.email_context".columns.body_cid_refs]
+type = "jsonb"
+description = ""
+nullable = true
+
+[tables."finopsiq.email_context".columns.processed_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.email_context".columns.created_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.email_context".columns.updated_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.email_context_link"]
+kind = "table"
+description = ""
+
+[tables."finopsiq.email_context_link".columns.id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.email_context_link".columns.tenant_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.email_context_link".columns.context_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.email_context_link".columns.entity_type]
+type = "text"
+description = ""
+nullable = false
+
+[tables."finopsiq.email_context_link".columns.entity_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.email_context_link".columns.linked_by]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.email_context_link".columns.linked_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.email_context_link".columns.link_type]
+type = "text"
+description = ""
+nullable = false
+
+[tables."finopsiq.email_context_link".columns.created_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.email_context_link".columns.updated_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.entity_audit_log"]
+kind = "table"
+description = ""
+
+[tables."finopsiq.entity_audit_log".columns.audit_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.entity_audit_log".columns.invoice_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.entity_audit_log".columns.tenant_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.entity_audit_log".columns.action_type]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."finopsiq.entity_audit_log".columns.performed_by]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."finopsiq.entity_audit_log".columns.performed_by_name]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.entity_audit_log".columns.summary]
+type = "text"
+description = ""
+nullable = true
+
+[tables."finopsiq.entity_audit_log".columns.changes]
+type = "jsonb"
+description = ""
+nullable = false
+
+[tables."finopsiq.entity_audit_log".columns.metadata]
+type = "jsonb"
+description = ""
+nullable = true
+
+[tables."finopsiq.entity_audit_log".columns.revision_number]
+type = "integer"
+description = ""
+nullable = true
+
+[tables."finopsiq.entity_audit_log".columns.created_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.genbooks_entity_aliases"]
+kind = "table"
+description = ""
+
+[tables."finopsiq.genbooks_entity_aliases".columns.id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.genbooks_entity_aliases".columns.tenant_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.genbooks_entity_aliases".columns.raw_name]
+type = "text"
+description = ""
+nullable = false
+
+[tables."finopsiq.genbooks_entity_aliases".columns.entity_type]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."finopsiq.genbooks_entity_aliases".columns.entity_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.genbooks_entity_aliases".columns.created_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.genbooks_entity_aliases".columns.updated_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.genbooks_file_metadata"]
+kind = "table"
+description = ""
+
+[tables."finopsiq.genbooks_file_metadata".columns.id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.genbooks_file_metadata".columns.session_id]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.genbooks_file_metadata".columns.tenant_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.genbooks_file_metadata".columns.original_filename]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."finopsiq.genbooks_file_metadata".columns.md5_hash]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."finopsiq.genbooks_file_metadata".columns.file_size]
+type = "bigint"
+description = ""
+nullable = true
+
+[tables."finopsiq.genbooks_file_metadata".columns.source]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."finopsiq.genbooks_file_metadata".columns.stage]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."finopsiq.genbooks_file_metadata".columns.conversation_id]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.genbooks_file_metadata".columns.dams_file_id]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.genbooks_file_metadata".columns.invoice_id]
+type = "uuid"
+description = ""
+nullable = true
+
+[tables."finopsiq.genbooks_file_metadata".columns.contract_id]
+type = "uuid"
+description = ""
+nullable = true
+
+[tables."finopsiq.genbooks_file_metadata".columns.po_id]
+type = "uuid"
+description = ""
+nullable = true
+
+[tables."finopsiq.genbooks_file_metadata".columns.general_document_id]
+type = "uuid"
+description = ""
+nullable = true
+
+[tables."finopsiq.genbooks_file_metadata".columns.document_type]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.genbooks_file_metadata".columns.error_message]
+type = "text"
+description = ""
+nullable = true
+
+[tables."finopsiq.genbooks_file_metadata".columns.extraction_json]
+type = "jsonb"
+description = ""
+nullable = true
+
+[tables."finopsiq.genbooks_file_metadata".columns.file_name]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.genbooks_file_metadata".columns.file_url]
+type = "text"
+description = ""
+nullable = true
+
+[tables."finopsiq.genbooks_file_metadata".columns.file_type]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.genbooks_file_metadata".columns.content_type]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.genbooks_file_metadata".columns.is_parsed]
+type = "boolean"
+description = ""
+nullable = false
+
+[tables."finopsiq.genbooks_file_metadata".columns.parsed_file_url]
+type = "text"
+description = ""
+nullable = true
+
+[tables."finopsiq.genbooks_file_metadata".columns.storage_path]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.genbooks_file_metadata".columns.storage_provider]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.genbooks_file_metadata".columns.cache_name]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.genbooks_file_metadata".columns.internet_message_id]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.genbooks_file_metadata".columns.attachment_id]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.genbooks_file_metadata".columns.attachment_kind]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.genbooks_file_metadata".columns.attempts]
+type = "integer"
+description = ""
+nullable = false
+
+[tables."finopsiq.genbooks_file_metadata".columns.max_attempts]
+type = "integer"
+description = ""
+nullable = false
+
+[tables."finopsiq.genbooks_file_metadata".columns.next_retry_at]
+type = "timestamp with time zone"
+description = ""
+nullable = true
+
+[tables."finopsiq.genbooks_file_metadata".columns.locked_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.genbooks_file_metadata".columns.locked_at]
+type = "timestamp with time zone"
+description = ""
+nullable = true
+
+[tables."finopsiq.genbooks_file_metadata".columns.is_deleted]
+type = "boolean"
+description = ""
+nullable = false
+
+[tables."finopsiq.genbooks_file_metadata".columns.deleted_at]
+type = "timestamp with time zone"
+description = ""
+nullable = true
+
+[tables."finopsiq.genbooks_file_metadata".columns.created_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.genbooks_file_metadata".columns.updated_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.genbooks_file_metadata".columns.reprocess_attempts]
+type = "integer"
+description = ""
+nullable = false
+
+[tables."finopsiq.genbooks_file_metadata".columns.last_reprocess_at]
+type = "timestamp with time zone"
+description = ""
+nullable = true
+
+[tables."finopsiq.genbooks_file_metadata".columns.content_id]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.genbooks_file_metadata".columns.upload_context_invoice_id]
+type = "uuid"
+description = ""
+nullable = true
+
+[tables."finopsiq.genbooks_requests"]
+kind = "table"
+description = ""
+
+[tables."finopsiq.genbooks_requests".columns.request_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.genbooks_requests".columns.invoice_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.genbooks_requests".columns.tenant_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.genbooks_requests".columns.file_urls]
+type = "jsonb"
+description = ""
+nullable = true
+
+[tables."finopsiq.genbooks_requests".columns.status]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."finopsiq.genbooks_requests".columns.match_id]
+type = "uuid"
+description = ""
+nullable = true
+
+[tables."finopsiq.genbooks_requests".columns.discrepancies_id]
+type = "uuid"
+description = ""
+nullable = true
+
+[tables."finopsiq.genbooks_requests".columns.channel]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."finopsiq.genbooks_requests".columns.agent_updated]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.genbooks_requests".columns.error_message]
+type = "text"
+description = ""
+nullable = true
+
+[tables."finopsiq.genbooks_requests".columns.invoice_type]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.genbooks_requests".columns.ar_status]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.genbooks_requests".columns.status_reason]
+type = "text"
+description = ""
+nullable = true
+
+[tables."finopsiq.genbooks_requests".columns.is_deleted]
+type = "boolean"
+description = ""
+nullable = false
+
+[tables."finopsiq.genbooks_requests".columns.deleted_at]
+type = "timestamp with time zone"
+description = ""
+nullable = true
+
+[tables."finopsiq.genbooks_requests".columns.created_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.genbooks_requests".columns.updated_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.general_documents"]
+kind = "table"
+description = ""
+
+[tables."finopsiq.general_documents".columns.general_document_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.general_documents".columns.tenant_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.general_documents".columns.file_id]
+type = "uuid"
+description = ""
+nullable = true
+
+[tables."finopsiq.general_documents".columns.original_file_name]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.general_documents".columns.source]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.general_documents".columns.internet_message_id]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.general_documents".columns.document_subtype]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.general_documents".columns.classification_confidence]
+type = "numeric"
+description = ""
+nullable = true
+
+[tables."finopsiq.general_documents".columns.extracted_data]
+type = "jsonb"
+description = ""
+nullable = true
+
+[tables."finopsiq.general_documents".columns.invoice_number_refs]
+type = "ARRAY"
+description = ""
+nullable = true
+
+[tables."finopsiq.general_documents".columns.sync_hash]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.general_documents".columns.document_type]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.general_documents".columns.vendor_id]
+type = "uuid"
+description = ""
+nullable = true
+
+[tables."finopsiq.general_documents".columns.customer_id]
+type = "uuid"
+description = ""
+nullable = true
+
+[tables."finopsiq.general_documents".columns.is_deleted]
+type = "boolean"
+description = ""
+nullable = false
+
+[tables."finopsiq.general_documents".columns.deleted_at]
+type = "timestamp with time zone"
+description = ""
+nullable = true
+
+[tables."finopsiq.general_documents".columns.created_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.general_documents".columns.updated_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.general_documents".columns.created_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.general_documents".columns.updated_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.ignored_discrepancies"]
+kind = "table"
+description = ""
+
+[tables."finopsiq.ignored_discrepancies".columns.ignored_discrepancy_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.ignored_discrepancies".columns.tenant_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.ignored_discrepancies".columns.vendor_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.ignored_discrepancies".columns.invoice_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.ignored_discrepancies".columns.discrepancy_id]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.ignored_discrepancies".columns.discrepancy_uid]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.ignored_discrepancies".columns.item_key]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.ignored_discrepancies".columns.discrepancy_type]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."finopsiq.ignored_discrepancies".columns.check_name]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.ignored_discrepancies".columns.severity]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.ignored_discrepancies".columns.message]
+type = "text"
+description = ""
+nullable = true
+
+[tables."finopsiq.ignored_discrepancies".columns.group_id]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.ignored_discrepancies".columns.group_reason]
+type = "text"
+description = ""
+nullable = true
+
+[tables."finopsiq.ignored_discrepancies".columns.is_future_rule]
+type = "boolean"
+description = ""
+nullable = false
+
+[tables."finopsiq.ignored_discrepancies".columns.effective_from]
+type = "timestamp with time zone"
+description = ""
+nullable = true
+
+[tables."finopsiq.ignored_discrepancies".columns.restored_invoice_ids]
+type = "jsonb"
+description = ""
+nullable = true
+
+[tables."finopsiq.ignored_discrepancies".columns.ignored_by_user_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.ignored_discrepancies".columns.is_active]
+type = "boolean"
+description = ""
+nullable = false
+
+[tables."finopsiq.ignored_discrepancies".columns.created_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.invoice_document_links"]
+kind = "table"
+description = ""
+
+[tables."finopsiq.invoice_document_links".columns.link_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.invoice_document_links".columns.tenant_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.invoice_document_links".columns.source_document_type]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."finopsiq.invoice_document_links".columns.source_document_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.invoice_document_links".columns.target_document_type]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."finopsiq.invoice_document_links".columns.target_po_id]
+type = "uuid"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoice_document_links".columns.target_contract_id]
+type = "uuid"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoice_document_links".columns.target_general_document_id]
+type = "uuid"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoice_document_links".columns.linked_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoice_document_links".columns.relationship_role]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."finopsiq.invoice_document_links".columns.created_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.invoice_document_links".columns.updated_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.invoice_line_items"]
+kind = "table"
+description = ""
+
+[tables."finopsiq.invoice_line_items".columns.invoice_line_item_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.invoice_line_items".columns.invoice_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.invoice_line_items".columns.tenant_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.invoice_line_items".columns.po_line_item_id]
+type = "uuid"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoice_line_items".columns.external_line_item_id]
+type = "bigint"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoice_line_items".columns.line_number]
+type = "integer"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoice_line_items".columns.line_item_type]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoice_line_items".columns.product_id]
+type = "integer"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoice_line_items".columns.billable_status]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoice_line_items".columns.description]
+type = "text"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoice_line_items".columns.item_name]
+type = "text"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoice_line_items".columns.quantity_text]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoice_line_items".columns.quantity]
+type = "numeric"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoice_line_items".columns.quantity_unit]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoice_line_items".columns.unit_price_text]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoice_line_items".columns.unit_price]
+type = "numeric"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoice_line_items".columns.unit_price_unit]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoice_line_items".columns.line_total]
+type = "numeric"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoice_line_items".columns.discount_type]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoice_line_items".columns.discount_amount]
+type = "numeric"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoice_line_items".columns.discount_percentage]
+type = "numeric"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoice_line_items".columns.apply_tax_after_discount]
+type = "boolean"
+description = ""
+nullable = false
+
+[tables."finopsiq.invoice_line_items".columns.taxes]
+type = "jsonb"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoice_line_items".columns.customer_id]
+type = "uuid"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoice_line_items".columns.customer_name]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoice_line_items".columns.created_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.invoice_line_items".columns.updated_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.invoice_reminder_state"]
+kind = "table"
+description = ""
+
+[tables."finopsiq.invoice_reminder_state".columns.invoice_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.invoice_reminder_state".columns.tenant_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.invoice_reminder_state".columns.status]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."finopsiq.invoice_reminder_state".columns.next_reminder_at]
+type = "timestamp with time zone"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoice_reminder_state".columns.next_level]
+type = "smallint"
+description = ""
+nullable = false
+
+[tables."finopsiq.invoice_reminder_state".columns.customer_email]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoice_reminder_state".columns.customer_name]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoice_reminder_state".columns.invoice_number]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoice_reminder_state".columns.total_amount]
+type = "numeric"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoice_reminder_state".columns.amount_paid]
+type = "numeric"
+description = ""
+nullable = false
+
+[tables."finopsiq.invoice_reminder_state".columns.amount_due]
+type = "numeric"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoice_reminder_state".columns.due_date]
+type = "timestamp with time zone"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoice_reminder_state".columns.currency]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoice_reminder_state".columns.last_payment_at]
+type = "timestamp with time zone"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoice_reminder_state".columns.invoice_json]
+type = "jsonb"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoice_reminder_state".columns.created_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.invoice_reminder_state".columns.updated_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.invoice_reminder_state".columns.max_reached_at]
+type = "timestamp with time zone"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoice_reminder_state".columns.admin_alert_sent_at]
+type = "timestamp with time zone"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoice_revisions"]
+kind = "table"
+description = ""
+
+[tables."finopsiq.invoice_revisions".columns.revision_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.invoice_revisions".columns.invoice_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.invoice_revisions".columns.revision_number]
+type = "integer"
+description = ""
+nullable = false
+
+[tables."finopsiq.invoice_revisions".columns.file_id]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoice_revisions".columns.snapshot]
+type = "jsonb"
+description = ""
+nullable = false
+
+[tables."finopsiq.invoice_revisions".columns.edit_source]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoice_revisions".columns.edited_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoice_revisions".columns.user_acknowledged_risk]
+type = "boolean"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoice_revisions".columns.created_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.invoices"]
+kind = "table"
+description = ""
+
+[tables."finopsiq.invoices".columns.invoice_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.invoices".columns.tenant_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.invoices".columns.purchase_order_number]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoices".columns.original_file_name]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoices".columns.contract_number]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoices".columns.vendor_id]
+type = "uuid"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoices".columns.customer_id]
+type = "uuid"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoices".columns.connector_id]
+type = "integer"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoices".columns.external_invoice_id]
+type = "bigint"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoices".columns.external_realm_id]
+type = "bigint"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoices".columns.source]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoices".columns.internet_message_id]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoices".columns.show_status]
+type = "boolean"
+description = ""
+nullable = false
+
+[tables."finopsiq.invoices".columns.invoice_type]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoices".columns.status]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoices".columns.email_status]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoices".columns.invoice_number]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoices".columns.invoice_received_date]
+type = "timestamp with time zone"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoices".columns.invoice_date]
+type = "date"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoices".columns.shipping_date]
+type = "date"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoices".columns.due_date]
+type = "date"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoices".columns.currency]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoices".columns.exchange_rate]
+type = "numeric"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoices".columns.total_quantity]
+type = "numeric"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoices".columns.subtotal]
+type = "numeric"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoices".columns.discount_type]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoices".columns.discount_amount]
+type = "numeric"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoices".columns.discount_percentage]
+type = "numeric"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoices".columns.discount_account_id]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoices".columns.discount_account_name]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoices".columns.is_discount_before_tax]
+type = "boolean"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoices".columns.shipping_charges]
+type = "numeric"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoices".columns.apply_tax_after_discount]
+type = "boolean"
+description = ""
+nullable = false
+
+[tables."finopsiq.invoices".columns.tax_calculation_level]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoices".columns.taxes]
+type = "jsonb"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoices".columns.total_amount]
+type = "numeric"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoices".columns.balance_due]
+type = "numeric"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoices".columns.deposit]
+type = "numeric"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoices".columns.is_reverse_charge_applied]
+type = "boolean"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoices".columns.reverse_charge_total]
+type = "numeric"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoices".columns.tax_identity_info]
+type = "jsonb"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoices".columns.deductions_total]
+type = "numeric"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoices".columns.deductions_details]
+type = "jsonb"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoices".columns.additional_charges]
+type = "jsonb"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoices".columns.round_off]
+type = "numeric"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoices".columns.vendor_email]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoices".columns.customer_email]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoices".columns.memo]
+type = "text"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoices".columns.private_note]
+type = "text"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoices".columns.description]
+type = "text"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoices".columns.billing_address]
+type = "jsonb"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoices".columns.shipping_address]
+type = "jsonb"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoices".columns.vendor_address]
+type = "jsonb"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoices".columns.linked_transactions]
+type = "jsonb"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoices".columns.file_id]
+type = "uuid"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoices".columns.sync_hash]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoices".columns.invoice_json]
+type = "jsonb"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoices".columns.rejected_references]
+type = "jsonb"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoices".columns.created_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.invoices".columns.updated_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.invoices".columns.is_deleted]
+type = "boolean"
+description = ""
+nullable = false
+
+[tables."finopsiq.invoices".columns.deleted_at]
+type = "timestamp with time zone"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoices".columns.created_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoices".columns.updated_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoices".columns.fx_rate_used]
+type = "numeric"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoices".columns.amount_usd]
+type = "numeric"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoices".columns.fx_rate_date]
+type = "date"
+description = ""
+nullable = true
+
+[tables."finopsiq.invoices".columns.fx_is_provisional]
+type = "boolean"
+description = ""
+nullable = false
+
+[tables."finopsiq.invoices".columns.fx_source]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.parser_headers"]
+kind = "table"
+description = ""
+
+[tables."finopsiq.parser_headers".columns.parser_header_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.parser_headers".columns.tenant_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.parser_headers".columns.fingerprint]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."finopsiq.parser_headers".columns.doc_type]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."finopsiq.parser_headers".columns.vendor_id]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.parser_headers".columns.field_rules]
+type = "jsonb"
+description = ""
+nullable = false
+
+[tables."finopsiq.parser_headers".columns.table_config]
+type = "jsonb"
+description = ""
+nullable = false
+
+[tables."finopsiq.parser_headers".columns.orphan_config]
+type = "jsonb"
+description = ""
+nullable = false
+
+[tables."finopsiq.parser_headers".columns.match_count]
+type = "integer"
+description = ""
+nullable = false
+
+[tables."finopsiq.parser_headers".columns.status]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."finopsiq.parser_headers".columns.template_schema_version]
+type = "smallint"
+description = ""
+nullable = false
+
+[tables."finopsiq.parser_headers".columns.learned_by]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."finopsiq.parser_headers".columns.created_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.parser_headers".columns.updated_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.payment_history"]
+kind = "table"
+description = ""
+
+[tables."finopsiq.payment_history".columns.payment_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.payment_history".columns.tenant_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.payment_history".columns.invoice_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.payment_history".columns.amount]
+type = "numeric"
+description = ""
+nullable = false
+
+[tables."finopsiq.payment_history".columns.payment_date]
+type = "date"
+description = ""
+nullable = true
+
+[tables."finopsiq.payment_history".columns.action]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.payment_history".columns.currency]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.payment_history".columns.balance_after]
+type = "numeric"
+description = ""
+nullable = true
+
+[tables."finopsiq.payment_history".columns.recorded_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.payment_history".columns.created_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.payment_history".columns.updated_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.po_line_items"]
+kind = "table"
+description = ""
+
+[tables."finopsiq.po_line_items".columns.po_line_item_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.po_line_items".columns.po_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.po_line_items".columns.tenant_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.po_line_items".columns.external_line_item_id]
+type = "bigint"
+description = ""
+nullable = true
+
+[tables."finopsiq.po_line_items".columns.line_number]
+type = "integer"
+description = ""
+nullable = true
+
+[tables."finopsiq.po_line_items".columns.line_item_type]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.po_line_items".columns.product_id]
+type = "integer"
+description = ""
+nullable = true
+
+[tables."finopsiq.po_line_items".columns.billable_status]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.po_line_items".columns.item_name]
+type = "text"
+description = ""
+nullable = true
+
+[tables."finopsiq.po_line_items".columns.description]
+type = "text"
+description = ""
+nullable = true
+
+[tables."finopsiq.po_line_items".columns.quantity_text]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.po_line_items".columns.quantity]
+type = "numeric"
+description = ""
+nullable = true
+
+[tables."finopsiq.po_line_items".columns.quantity_unit]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.po_line_items".columns.unit_price_text]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.po_line_items".columns.unit_price]
+type = "numeric"
+description = ""
+nullable = true
+
+[tables."finopsiq.po_line_items".columns.unit_price_unit]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.po_line_items".columns.line_total]
+type = "numeric"
+description = ""
+nullable = true
+
+[tables."finopsiq.po_line_items".columns.discount_type]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.po_line_items".columns.discount_amount]
+type = "numeric"
+description = ""
+nullable = true
+
+[tables."finopsiq.po_line_items".columns.discount_percentage]
+type = "numeric"
+description = ""
+nullable = true
+
+[tables."finopsiq.po_line_items".columns.apply_tax_after_discount]
+type = "boolean"
+description = ""
+nullable = false
+
+[tables."finopsiq.po_line_items".columns.taxes]
+type = "jsonb"
+description = ""
+nullable = true
+
+[tables."finopsiq.po_line_items".columns.customer_id]
+type = "uuid"
+description = ""
+nullable = true
+
+[tables."finopsiq.po_line_items".columns.customer_name]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.po_line_items".columns.created_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.po_line_items".columns.updated_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.po_line_items".columns.processed_quantity]
+type = "numeric"
+description = ""
+nullable = true
+
+[tables."finopsiq.po_revisions"]
+kind = "table"
+description = ""
+
+[tables."finopsiq.po_revisions".columns.revision_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.po_revisions".columns.po_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.po_revisions".columns.revision_number]
+type = "integer"
+description = ""
+nullable = false
+
+[tables."finopsiq.po_revisions".columns.file_id]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.po_revisions".columns.snapshot]
+type = "jsonb"
+description = ""
+nullable = false
+
+[tables."finopsiq.po_revisions".columns.edit_source]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.po_revisions".columns.context_id]
+type = "uuid"
+description = ""
+nullable = true
+
+[tables."finopsiq.po_revisions".columns.edited_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.po_revisions".columns.user_acknowledged_risk]
+type = "boolean"
+description = ""
+nullable = true
+
+[tables."finopsiq.po_revisions".columns.created_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.products"]
+kind = "table"
+description = ""
+
+[tables."finopsiq.products".columns.product_id]
+type = "integer"
+description = ""
+nullable = false
+
+[tables."finopsiq.products".columns.product_code]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."finopsiq.products".columns.default_description]
+type = "text"
+description = ""
+nullable = true
+
+[tables."finopsiq.products".columns.created_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.products".columns.updated_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.purchase_orders"]
+kind = "table"
+description = ""
+
+[tables."finopsiq.purchase_orders".columns.po_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.purchase_orders".columns.tenant_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.purchase_orders".columns.connector_id]
+type = "integer"
+description = ""
+nullable = true
+
+[tables."finopsiq.purchase_orders".columns.external_po_id]
+type = "bigint"
+description = ""
+nullable = true
+
+[tables."finopsiq.purchase_orders".columns.external_realm_id]
+type = "bigint"
+description = ""
+nullable = true
+
+[tables."finopsiq.purchase_orders".columns.source]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.purchase_orders".columns.internet_message_id]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.purchase_orders".columns.invoice_id]
+type = "uuid"
+description = ""
+nullable = true
+
+[tables."finopsiq.purchase_orders".columns.vendor_id]
+type = "uuid"
+description = ""
+nullable = true
+
+[tables."finopsiq.purchase_orders".columns.customer_id]
+type = "uuid"
+description = ""
+nullable = true
+
+[tables."finopsiq.purchase_orders".columns.show_status]
+type = "boolean"
+description = ""
+nullable = false
+
+[tables."finopsiq.purchase_orders".columns.is_deleted]
+type = "boolean"
+description = ""
+nullable = false
+
+[tables."finopsiq.purchase_orders".columns.deleted_at]
+type = "timestamp with time zone"
+description = ""
+nullable = true
+
+[tables."finopsiq.purchase_orders".columns.order_status]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.purchase_orders".columns.billed_status]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.purchase_orders".columns.received_status]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.purchase_orders".columns.email_status]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.purchase_orders".columns.po_number]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."finopsiq.purchase_orders".columns.original_file_name]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.purchase_orders".columns.po_received_date]
+type = "timestamp with time zone"
+description = ""
+nullable = true
+
+[tables."finopsiq.purchase_orders".columns.po_date]
+type = "date"
+description = ""
+nullable = true
+
+[tables."finopsiq.purchase_orders".columns.expected_delivery_date]
+type = "date"
+description = ""
+nullable = true
+
+[tables."finopsiq.purchase_orders".columns.delivery_date]
+type = "date"
+description = ""
+nullable = true
+
+[tables."finopsiq.purchase_orders".columns.po_expiry_date]
+type = "date"
+description = ""
+nullable = true
+
+[tables."finopsiq.purchase_orders".columns.currency]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.purchase_orders".columns.exchange_rate]
+type = "numeric"
+description = ""
+nullable = true
+
+[tables."finopsiq.purchase_orders".columns.total_quantity]
+type = "numeric"
+description = ""
+nullable = true
+
+[tables."finopsiq.purchase_orders".columns.subtotal]
+type = "numeric"
+description = ""
+nullable = true
+
+[tables."finopsiq.purchase_orders".columns.discount_type]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.purchase_orders".columns.discount_amount]
+type = "numeric"
+description = ""
+nullable = true
+
+[tables."finopsiq.purchase_orders".columns.discount_percentage]
+type = "numeric"
+description = ""
+nullable = true
+
+[tables."finopsiq.purchase_orders".columns.discount_account_id]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.purchase_orders".columns.discount_account_name]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.purchase_orders".columns.is_discount_before_tax]
+type = "boolean"
+description = ""
+nullable = true
+
+[tables."finopsiq.purchase_orders".columns.shipping_charges]
+type = "numeric"
+description = ""
+nullable = true
+
+[tables."finopsiq.purchase_orders".columns.apply_tax_after_discount]
+type = "boolean"
+description = ""
+nullable = false
+
+[tables."finopsiq.purchase_orders".columns.tax_calculation_level]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.purchase_orders".columns.taxes]
+type = "jsonb"
+description = ""
+nullable = true
+
+[tables."finopsiq.purchase_orders".columns.total_amount]
+type = "numeric"
+description = ""
+nullable = true
+
+[tables."finopsiq.purchase_orders".columns.is_reverse_charge_applied]
+type = "boolean"
+description = ""
+nullable = true
+
+[tables."finopsiq.purchase_orders".columns.reverse_charge_total]
+type = "numeric"
+description = ""
+nullable = true
+
+[tables."finopsiq.purchase_orders".columns.gst_number]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.purchase_orders".columns.gst_treatment]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.purchase_orders".columns.vendor_name]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.purchase_orders".columns.email]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.purchase_orders".columns.notes]
+type = "text"
+description = ""
+nullable = true
+
+[tables."finopsiq.purchase_orders".columns.terms_and_conditions]
+type = "text"
+description = ""
+nullable = true
+
+[tables."finopsiq.purchase_orders".columns.message_to_vendor]
+type = "text"
+description = ""
+nullable = true
+
+[tables."finopsiq.purchase_orders".columns.memo]
+type = "text"
+description = ""
+nullable = true
+
+[tables."finopsiq.purchase_orders".columns.billing_address]
+type = "jsonb"
+description = ""
+nullable = true
+
+[tables."finopsiq.purchase_orders".columns.vendor_address]
+type = "jsonb"
+description = ""
+nullable = true
+
+[tables."finopsiq.purchase_orders".columns.delivery_customer_id]
+type = "uuid"
+description = ""
+nullable = true
+
+[tables."finopsiq.purchase_orders".columns.delivery_customer_address]
+type = "jsonb"
+description = ""
+nullable = true
+
+[tables."finopsiq.purchase_orders".columns.delivery_customer_name]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.purchase_orders".columns.contact_persons_associated]
+type = "jsonb"
+description = ""
+nullable = true
+
+[tables."finopsiq.purchase_orders".columns.linked_transactions]
+type = "jsonb"
+description = ""
+nullable = true
+
+[tables."finopsiq.purchase_orders".columns.file_id]
+type = "uuid"
+description = ""
+nullable = true
+
+[tables."finopsiq.purchase_orders".columns.sync_hash]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.purchase_orders".columns.po_type]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.purchase_orders".columns.billing_type]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.purchase_orders".columns.po_json]
+type = "jsonb"
+description = ""
+nullable = true
+
+[tables."finopsiq.purchase_orders".columns.created_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.purchase_orders".columns.updated_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.purchase_orders".columns.created_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.purchase_orders".columns.updated_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.relevant_document_details"]
+kind = "table"
+description = ""
+
+[tables."finopsiq.relevant_document_details".columns.match_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.relevant_document_details".columns.tenant_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.relevant_document_details".columns.invoice_id]
+type = "uuid"
+description = ""
+nullable = true
+
+[tables."finopsiq.relevant_document_details".columns.match_status]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."finopsiq.relevant_document_details".columns.source_type]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.relevant_document_details".columns.match_type]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.relevant_document_details".columns.match_confidence]
+type = "numeric"
+description = ""
+nullable = true
+
+[tables."finopsiq.relevant_document_details".columns.po_details]
+type = "jsonb"
+description = ""
+nullable = true
+
+[tables."finopsiq.relevant_document_details".columns.contracts_details]
+type = "jsonb"
+description = ""
+nullable = true
+
+[tables."finopsiq.relevant_document_details".columns.invoice_details]
+type = "jsonb"
+description = ""
+nullable = true
+
+[tables."finopsiq.relevant_document_details".columns.general_document_details]
+type = "jsonb"
+description = ""
+nullable = true
+
+[tables."finopsiq.relevant_document_details".columns.internet_message_id]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.relevant_document_details".columns.processing_metadata]
+type = "jsonb"
+description = ""
+nullable = true
+
+[tables."finopsiq.relevant_document_details".columns.source_sync_hash]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.relevant_document_details".columns.processed_at]
+type = "timestamp with time zone"
+description = ""
+nullable = true
+
+[tables."finopsiq.relevant_document_details".columns.created_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.relevant_document_details".columns.updated_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.reminder_alert_config"]
+kind = "table"
+description = ""
+
+[tables."finopsiq.reminder_alert_config".columns.config_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.reminder_alert_config".columns.tenant_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.reminder_alert_config".columns.is_enabled]
+type = "boolean"
+description = ""
+nullable = false
+
+[tables."finopsiq.reminder_alert_config".columns.recipient_emails]
+type = "jsonb"
+description = ""
+nullable = false
+
+[tables."finopsiq.reminder_alert_config".columns.delay_minutes]
+type = "integer"
+description = ""
+nullable = false
+
+[tables."finopsiq.reminder_alert_config".columns.created_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.reminder_alert_config".columns.updated_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.reminder_alert_config".columns.created_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.reminder_alert_config".columns.updated_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.reminder_configuration"]
+kind = "table"
+description = ""
+
+[tables."finopsiq.reminder_configuration".columns.config_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.reminder_configuration".columns.tenant_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.reminder_configuration".columns.level]
+type = "smallint"
+description = ""
+nullable = false
+
+[tables."finopsiq.reminder_configuration".columns.from_days]
+type = "integer"
+description = ""
+nullable = false
+
+[tables."finopsiq.reminder_configuration".columns.to_days]
+type = "integer"
+description = ""
+nullable = true
+
+[tables."finopsiq.reminder_configuration".columns.display_label]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."finopsiq.reminder_configuration".columns.reminder_label]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.reminder_configuration".columns.reminder_tone]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."finopsiq.reminder_configuration".columns.is_enabled]
+type = "boolean"
+description = ""
+nullable = false
+
+[tables."finopsiq.reminder_configuration".columns.created_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.reminder_configuration".columns.updated_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.reminder_configuration".columns.created_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.reminder_configuration".columns.updated_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.reminders"]
+kind = "table"
+description = ""
+
+[tables."finopsiq.reminders".columns.reminder_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.reminders".columns.invoice_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.reminders".columns.tenant_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.reminders".columns.level]
+type = "smallint"
+description = ""
+nullable = false
+
+[tables."finopsiq.reminders".columns.reminder_label]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.reminders".columns.reminder_tone]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.reminders".columns.template_used]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.reminders".columns.recipient_email]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.reminders".columns.recipient_name]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.reminders".columns.status]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."finopsiq.reminders".columns.skip_reason]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.reminders".columns.error_message]
+type = "text"
+description = ""
+nullable = true
+
+[tables."finopsiq.reminders".columns.email_html]
+type = "text"
+description = ""
+nullable = true
+
+[tables."finopsiq.reminders".columns.sent_at]
+type = "timestamp with time zone"
+description = ""
+nullable = true
+
+[tables."finopsiq.reminders".columns.next_reminder_at]
+type = "timestamp with time zone"
+description = ""
+nullable = true
+
+[tables."finopsiq.reminders".columns.scheduler_request_id]
+type = "uuid"
+description = ""
+nullable = true
+
+[tables."finopsiq.reminders".columns.attempt]
+type = "smallint"
+description = ""
+nullable = false
+
+[tables."finopsiq.reminders".columns.created_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.resolution_audit_log"]
+kind = "table"
+description = ""
+
+[tables."finopsiq.resolution_audit_log".columns.audit_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.resolution_audit_log".columns.resolution_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.resolution_audit_log".columns.action_type]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."finopsiq.resolution_audit_log".columns.performed_by]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."finopsiq.resolution_audit_log".columns.details]
+type = "jsonb"
+description = ""
+nullable = true
+
+[tables."finopsiq.resolution_audit_log".columns.invoice_id]
+type = "uuid"
+description = ""
+nullable = true
+
+[tables."finopsiq.resolution_audit_log".columns.timestamp]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.resolution_audit_log".columns.created_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.resolution_communication"]
+kind = "table"
+description = ""
+
+[tables."finopsiq.resolution_communication".columns.communication_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.resolution_communication".columns.resolution_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.resolution_communication".columns.tenant_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.resolution_communication".columns.vendor_name]
+type = "text"
+description = ""
+nullable = true
+
+[tables."finopsiq.resolution_communication".columns.vendor_email]
+type = "text"
+description = ""
+nullable = true
+
+[tables."finopsiq.resolution_communication".columns.vendor_address]
+type = "text"
+description = ""
+nullable = true
+
+[tables."finopsiq.resolution_communication".columns.invoice_id]
+type = "uuid"
+description = ""
+nullable = true
+
+[tables."finopsiq.resolution_communication".columns.customer_name]
+type = "text"
+description = ""
+nullable = true
+
+[tables."finopsiq.resolution_communication".columns.customer_email]
+type = "text"
+description = ""
+nullable = true
+
+[tables."finopsiq.resolution_communication".columns.customer_address]
+type = "text"
+description = ""
+nullable = true
+
+[tables."finopsiq.resolution_communication".columns.direction]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."finopsiq.resolution_communication".columns.type]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."finopsiq.resolution_communication".columns.timestamp]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.resolution_communication".columns.subject]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."finopsiq.resolution_communication".columns.body_content]
+type = "jsonb"
+description = ""
+nullable = false
+
+[tables."finopsiq.resolution_communication".columns.attachments_gcs_paths]
+type = "text"
+description = ""
+nullable = true
+
+[tables."finopsiq.resolution_communication".columns.is_valid_response]
+type = "boolean"
+description = ""
+nullable = true
+
+[tables."finopsiq.resolution_communication".columns.status]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.resolution_communication".columns.communication_metadata]
+type = "jsonb"
+description = ""
+nullable = true
+
+[tables."finopsiq.resolution_communication".columns.performed_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.resolution_communication".columns.retry_count]
+type = "integer"
+description = ""
+nullable = false
+
+[tables."finopsiq.resolution_communication".columns.created_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.resolution_communication".columns.updated_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.resolution_communication".columns.internet_message_id]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.system_audit_log"]
+kind = "table"
+description = ""
+
+[tables."finopsiq.system_audit_log".columns.audit_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.system_audit_log".columns.tenant_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.system_audit_log".columns.actor_id]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."finopsiq.system_audit_log".columns.actor_name]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.system_audit_log".columns.action]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."finopsiq.system_audit_log".columns.outcome]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."finopsiq.system_audit_log".columns.reason]
+type = "text"
+description = ""
+nullable = true
+
+[tables."finopsiq.system_audit_log".columns.entity_group]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."finopsiq.system_audit_log".columns.entity_type]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."finopsiq.system_audit_log".columns.entity_id]
+type = "uuid"
+description = ""
+nullable = true
+
+[tables."finopsiq.system_audit_log".columns.entity_label]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.system_audit_log".columns.summary]
+type = "text"
+description = ""
+nullable = true
+
+[tables."finopsiq.system_audit_log".columns.changes]
+type = "jsonb"
+description = ""
+nullable = true
+
+[tables."finopsiq.system_audit_log".columns.context]
+type = "jsonb"
+description = ""
+nullable = true
+
+[tables."finopsiq.system_audit_log".columns.created_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.tax_metadata"]
+kind = "table"
+description = ""
+
+[tables."finopsiq.tax_metadata".columns.id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.tax_metadata".columns.tax_code]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."finopsiq.tax_metadata".columns.tax_rates]
+type = "jsonb"
+description = ""
+nullable = true
+
+[tables."finopsiq.tax_metadata".columns.is_rate_valid]
+type = "boolean"
+description = ""
+nullable = false
+
+[tables."finopsiq.tax_metadata".columns.created_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.tax_metadata".columns.updated_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.tenant_profiles"]
+kind = "table"
+description = ""
+
+[tables."finopsiq.tenant_profiles".columns.tenant_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.tenant_profiles".columns.organization_name]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."finopsiq.tenant_profiles".columns.domain]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.tenant_profiles".columns.company_website]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.tenant_profiles".columns.gst_number]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.tenant_profiles".columns.tin_number]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.tenant_profiles".columns.pan_number]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.tenant_profiles".columns.legal_org_name]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.tenant_profiles".columns.timezone]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.tenant_profiles".columns.language]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.tenant_profiles".columns.country]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.tenant_profiles".columns.state]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.tenant_profiles".columns.currency]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.tenant_profiles".columns.created_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.tenant_profiles".columns.updated_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.tenant_profiles".columns.created_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.tenant_profiles".columns.updated_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.tenant_profiles".columns.industry]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.tenant_profiles".columns.max_retries]
+type = "integer"
+description = ""
+nullable = false
+
+[tables."finopsiq.tenant_profiles".columns.cooldown_seconds]
+type = "integer"
+description = ""
+nullable = false
+
+[tables."finopsiq.thread_enrichment_queue"]
+kind = "table"
+description = ""
+
+[tables."finopsiq.thread_enrichment_queue".columns.id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.thread_enrichment_queue".columns.tenant_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.thread_enrichment_queue".columns.conversation_id]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."finopsiq.thread_enrichment_queue".columns.status]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."finopsiq.thread_enrichment_queue".columns.claimed_at]
+type = "timestamp with time zone"
+description = ""
+nullable = true
+
+[tables."finopsiq.thread_enrichment_queue".columns.retry_count]
+type = "smallint"
+description = ""
+nullable = false
+
+[tables."finopsiq.thread_enrichment_queue".columns.last_error]
+type = "text"
+description = ""
+nullable = true
+
+[tables."finopsiq.thread_enrichment_queue".columns.created_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.thread_enrichment_queue".columns.updated_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.unmatched_inbound_email"]
+kind = "table"
+description = ""
+
+[tables."finopsiq.unmatched_inbound_email".columns.id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.unmatched_inbound_email".columns.tenant_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.unmatched_inbound_email".columns.sender_email]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.unmatched_inbound_email".columns.sender_name]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.unmatched_inbound_email".columns.subject]
+type = "text"
+description = ""
+nullable = true
+
+[tables."finopsiq.unmatched_inbound_email".columns.body_text]
+type = "text"
+description = ""
+nullable = true
+
+[tables."finopsiq.unmatched_inbound_email".columns.internet_message_id]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.unmatched_inbound_email".columns.reason]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."finopsiq.unmatched_inbound_email".columns.resolution_id]
+type = "uuid"
+description = ""
+nullable = true
+
+[tables."finopsiq.unmatched_inbound_email".columns.received_at]
+type = "timestamp with time zone"
+description = ""
+nullable = true
+
+[tables."finopsiq.unmatched_inbound_email".columns.created_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.unmatched_inbound_email".columns.reviewed_at]
+type = "timestamp with time zone"
+description = ""
+nullable = true
+
+[tables."finopsiq.unmatched_inbound_email".columns.reviewed_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.us_state_sourcing"]
+kind = "table"
+description = ""
+
+[tables."finopsiq.us_state_sourcing".columns.state_code]
+type = "character"
+description = ""
+nullable = false
+
+[tables."finopsiq.us_state_sourcing".columns.sourcing]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."finopsiq.us_state_sourcing".columns.source]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."finopsiq.us_state_sourcing".columns.last_observed]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.us_tax_rate_cache"]
+kind = "table"
+description = ""
+
+[tables."finopsiq.us_tax_rate_cache".columns.postal_code]
+type = "character"
+description = ""
+nullable = false
+
+[tables."finopsiq.us_tax_rate_cache".columns.city_name]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."finopsiq.us_tax_rate_cache".columns.tic_id]
+type = "integer"
+description = ""
+nullable = false
+
+[tables."finopsiq.us_tax_rate_cache".columns.state_code]
+type = "character"
+description = ""
+nullable = false
+
+[tables."finopsiq.us_tax_rate_cache".columns.county_fips]
+type = "character"
+description = ""
+nullable = true
+
+[tables."finopsiq.us_tax_rate_cache".columns.county_name]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.us_tax_rate_cache".columns.sourcing_flag]
+type = "character"
+description = ""
+nullable = true
+
+[tables."finopsiq.us_tax_rate_cache".columns.state_rate]
+type = "numeric"
+description = ""
+nullable = false
+
+[tables."finopsiq.us_tax_rate_cache".columns.county_rate]
+type = "numeric"
+description = ""
+nullable = false
+
+[tables."finopsiq.us_tax_rate_cache".columns.city_rate]
+type = "numeric"
+description = ""
+nullable = false
+
+[tables."finopsiq.us_tax_rate_cache".columns.district_rate]
+type = "numeric"
+description = ""
+nullable = false
+
+[tables."finopsiq.us_tax_rate_cache".columns.combined_rate]
+type = "numeric"
+description = ""
+nullable = false
+
+[tables."finopsiq.us_tax_rate_cache".columns.raw_response]
+type = "jsonb"
+description = ""
+nullable = true
+
+[tables."finopsiq.us_tax_rate_cache".columns.cached_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.us_tax_rate_cache".columns.rate_year]
+type = "integer"
+description = ""
+nullable = true
+
+[tables."finopsiq.us_tax_rate_cache".columns.rate_month]
+type = "integer"
+description = ""
+nullable = true
+
+[tables."finopsiq.us_tic_cache"]
+kind = "table"
+description = ""
+
+[tables."finopsiq.us_tic_cache".columns.id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.us_tic_cache".columns.description]
+type = "text"
+description = ""
+nullable = false
+
+[tables."finopsiq.us_tic_cache".columns.tic_id]
+type = "integer"
+description = ""
+nullable = false
+
+[tables."finopsiq.us_tic_cache".columns.label]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."finopsiq.us_tic_cache".columns.label_normalized]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."finopsiq.us_tic_cache".columns.tic_description]
+type = "text"
+description = ""
+nullable = false
+
+[tables."finopsiq.us_tic_cache".columns.cached_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.us_tic_cache".columns.expires_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.vendor_instructions"]
+kind = "table"
+description = ""
+
+[tables."finopsiq.vendor_instructions".columns.id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.vendor_instructions".columns.tenant_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.vendor_instructions".columns.rule_name]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."finopsiq.vendor_instructions".columns.instruction_prompt]
+type = "text"
+description = ""
+nullable = false
+
+[tables."finopsiq.vendor_instructions".columns.action_type]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.vendor_instructions".columns.severity]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.vendor_instructions".columns.is_global]
+type = "boolean"
+description = ""
+nullable = false
+
+[tables."finopsiq.vendor_instructions".columns.is_active]
+type = "boolean"
+description = ""
+nullable = false
+
+[tables."finopsiq.vendor_instructions".columns.created_by]
+type = "character varying"
+description = ""
+nullable = false
+
+[tables."finopsiq.vendor_instructions".columns.created_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.vendor_instructions".columns.updated_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.vendor_instructions".columns.updated_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.vendors"]
+kind = "table"
+description = ""
+
+[tables."finopsiq.vendors".columns.vendor_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.vendors".columns.tenant_id]
+type = "uuid"
+description = ""
+nullable = false
+
+[tables."finopsiq.vendors".columns.connector_id]
+type = "integer"
+description = ""
+nullable = true
+
+[tables."finopsiq.vendors".columns.external_realm_id]
+type = "bigint"
+description = ""
+nullable = true
+
+[tables."finopsiq.vendors".columns.external_vendor_id]
+type = "bigint"
+description = ""
+nullable = true
+
+[tables."finopsiq.vendors".columns.source]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.vendors".columns.title]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.vendors".columns.given_name]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.vendors".columns.middle_name]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.vendors".columns.family_name]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.vendors".columns.company_name]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.vendors".columns.display_name]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.vendors".columns.phone]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.vendors".columns.email]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.vendors".columns.tin]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.vendors".columns.balance]
+type = "numeric"
+description = ""
+nullable = true
+
+[tables."finopsiq.vendors".columns.is_active]
+type = "boolean"
+description = ""
+nullable = false
+
+[tables."finopsiq.vendors".columns.is_taxable]
+type = "boolean"
+description = ""
+nullable = false
+
+[tables."finopsiq.vendors".columns.vendor_address]
+type = "jsonb"
+description = ""
+nullable = true
+
+[tables."finopsiq.vendors".columns.remittance_address]
+type = "text"
+description = ""
+nullable = true
+
+[tables."finopsiq.vendors".columns.assigned_instruction_ids]
+type = "jsonb"
+description = ""
+nullable = true
+
+[tables."finopsiq.vendors".columns.sync_hash]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.vendors".columns.created_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.vendors".columns.updated_at]
+type = "timestamp with time zone"
+description = ""
+nullable = false
+
+[tables."finopsiq.vendors".columns.updated_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[tables."finopsiq.vendors".columns.created_by]
+type = "character varying"
+description = ""
+nullable = true
+
+[[relationships]]
+from_table = "finopsiq.contracts"
+from_column = "customer_id"
+to_table = "finopsiq.customers"
+to_column = "customer_id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "finopsiq.contracts"
+from_column = "file_id"
+to_table = "finopsiq.genbooks_file_metadata"
+to_column = "id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "finopsiq.contracts"
+from_column = "invoice_id"
+to_table = "finopsiq.invoices"
+to_column = "invoice_id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "finopsiq.contracts"
+from_column = "vendor_id"
+to_table = "finopsiq.vendors"
+to_column = "vendor_id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "finopsiq.email_context_link"
+from_column = "context_id"
+to_table = "finopsiq.email_context"
+to_column = "id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "finopsiq.genbooks_file_metadata"
+from_column = "contract_id"
+to_table = "finopsiq.contracts"
+to_column = "contract_id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "finopsiq.genbooks_file_metadata"
+from_column = "general_document_id"
+to_table = "finopsiq.general_documents"
+to_column = "general_document_id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "finopsiq.genbooks_file_metadata"
+from_column = "invoice_id"
+to_table = "finopsiq.invoices"
+to_column = "invoice_id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "finopsiq.genbooks_file_metadata"
+from_column = "po_id"
+to_table = "finopsiq.purchase_orders"
+to_column = "po_id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "finopsiq.genbooks_file_metadata"
+from_column = "upload_context_invoice_id"
+to_table = "finopsiq.invoices"
+to_column = "invoice_id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "finopsiq.genbooks_requests"
+from_column = "discrepancies_id"
+to_table = "finopsiq.discrepancies_details"
+to_column = "discrepancies_id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "finopsiq.genbooks_requests"
+from_column = "match_id"
+to_table = "finopsiq.relevant_document_details"
+to_column = "match_id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "finopsiq.general_documents"
+from_column = "customer_id"
+to_table = "finopsiq.customers"
+to_column = "customer_id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "finopsiq.general_documents"
+from_column = "file_id"
+to_table = "finopsiq.genbooks_file_metadata"
+to_column = "id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "finopsiq.general_documents"
+from_column = "vendor_id"
+to_table = "finopsiq.vendors"
+to_column = "vendor_id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "finopsiq.invoice_document_links"
+from_column = "source_document_id"
+to_table = "finopsiq.invoices"
+to_column = "invoice_id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "finopsiq.invoice_document_links"
+from_column = "target_contract_id"
+to_table = "finopsiq.contracts"
+to_column = "contract_id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "finopsiq.invoice_document_links"
+from_column = "target_general_document_id"
+to_table = "finopsiq.general_documents"
+to_column = "general_document_id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "finopsiq.invoice_document_links"
+from_column = "target_po_id"
+to_table = "finopsiq.purchase_orders"
+to_column = "po_id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "finopsiq.invoice_line_items"
+from_column = "invoice_id"
+to_table = "finopsiq.invoices"
+to_column = "invoice_id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "finopsiq.invoice_line_items"
+from_column = "product_id"
+to_table = "finopsiq.products"
+to_column = "product_id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "finopsiq.invoice_revisions"
+from_column = "invoice_id"
+to_table = "finopsiq.invoices"
+to_column = "invoice_id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "finopsiq.invoices"
+from_column = "customer_id"
+to_table = "finopsiq.customers"
+to_column = "customer_id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "finopsiq.invoices"
+from_column = "file_id"
+to_table = "finopsiq.genbooks_file_metadata"
+to_column = "id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "finopsiq.invoices"
+from_column = "vendor_id"
+to_table = "finopsiq.vendors"
+to_column = "vendor_id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "connector_service.oauth_state"
+from_column = "connector_id"
+to_table = "connector_service.connectors"
+to_column = "id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "auth.org_custom_role_privileges"
+from_column = "privilege_id"
+to_table = "auth.product_privileges"
+to_column = "id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "auth.org_custom_role_privileges"
+from_column = "role_id"
+to_table = "auth.org_custom_roles"
+to_column = "id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "auth.org_custom_roles"
+from_column = "organisation_id"
+to_table = "auth.organisations"
+to_column = "id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "auth.org_domains"
+from_column = "organisation_id"
+to_table = "auth.organisations"
+to_column = "id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "auth.org_group_members"
+from_column = "group_id"
+to_table = "auth.org_groups"
+to_column = "id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "auth.org_group_members"
+from_column = "user_id"
+to_table = "auth.users"
+to_column = "id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "auth.org_groups"
+from_column = "organisation_id"
+to_table = "auth.organisations"
+to_column = "id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "auth.org_idp_config"
+from_column = "organisation_id"
+to_table = "auth.organisations"
+to_column = "id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "auth.org_token_version"
+from_column = "org_id"
+to_table = "auth.organisations"
+to_column = "id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "auth.otp_codes"
+from_column = "user_id"
+to_table = "auth.users"
+to_column = "id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "connector_service.outlook_subscriptions"
+from_column = "connector_id"
+to_table = "connector_service.connectors"
+to_column = "id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "finopsiq.parser_headers"
+from_column = "tenant_id"
+to_table = "finopsiq.tenant_profiles"
+to_column = "tenant_id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "finopsiq.po_line_items"
+from_column = "po_id"
+to_table = "finopsiq.purchase_orders"
+to_column = "po_id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "finopsiq.po_line_items"
+from_column = "product_id"
+to_table = "finopsiq.products"
+to_column = "product_id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "finopsiq.po_revisions"
+from_column = "po_id"
+to_table = "finopsiq.purchase_orders"
+to_column = "po_id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "finopsiq.purchase_orders"
+from_column = "customer_id"
+to_table = "finopsiq.customers"
+to_column = "customer_id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "finopsiq.purchase_orders"
+from_column = "file_id"
+to_table = "finopsiq.genbooks_file_metadata"
+to_column = "id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "finopsiq.purchase_orders"
+from_column = "invoice_id"
+to_table = "finopsiq.invoices"
+to_column = "invoice_id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "finopsiq.purchase_orders"
+from_column = "vendor_id"
+to_table = "finopsiq.vendors"
+to_column = "vendor_id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "auth.refresh_tokens"
+from_column = "user_id"
+to_table = "auth.users"
+to_column = "id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "finopsiq.reminder_alert_config"
+from_column = "tenant_id"
+to_table = "finopsiq.tenant_profiles"
+to_column = "tenant_id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "finopsiq.reminder_configuration"
+from_column = "tenant_id"
+to_table = "finopsiq.tenant_profiles"
+to_column = "tenant_id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "finopsiq.reminders"
+from_column = "invoice_id"
+to_table = "finopsiq.invoice_reminder_state"
+to_column = "invoice_id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "finopsiq.resolution_audit_log"
+from_column = "resolution_id"
+to_table = "finopsiq.discrepancy_resolution"
+to_column = "resolution_id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "finopsiq.resolution_communication"
+from_column = "resolution_id"
+to_table = "finopsiq.discrepancy_resolution"
+to_column = "resolution_id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "connector_service.sync_jobs"
+from_column = "connector_id"
+to_table = "connector_service.connectors"
+to_column = "id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "connector_service.tenant_connector_auth"
+from_column = "connector_id"
+to_table = "connector_service.connectors"
+to_column = "id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "auth.user_custom_roles"
+from_column = "organisation_id"
+to_table = "auth.organisations"
+to_column = "id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "auth.user_custom_roles"
+from_column = "role_id"
+to_table = "auth.org_custom_roles"
+to_column = "id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "auth.user_custom_roles"
+from_column = "user_id"
+to_table = "auth.users"
+to_column = "id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "auth.user_roles"
+from_column = "role_id"
+to_table = "auth.roles"
+to_column = "id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "auth.user_roles"
+from_column = "user_id"
+to_table = "auth.users"
+to_column = "id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "auth.users"
+from_column = "organisation_id"
+to_table = "auth.organisations"
+to_column = "id"
+type = "many_to_one"

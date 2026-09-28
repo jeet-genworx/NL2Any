@@ -11,10 +11,16 @@ from backend.src.data.clients.base import DatabaseAdapter
 from backend.src.data.clients.mongo.adapter import MongoDBAdapter
 from backend.src.data.clients.postgres.adapter import PostgreSQLAdapter
 from backend.src.data.models.schema import DatabaseType
+from backend.src.data.models.targets import DatabaseTarget, as_target
 
 
-def get_adapter(database_type: DatabaseType) -> DatabaseAdapter:
-    """Build the adapter for a database type, using connection settings from .env."""
-    if database_type == DatabaseType.POSTGRESQL:
-        return PostgreSQLAdapter(dsn=settings.postgres_dsn)
-    return MongoDBAdapter(uri=settings.mongodb_uri, database=settings.mongodb_database)
+def get_adapter(database: DatabaseTarget | DatabaseType) -> DatabaseAdapter:
+    """Build the adapter for a database target, using its own connection string.
+
+    Takes a target rather than an engine type so two PostgreSQL databases reach
+    their own DSNs; a bare DatabaseType still resolves to the demo target.
+    """
+    target = as_target(database)
+    if target.db_type == DatabaseType.POSTGRESQL:
+        return PostgreSQLAdapter(dsn=target.connection)
+    return MongoDBAdapter(uri=target.connection, database=settings.mongodb_database)
