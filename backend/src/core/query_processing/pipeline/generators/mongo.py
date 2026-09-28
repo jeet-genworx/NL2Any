@@ -7,8 +7,8 @@ from backend.src.config import settings
 from backend.src.utils.text_utils import extract_json_block
 from backend.src.schemas.pipeline import GeneratedQuery, MongoQuery, QueryPlan, RelevantSchema
 from backend.src.data.models.schema import DatabaseType
-from backend.src.code.query_processing.pipeline.generators.base import QueryGenerator
-from backend.src.code.query_processing.pipeline.planner import _format_relevant_schema_for_planner
+from backend.src.core.query_processing.pipeline.generators.base import QueryGenerator
+from backend.src.core.query_processing.pipeline.planner import _format_relevant_schema_for_planner
 from backend.src.control.providers.model.base import ModelProvider
 from backend.src.control.providers.model.koboldcpp import KoboldCppProvider
 

@@ -4,10 +4,10 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 
 from backend.src.api.rest.dependencies import get_orchestrator, resolve_db_type
-from backend.src.code.ingestion.pipeline import run_ingestion_pipeline
-from backend.src.code.ingestion.schema.manager import get_default_schema_path
-from backend.src.code.ingestion.schema.toml_store import load_schema_file
-from backend.src.code.query_processing.pipeline.orchestrator import NL2AnyQueryOrchestrator
+from backend.src.core.ingestion.pipeline import run_ingestion_pipeline
+from backend.src.core.ingestion.schema.manager import get_default_schema_path
+from backend.src.core.ingestion.schema.toml_store import load_schema_file
+from backend.src.core.query_processing.pipeline.orchestrator import NL2AnyQueryOrchestrator
 from backend.src.schemas.pipeline import PipelineResponse
 from backend.src.schemas.request import QueryRequest
 

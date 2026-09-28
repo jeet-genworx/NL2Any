@@ -5,8 +5,8 @@ import logging
 from typing import Any
 
 from backend.src.data.clients.detector import detect_database_type
-from backend.src.code.ingestion.schema.manager import get_default_schema_path
-from backend.src.code.ingestion.schema.toml_store import load_schema_file
+from backend.src.core.ingestion.schema.manager import get_default_schema_path
+from backend.src.core.ingestion.schema.toml_store import load_schema_file
 from backend.src.config import settings
 from backend.src.schemas.pipeline import (
     CandidateTable,
@@ -23,24 +23,24 @@ from backend.src.schemas.pipeline import (
     ValidationResult,
 )
 from backend.src.data.models.schema import DatabaseSchema, DatabaseType
-from backend.src.code.query_processing.nlp.linguistic import LinguisticAnalyzer
-from backend.src.code.query_processing.pipeline.executor import QueryExecutor
-from backend.src.code.query_processing.pipeline.expansion import SchemaExpander
-from backend.src.code.query_processing.pipeline.generators.mongo import MongoQueryGenerator
-from backend.src.code.query_processing.pipeline.generators.postgres import PostgresQueryGenerator
-from backend.src.code.query_processing.pipeline.guardrail import GuardrailClassifier
-from backend.src.code.query_processing.pipeline.planner import QueryPlanner
-from backend.src.code.query_processing.pipeline.policy import SafetyPolicyValidator
-from backend.src.code.query_processing.pipeline.results import ResultProcessor
-from backend.src.code.query_processing.pipeline.selector import TableSelector
-from backend.src.code.query_processing.pipeline.semantic import SemanticAnalyzer
-from backend.src.code.query_processing.pipeline.validator import QueryValidator
+from backend.src.core.query_processing.nlp.linguistic import LinguisticAnalyzer
+from backend.src.core.query_processing.pipeline.executor import QueryExecutor
+from backend.src.core.query_processing.pipeline.expansion import SchemaExpander
+from backend.src.core.query_processing.pipeline.generators.mongo import MongoQueryGenerator
+from backend.src.core.query_processing.pipeline.generators.postgres import PostgresQueryGenerator
+from backend.src.core.query_processing.pipeline.guardrail import GuardrailClassifier
+from backend.src.core.query_processing.pipeline.planner import QueryPlanner
+from backend.src.core.query_processing.pipeline.policy import SafetyPolicyValidator
+from backend.src.core.query_processing.pipeline.results import ResultProcessor
+from backend.src.core.query_processing.pipeline.selector import TableSelector
+from backend.src.core.query_processing.pipeline.semantic import SemanticAnalyzer
+from backend.src.core.query_processing.pipeline.validator import QueryValidator
 from backend.src.control.providers.embedding.base import EmbeddingProvider
 from backend.src.control.providers.embedding.koboldcpp import KoboldCppEmbeddingProvider
 from backend.src.control.providers.model.base import ModelProvider
 from backend.src.control.providers.model.koboldcpp import KoboldCppProvider
-from backend.src.code.query_processing.retrieval.store import EmbeddingStore
-from backend.src.code.query_processing.retrieval.vector import VectorRetriever
+from backend.src.core.query_processing.retrieval.store import EmbeddingStore
+from backend.src.core.query_processing.retrieval.vector import VectorRetriever
 
 logger = logging.getLogger(__name__)
 

@@ -7,28 +7,28 @@ import sys
 
 from backend.src.config import settings
 from backend.src.data.models.schema import DatabaseType
-from backend.src.code.query_processing.nlp.linguistic import LinguisticAnalyzer
+from backend.src.core.query_processing.nlp.linguistic import LinguisticAnalyzer
 from backend.src.control.providers.model.koboldcpp import KoboldCppProvider
-from backend.src.code.query_processing.retrieval.semantic import SemanticRetriever
-from backend.src.code.ingestion.schema.manager import get_default_schema_path
-from backend.src.code.ingestion.schema.toml_store import load_schema_file, save_schema_file
-from backend.src.code.ingestion.schema.graph import get_default_graph_path
-from backend.src.code.ingestion.schema.mst import get_default_mst_path
-from backend.src.code.ingestion.schema.describe import (
+from backend.src.core.query_processing.retrieval.semantic import SemanticRetriever
+from backend.src.core.ingestion.schema.manager import get_default_schema_path
+from backend.src.core.ingestion.schema.toml_store import load_schema_file, save_schema_file
+from backend.src.core.ingestion.schema.graph import get_default_graph_path
+from backend.src.core.ingestion.schema.mst import get_default_mst_path
+from backend.src.core.ingestion.schema.describe import (
     apply_descriptions,
     describe_tables,
     get_default_descriptions_path,
     save_descriptions,
     table_descriptions,
 )
-from backend.src.code.ingestion.schema.embed import (
+from backend.src.core.ingestion.schema.embed import (
     embed_descriptions,
     get_default_embeddings_path,
     load_descriptions,
     load_embeddings,
     save_embeddings,
 )
-from backend.src.code.ingestion.pipeline import extract_and_save_schema, run_ingestion_pipeline
+from backend.src.core.ingestion.pipeline import extract_and_save_schema, run_ingestion_pipeline
 
 
 def seed_postgres_cli() -> None:

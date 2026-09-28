@@ -15,11 +15,11 @@ from backend.src.data.models.schema import DatabaseSchema, DatabaseType
 from backend.src.data.clients.base import DatabaseAdapter
 from backend.src.data.clients.mongo.adapter import MongoDBAdapter
 from backend.src.data.clients.postgres.adapter import PostgreSQLAdapter
-from backend.src.code.ingestion.schema.manager import get_default_schema_path
-from backend.src.code.ingestion.schema.toml_store import save_schema_file
-from backend.src.code.ingestion.schema.graph import get_default_graph_path, save_schema_graph
-from backend.src.code.ingestion.schema.mst import get_default_mst_path, save_minimum_spanning_tree
-from backend.src.code.ingestion.schema.describe import (
+from backend.src.core.ingestion.schema.manager import get_default_schema_path
+from backend.src.core.ingestion.schema.toml_store import save_schema_file
+from backend.src.core.ingestion.schema.graph import get_default_graph_path, save_schema_graph
+from backend.src.core.ingestion.schema.mst import get_default_mst_path, save_minimum_spanning_tree
+from backend.src.core.ingestion.schema.describe import (
     DEFAULT_BATCH_SIZE,
     apply_descriptions,
     describe_tables,
@@ -27,7 +27,7 @@ from backend.src.code.ingestion.schema.describe import (
     save_descriptions,
     table_descriptions,
 )
-from backend.src.code.ingestion.schema.embed import (
+from backend.src.core.ingestion.schema.embed import (
     embed_descriptions,
     get_default_embeddings_path,
     save_embeddings,

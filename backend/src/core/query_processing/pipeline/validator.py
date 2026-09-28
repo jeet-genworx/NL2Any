@@ -16,7 +16,7 @@ from backend.src.schemas.pipeline import (
     ValidationResult,
 )
 from backend.src.data.models.schema import DatabaseType
-from backend.src.code.query_processing.pipeline.planner import _format_relevant_schema_for_planner
+from backend.src.core.query_processing.pipeline.planner import _format_relevant_schema_for_planner
 from backend.src.control.providers.model.base import ModelProvider
 from backend.src.control.providers.model.koboldcpp import KoboldCppProvider
 

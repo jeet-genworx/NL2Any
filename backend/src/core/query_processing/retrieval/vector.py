@@ -4,7 +4,7 @@ import logging
 import math
 from backend.src.config import settings
 from backend.src.schemas.pipeline import CandidateTable
-from backend.src.code.query_processing.retrieval.store import EmbeddingStore
+from backend.src.core.query_processing.retrieval.store import EmbeddingStore
 
 logger = logging.getLogger(__name__)
 

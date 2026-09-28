@@ -19,7 +19,7 @@ from backend.src.config import settings
 from backend.src.data.models.schema import DatabaseType
 from backend.src.control.providers.model.base import EmbeddingProvider
 from backend.src.control.providers.model.embedding import KoboldCppEmbeddingProvider
-from backend.src.code.ingestion.schema.describe import TableDescription, parse_table_entry
+from backend.src.core.ingestion.schema.describe import TableDescription, parse_table_entry
 
 
 def get_default_embeddings_path(database_type: DatabaseType) -> Path:

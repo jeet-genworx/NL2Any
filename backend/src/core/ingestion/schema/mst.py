@@ -14,9 +14,9 @@ from pathlib import Path
 from typing import Any
 import tomli_w
 
-from backend.src.code.ingestion.schema.manager import _get_schemas_dir
+from backend.src.core.ingestion.schema.manager import _get_schemas_dir
 from backend.src.data.models.schema import DatabaseSchema, DatabaseType
-from backend.src.code.ingestion.schema.graph import build_schema_graph
+from backend.src.core.ingestion.schema.graph import build_schema_graph
 
 
 def get_default_mst_path(database_type: DatabaseType) -> Path:

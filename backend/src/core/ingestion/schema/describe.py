@@ -36,7 +36,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field as PydanticField
 
-from backend.src.code.ingestion.schema.manager import _get_schemas_dir
+from backend.src.core.ingestion.schema.manager import _get_schemas_dir
 from backend.src.utils.text_utils import extract_json_block
 from backend.src.data.models.schema import DatabaseSchema, DatabaseType
 from backend.src.control.providers.model.base import ModelProvider

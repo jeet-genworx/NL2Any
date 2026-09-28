@@ -1,6 +1,6 @@
 """Natural language processing package."""
 
-from backend.src.code.query_processing.nlp.linguistic import (
+from backend.src.core.query_processing.nlp.linguistic import (
     LinguisticAnalysis,
     LinguisticAnalyzer,
     LinguisticEntity,
