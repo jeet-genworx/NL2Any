@@ -145,7 +145,7 @@ if run_btn and question.strip():
             resp = httpx.post(
                 f"{api_url}/query",
                 json={"database": db_choice, "question": question.strip()},
-                timeout=120.0,
+                timeout=300.0,
             )
             resp.raise_for_status()
             data = resp.json()

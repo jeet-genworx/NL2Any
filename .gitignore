@@ -49,4 +49,7 @@ Thumbs.db
 *.swo
 
 # Schema outputs (optional local generation)
-# schemas/*.toml can be tracked or kept as artifacts
+schemas/*.toml
+mongo_embeddings.json
+postgres_embeddings.json
+# can be tracked or kept as artifacts
