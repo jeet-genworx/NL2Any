@@ -1,7 +1,7 @@
 [graph]
 database_type = "postgresql"
 database_name = "finopsiq_be"
-generated_at = "2026-09-25T10:10:19.410774+00:00"
+generated_at = "2026-09-29T04:25:29.099802+00:00"
 node_count = 68
 edge_count = 59
 

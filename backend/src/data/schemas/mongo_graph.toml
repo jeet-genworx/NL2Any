@@ -3,7 +3,7 @@ edges = []
 [graph]
 database_type = "mongodb"
 database_name = "nl2anyquery_demo"
-generated_at = "2026-09-25T04:18:55.816849+00:00"
+generated_at = "2026-09-29T05:37:14.327077+00:00"
 node_count = 5
 edge_count = 0
 
@@ -16,6 +16,9 @@ columns = [
     { name = "email", type = "string", nullable = false },
     { name = "phone", type = "string", nullable = false },
     { name = "address", type = "object", nullable = false },
+    { name = "address.city", type = "string", nullable = false },
+    { name = "address.country", type = "string", nullable = false },
+    { name = "address.zip_code", type = "string", nullable = false },
     { name = "created_at", type = "datetime", nullable = false },
 ]
 
@@ -43,6 +46,10 @@ columns = [
     { name = "total_amount", type = "number", nullable = false },
     { name = "shipping_city", type = "string", nullable = false },
     { name = "items", type = "array[object]", nullable = false },
+    { name = "items.product_id", type = "string", nullable = false },
+    { name = "items.product_name", type = "string", nullable = false },
+    { name = "items.quantity", type = "integer", nullable = false },
+    { name = "items.price", type = "number", nullable = false },
 ]
 
 [[nodes]]
