@@ -79,12 +79,24 @@ class SafetyPolicyValidator:
         # 4. Deterministic schema reference check (if schema provided)
         if schema is not None:
             allowed_tables = schema.get_object_names()
+            cte_names = {cte.alias_or_name.lower() for cte in root.find_all(exp.CTE) if cte.alias_or_name}
+            subquery_aliases = {s.alias.lower() for s in root.find_all(exp.Subquery) if s.alias}
             for table_exp in root.find_all(exp.Table):
                 t_name = table_exp.name.lower()
-                if t_name and t_name not in allowed_tables:
+                full_name = f"{table_exp.db.lower()}.{t_name}" if table_exp.db else t_name
+                is_allowed = (
+                    full_name in allowed_tables
+                    or t_name in allowed_tables
+                    or any(a.split(".", 1)[-1] == t_name for a in allowed_tables)
+                    or t_name in cte_names
+                    or t_name in subquery_aliases
+                    or full_name in cte_names
+                    or full_name in subquery_aliases
+                )
+                if t_name and not is_allowed:
                     return PolicyResult(
                         allowed=False,
-                        reason=f"Prohibited: table '{t_name}' does not exist in relevant schema {sorted(allowed_tables)}.",
+                        reason=f"Prohibited: table '{full_name}' does not exist in relevant schema {sorted(allowed_tables)}.",
                     )
 
         return PolicyResult(allowed=True, reason="Query verified read-only SELECT.")

@@ -488,3 +488,27 @@ async def test_orchestrator_basic_path(test_schema):
     assert resp.guardrail.decision == GuardrailDecision.BASIC
     assert resp.basic_answer == "I am NL2AnyQuery."
     assert resp.results is None
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_finops_target(test_schema):
+    executor = MockExecutor()
+    orchestrator = NL2AnyQueryOrchestrator(
+        embedding_provider=MockEmbeddingProvider(),
+        vector_retriever=MockVectorRetriever(),
+        guardrail=MockGuardrail(GuardrailDecision.READ_QUERY),
+        semantic=MockSemantic(),
+        selector=MockSelector([TableSelectionResult(selected_objects=["customers"], sufficient=True)]),
+        planner=MockPlanner(),
+        postgres_gen=MockPostgresGen(),
+        validator=MockValidator([ValidationResult(valid=True, error_type=ValidationErrorType.VALID)]),
+        policy=MockPolicy(),
+        executor=executor,
+    )
+    orchestrator._schemas["finops"] = test_schema
+
+    resp = await orchestrator.execute_pipeline("How many customers?", database="finops")
+    assert resp.error is None
+    assert resp.database == "finops"
+    assert resp.results is not None
+

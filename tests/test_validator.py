@@ -140,3 +140,66 @@ async def test_query_validator_generation_error(sample_schema):
     assert result.valid is False
     assert result.error_type == ValidationErrorType.GENERATION_ERROR
     assert "alias" in result.issues[0]
+
+
+def test_deterministic_sql_schema_validation_projected_alias():
+    schema = RelevantSchema(
+        objects=[
+            SchemaObject(
+                name="products",
+                kind=SchemaObjectKind.TABLE,
+                fields=[Field(name="id", type="int"), Field(name="name", type="text")],
+            ),
+            SchemaObject(
+                name="order_items",
+                kind=SchemaObjectKind.TABLE,
+                fields=[
+                    Field(name="id", type="int"),
+                    Field(name="product_id", type="int"),
+                    Field(name="quantity", type="int"),
+                    Field(name="unit_price", type="numeric"),
+                ],
+            ),
+        ]
+    )
+    sql = """
+    SELECT p.id, p.name, SUM(oi.quantity * oi.unit_price) AS total_sales
+    FROM order_items oi
+    JOIN products p ON oi.product_id = p.id
+    GROUP BY p.id, p.name
+    ORDER BY total_sales DESC
+    LIMIT 10;
+    """
+    issues = validate_sql_schema_references(sql, schema)
+    assert issues == []
+
+
+def test_deterministic_sql_schema_validation_qualified_table():
+    schema = RelevantSchema(
+        objects=[
+            SchemaObject(
+                name="finopsiq.customers",
+                kind=SchemaObjectKind.TABLE,
+                fields=[
+                    Field(name="customer_id", type="uuid"),
+                    Field(name="name", type="text"),
+                ],
+            )
+        ]
+    )
+    # Qualified table name in SQL
+    sql1 = "SELECT COUNT(customer_id) AS total_customers FROM finopsiq.customers;"
+    assert validate_sql_schema_references(sql1, schema) == []
+
+    # Unqualified table name in SQL
+    sql2 = "SELECT customer_id, name FROM customers;"
+    assert validate_sql_schema_references(sql2, schema) == []
+
+    # Aliased qualified table name in SQL
+    sql3 = "SELECT c.customer_id FROM finopsiq.customers AS c;"
+    assert validate_sql_schema_references(sql3, schema) == []
+
+    # Unknown table
+    sql4 = "SELECT id FROM orders;"
+    assert len(validate_sql_schema_references(sql4, schema)) > 0
+

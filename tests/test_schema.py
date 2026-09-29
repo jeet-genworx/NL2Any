@@ -138,3 +138,51 @@ def test_consistency_validation_invalid_relationship_field():
     )
     with pytest.raises(ValueError, match="relationship source field 'customer_id' does not exist"):
         schema.validate_consistency()
+
+
+def test_postgres_metadata_extractor_multi_schema_naming():
+    from unittest.mock import MagicMock
+    from backend.src.data.clients.postgres.metadata import PostgreSQLMetadataExtractor, _format_table_name
+
+    assert _format_table_name("public", "customers") == "customers"
+    assert _format_table_name("finopsiq", "email_context") == "finopsiq.email_context"
+    assert _format_table_name("connector_service", "email_context") == "connector_service.email_context"
+
+    # Mock cursor responses for multi-schema scenario
+    mock_conn = MagicMock()
+    mock_cursor = MagicMock()
+    mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
+
+    mock_cursor.fetchone.return_value = ("test_finops",)
+    mock_cursor.fetchall.side_effect = [
+        # 1. tables
+        [
+            ("connector_service", "email_context"),
+            ("finopsiq", "email_context"),
+            ("public", "customers"),
+        ],
+        # 2. columns
+        [
+            ("connector_service", "email_context", "id", "uuid", "NO"),
+            ("connector_service", "email_context", "sender", "varchar", "YES"),
+            ("finopsiq", "email_context", "id", "bigint", "NO"),
+            ("finopsiq", "email_context", "subject", "text", "YES"),
+            ("public", "customers", "id", "integer", "NO"),
+        ],
+        # 3. foreign keys
+        [],
+    ]
+
+    extractor = PostgreSQLMetadataExtractor(mock_conn)
+    schema = extractor.extract_schema()
+
+    assert len(schema.objects) == 3
+    obj_names = {obj.name for obj in schema.objects}
+    assert obj_names == {
+        "connector_service.email_context",
+        "finopsiq.email_context",
+        "customers",
+    }
+    # Validate consistency passed without duplicate field 'id' error
+    schema.validate_consistency()
+

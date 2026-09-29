@@ -5,6 +5,8 @@ import logging
 from typing import Any
 
 from backend.src.data.clients.detector import detect_database_type
+from backend.src.data.models.targets import DatabaseTarget, as_target, resolve_target
+from backend.src.data.repositories import paths, schema_repository
 from backend.src.core.ingestion.schema.manager import get_default_schema_path
 from backend.src.core.ingestion.schema.toml_store import load_schema_file
 from backend.src.config import settings
@@ -41,6 +43,7 @@ from backend.src.control.providers.model.base import ModelProvider
 from backend.src.control.providers.model.koboldcpp import KoboldCppProvider
 from backend.src.core.query_processing.retrieval.store import EmbeddingStore
 from backend.src.core.query_processing.retrieval.vector import VectorRetriever
+from backend.src.core.query_processing.pipeline.descriptions_client import DescriptionsClient
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +70,7 @@ class NL2AnyQueryOrchestrator:
         executor: QueryExecutor | None = None,
         results: ResultProcessor | None = None,
         max_retries: int | None = None,
+        descriptions_client: DescriptionsClient | None = None,
     ) -> None:
         self.provider = provider or KoboldCppProvider()
         self.embedding_provider = embedding_provider or KoboldCppEmbeddingProvider()
@@ -77,6 +81,7 @@ class NL2AnyQueryOrchestrator:
         self.linguistic = linguistic or LinguisticAnalyzer()
         self.selector = selector or TableSelector(provider=self.provider)
         self.expander = expander or SchemaExpander()
+        self.descriptions_client = descriptions_client or DescriptionsClient()
         self.planner = planner or QueryPlanner(provider=self.provider)
         self.postgres_gen = postgres_gen or PostgresQueryGenerator(provider=self.provider)
         self.mongo_gen = mongo_gen or MongoQueryGenerator(provider=self.provider)
@@ -86,39 +91,60 @@ class NL2AnyQueryOrchestrator:
         self.results = results or ResultProcessor()
         self.max_retries = max_retries if max_retries is not None else settings.max_retries
 
-        self._schemas: dict[DatabaseType, DatabaseSchema] = {}
-        self._vector_retrievers: dict[DatabaseType, VectorRetriever] = {}
+        self._schemas: dict[Any, DatabaseSchema] = {}
+        self._vector_retrievers: dict[Any, VectorRetriever] = {}
 
-    def get_or_load_schema(self, db_type: DatabaseType) -> DatabaseSchema:
+    def get_or_load_schema(self, database: DatabaseTarget | DatabaseType | str) -> DatabaseSchema:
         """Load and cache canonical schema from TOML file."""
-        if db_type in self._schemas:
-            return self._schemas[db_type]
-        schema_path = get_default_schema_path(db_type)
+        if database in self._schemas:
+            return self._schemas[database]
+
+        try:
+            target = as_target(database) if not isinstance(database, str) else resolve_target(database)
+            if target.key in self._schemas:
+                return self._schemas[target.key]
+            schema_path = paths.schema_path(target)
+        except Exception:
+            schema_path = get_default_schema_path(database)
+            target = None
+
         if not schema_path.exists():
             raise FileNotFoundError(
                 f"Canonical schema not found at {schema_path}. Run 'init-schema' first."
             )
-        schema = load_schema_file(schema_path)
-        self._schemas[db_type] = schema
+        schema = schema_repository.load_schema(schema_path)
+        key = target.key if target else database
+        self._schemas[key] = schema
         return schema
 
-    def _get_or_load_vector_retriever(self, db_type: DatabaseType) -> VectorRetriever:
+    def _get_or_load_vector_retriever(self, database: DatabaseTarget | DatabaseType | str) -> VectorRetriever:
         """Get or initialize the vector retriever for this database's embeddings.
 
         An explicitly injected vector_retriever/embedding_store overrides for all
-        database types; otherwise each type lazily loads its own embeddings file.
+        database types; otherwise each target lazily loads its own embeddings file.
         """
         if self.vector_retriever is not None:
             return self.vector_retriever
 
-        if db_type not in self._vector_retrievers:
-            store = self.embedding_store or EmbeddingStore(
+        if database in self._vector_retrievers:
+            return self._vector_retrievers[database]
+
+        try:
+            target = as_target(database) if not isinstance(database, str) else resolve_target(database)
+            key = target.key
+            emb_path = str(paths.embeddings_path(target))
+        except Exception:
+            key = database
+            emb_path = (
                 settings.postgres_embeddings_path
-                if db_type == DatabaseType.POSTGRESQL
+                if database == DatabaseType.POSTGRESQL
                 else settings.mongo_embeddings_path
             )
-            self._vector_retrievers[db_type] = VectorRetriever(store)
-        return self._vector_retrievers[db_type]
+
+        if key not in self._vector_retrievers:
+            store = self.embedding_store or EmbeddingStore(emb_path)
+            self._vector_retrievers[key] = VectorRetriever(store)
+        return self._vector_retrievers[key]
 
     def _build_response(
         self,
@@ -140,6 +166,7 @@ class NL2AnyQueryOrchestrator:
         results: ExecutionResult | None = None,
         basic_answer: str | None = None,
         error: str | None = None,
+        target_name: str | None = None,
     ) -> PipelineResponse:
         cand_list = candidates or []
         query_repr = (
@@ -148,7 +175,7 @@ class NL2AnyQueryOrchestrator:
             else ("No query generated" if (attempts > 1 and not basic_answer and not error) else None)
         )
         return PipelineResponse(
-            database=db_type.value,
+            database=target_name or db_type.value,
             question=question,
             guardrail=guardrail,
             basic_answer=basic_answer,
@@ -175,12 +202,19 @@ class NL2AnyQueryOrchestrator:
         analysis: QuestionAnalysis,
         query_vector: list[float],
         schema: DatabaseSchema,
-        db_type: DatabaseType,
+        database: Any,
     ) -> tuple[list[str], list[CandidateTable], int, str | None]:
         """Embedding-based table candidate retrieval + Table Selector SLM bounded retry."""
         try:
-            retriever = self._get_or_load_vector_retriever(db_type)
+            retriever = self._get_or_load_vector_retriever(database)
             initial_candidates = retriever.retrieve(query_vector)
+            if not initial_candidates and (analysis.subjective or analysis.nouns):
+                fallback_hint = " ".join(dict.fromkeys(analysis.subjective + analysis.nouns))
+                try:
+                    fallback_vec = await self.embedding_provider.embed(fallback_hint)
+                    initial_candidates = retriever.retrieve(fallback_vec)
+                except Exception as fallback_err:
+                    logger.warning("Fallback candidate retrieval failed: %s", fallback_err)
         except Exception as err:
             logger.error("Vector retrieval failed: %s", err)
             return [], [], 0, f"Vector retrieval failed: {err}"
@@ -232,6 +266,40 @@ class NL2AnyQueryOrchestrator:
                 f"Previous attempt selected {selection.selected_objects} but was marked insufficient. "
                 f"Reason: {selection.reason}.{missing_info}"
             )
+
+    async def _enrich_schema_descriptions(
+        self,
+        relevant_schema: RelevantSchema,
+        database: Any,
+    ) -> None:
+        """Fetch table and column descriptions from the Descriptions API and populate in place."""
+        if not self.descriptions_client:
+            return
+
+        target_slug = getattr(database, "key", None) or (
+            database.value if isinstance(database, DatabaseType) else str(database)
+        )
+        for obj in relevant_schema.objects:
+            try:
+                desc = await self.descriptions_client.get_table_description(
+                    database_type=target_slug,
+                    table_name=obj.name,
+                )
+                if desc:
+                    if desc.description:
+                        obj.description = desc.description
+                    for col_name, col_desc in desc.columns.items():
+                        if col_desc:
+                            field = obj.get_field(col_name)
+                            if field:
+                                field.description = col_desc
+            except Exception as err:
+                logger.warning(
+                    "Failed to enrich descriptions for %s.%s: %s",
+                    db_type.value,
+                    obj.name,
+                    err,
+                )
 
     async def _plan_generate_validate(
         self,
@@ -313,25 +381,33 @@ class NL2AnyQueryOrchestrator:
     async def execute_pipeline(
         self,
         question: str,
-        database: str | DatabaseType = "postgres",
+        database: str | DatabaseType | DatabaseTarget = "postgres",
     ) -> PipelineResponse:
         """Run complete NL-to-query pipeline with clean stages and bounded retries."""
-        # 1. Resolve database type & load schema
-        if isinstance(database, str):
-            db_clean = database.strip().lower()
-            db_type = (
-                DatabaseType.POSTGRESQL
-                if db_clean in ("postgres", "postgresql")
-                else (DatabaseType.MONGODB if db_clean in ("mongo", "mongodb") else detect_database_type(database))
-            )
-        else:
+        # 1. Resolve database target & type
+        if isinstance(database, DatabaseTarget):
+            target = database
+            db_type = target.db_type
+        elif isinstance(database, DatabaseType):
+            target = as_target(database)
             db_type = database
+        elif isinstance(database, str):
+            try:
+                target = resolve_target(database)
+                db_type = target.db_type
+            except ValueError:
+                db_type = detect_database_type(database)
+                target = as_target(db_type)
+        else:
+            target = as_target(DatabaseType.POSTGRESQL)
+            db_type = DatabaseType.POSTGRESQL
 
         try:
-            schema = self.get_or_load_schema(db_type)
+            schema = self.get_or_load_schema(target)
         except Exception as err:
             return self._build_response(
                 db_type=db_type,
+                target_name=target.key,
                 question=question,
                 guardrail=GuardrailResult(decision=GuardrailDecision.REJECT, reason=str(err)),
                 error=str(err),
@@ -342,6 +418,7 @@ class NL2AnyQueryOrchestrator:
         if guardrail_result.decision == GuardrailDecision.REJECT:
             return self._build_response(
                 db_type=db_type,
+                target_name=target.key,
                 question=question,
                 guardrail=guardrail_result,
                 error="Sorry, I can't help with this.",
@@ -350,11 +427,12 @@ class NL2AnyQueryOrchestrator:
         if guardrail_result.decision == GuardrailDecision.BASIC:
             basic_ans = self.guardrail.handle_basic_question(
                 question=question,
-                database_type=db_type.value,
+                database_type=target.key,
                 database_name=schema.database_name,
             )
             return self._build_response(
                 db_type=db_type,
+                target_name=target.key,
                 question=question,
                 guardrail=guardrail_result,
                 basic_answer=basic_ans,
@@ -370,6 +448,7 @@ class NL2AnyQueryOrchestrator:
         except Exception as err:
             return self._build_response(
                 db_type=db_type,
+                target_name=target.key,
                 question=question,
                 guardrail=guardrail_result,
                 error=f"Failed to analyze query: {err}",
@@ -385,19 +464,18 @@ class NL2AnyQueryOrchestrator:
         )
 
         # 4. Stages 5 & 6: Candidate Table Retrieval & Selection
-        # Both PostgreSQL and MongoDB retrieve candidates from their own
-        # precomputed description embeddings, produced by the ingestion pipeline.
         selected_objs, candidates, sel_retries, sel_err = await self._select_tables_vector(
             question=question,
             analysis=analysis,
             query_vector=query_vector,
             schema=schema,
-            db_type=db_type,
+            database=target,
         )
 
         if sel_err or not selected_objs:
             return self._build_response(
                 db_type=db_type,
+                target_name=target.key,
                 question=question,
                 guardrail=guardrail_result,
                 semantic=semantic_res,
@@ -411,6 +489,9 @@ class NL2AnyQueryOrchestrator:
         # 5. Stage 7: Deterministic Schema Expansion
         relevant_schema = self.expander.expand(selected_object_names=selected_objs, schema=schema)
 
+        # Stage 7b: Enrich RelevantSchema with table & column descriptions via Descriptions API
+        await self._enrich_schema_descriptions(relevant_schema, target)
+
         # 6. Stages 8, 9, 10: Query Planning, Generation & Validation Loop
         query_plan, last_query, last_val, val_retries, val_err = await self._plan_generate_validate(
             question=question,
@@ -422,6 +503,7 @@ class NL2AnyQueryOrchestrator:
         attempts = val_retries + 1
         ctx: dict[str, Any] = {
             "db_type": db_type,
+            "target_name": target.key,
             "question": question,
             "guardrail": guardrail_result,
             "semantic": semantic_res,
@@ -451,7 +533,7 @@ class NL2AnyQueryOrchestrator:
 
         # 8. Stages 12 & 13: Execution and Result Processing
         try:
-            columns, raw_rows = self.executor.execute(last_query)
+            columns, raw_rows = self.executor.execute(last_query, connection=target.connection)
         except Exception as exec_err:
             logger.error("Execution error: %s", exec_err)
             return self._build_response(

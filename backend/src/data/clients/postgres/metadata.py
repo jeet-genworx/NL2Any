@@ -21,6 +21,11 @@ from backend.src.data.models.schema import (
 SYSTEM_SCHEMAS = ("pg_catalog", "information_schema", "pg_toast")
 
 
+def _format_table_name(schema: str, table: str) -> str:
+    """Format table name: unqualified for default 'public' schema, schema-qualified otherwise."""
+    return table if schema == "public" else f"{schema}.{table}"
+
+
 class PostgreSQLMetadataExtractor:
     """Extracts every table and column visible to the connection, with foreign keys."""
 
@@ -44,7 +49,10 @@ class PostgreSQLMetadataExtractor:
                 (list(SYSTEM_SCHEMAS),),
             )
             tables = cur.fetchall()
-            table_names = [row[1] for row in tables]
+            table_map = {
+                (schema, tbl): _format_table_name(schema, tbl)
+                for schema, tbl in tables
+            }
 
             cur.execute(
                 """
@@ -55,11 +63,12 @@ class PostgreSQLMetadataExtractor:
                 """,
                 (list(SYSTEM_SCHEMAS),),
             )
-            columns_by_table: dict[str, list[Field]] = {tbl: [] for tbl in table_names}
-            for _schema, tbl, col_name, data_type, is_nullable in cur.fetchall():
-                if tbl not in columns_by_table:
+            columns_by_table: dict[str, list[Field]] = {name: [] for name in table_map.values()}
+            for schema, tbl, col_name, data_type, is_nullable in cur.fetchall():
+                full_name = table_map.get((schema, tbl))
+                if full_name is None:
                     continue
-                columns_by_table[tbl].append(
+                columns_by_table[full_name].append(
                     Field(
                         name=col_name,
                         type=data_type,
@@ -70,8 +79,10 @@ class PostgreSQLMetadataExtractor:
             cur.execute(
                 """
                 SELECT
+                    kcu.table_schema AS from_schema,
                     kcu.table_name AS from_table,
                     kcu.column_name AS from_column,
+                    ccu.table_schema AS to_schema,
                     ccu.table_name AS to_table,
                     ccu.column_name AS to_column
                 FROM information_schema.table_constraints tc
@@ -86,18 +97,20 @@ class PostgreSQLMetadataExtractor:
                   AND rc.unique_constraint_schema = ccu.table_schema
                 WHERE tc.table_schema != ALL(%s)
                   AND tc.constraint_type = 'FOREIGN KEY'
-                ORDER BY kcu.table_name, kcu.column_name;
+                ORDER BY kcu.table_schema, kcu.table_name, kcu.column_name;
                 """,
                 (list(SYSTEM_SCHEMAS),),
             )
             relationships: list[Relationship] = []
-            for from_tbl, from_col, to_tbl, to_col in cur.fetchall():
-                if from_tbl in columns_by_table and to_tbl in columns_by_table:
+            for from_s, from_tbl, from_col, to_s, to_tbl, to_col in cur.fetchall():
+                from_obj = table_map.get((from_s, from_tbl))
+                to_obj = table_map.get((to_s, to_tbl))
+                if from_obj and to_obj:
                     relationships.append(
                         Relationship(
-                            from_object=from_tbl,
+                            from_object=from_obj,
                             from_field=from_col,
-                            to_object=to_tbl,
+                            to_object=to_obj,
                             to_field=to_col,
                             relationship_type="many_to_one",
                         )
@@ -105,12 +118,12 @@ class PostgreSQLMetadataExtractor:
 
         schema_objects = [
             SchemaObject(
-                name=tbl,
+                name=name,
                 kind=SchemaObjectKind.TABLE,
                 description="",
-                fields=columns_by_table[tbl],
+                fields=columns_by_table[name],
             )
-            for tbl in table_names
+            for name in table_map.values()
         ]
 
         now_iso = datetime.now(timezone.utc).isoformat()

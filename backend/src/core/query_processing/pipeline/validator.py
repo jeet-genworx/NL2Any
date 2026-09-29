@@ -57,31 +57,66 @@ def validate_sql_schema_references(sql: str, schema: RelevantSchema) -> list[str
         tbl_name = obj.name.lower()
         cols = {f.name.lower() for f in obj.fields}
         table_columns_map[tbl_name] = cols
+        if "." in tbl_name:
+            short_name = tbl_name.split(".", 1)[1]
+            if short_name not in table_columns_map:
+                table_columns_map[short_name] = cols
+            else:
+                table_columns_map[short_name] = table_columns_map[short_name].union(cols)
         all_allowed_columns.update(cols)
 
+    # Collect CTE names, subquery aliases, and projected column aliases defined in the query
+    cte_names = {cte.alias_or_name.lower() for cte in parsed.find_all(exp.CTE) if cte.alias_or_name}
+    subquery_aliases = {s.alias.lower() for s in parsed.find_all(exp.Subquery) if s.alias}
+    query_column_aliases = {alias_exp.alias.lower() for alias_exp in parsed.find_all(exp.Alias) if alias_exp.alias}
+
     # 1. Check referenced tables
+    table_alias_map: dict[str, str] = {}
     referenced_tables: set[str] = set()
     for table_exp in parsed.find_all(exp.Table):
         t_name = table_exp.name.lower()
+        full_name = f"{table_exp.db.lower()}.{t_name}" if table_exp.db else t_name
         if t_name:
-            referenced_tables.add(t_name)
-            if t_name not in allowed_tables:
-                issues.append(f"Table '{t_name}' does not exist in relevant schema {sorted(allowed_tables)}")
+            referenced_tables.add(full_name)
+            is_allowed = (
+                full_name in allowed_tables
+                or t_name in allowed_tables
+                or any(a.split(".", 1)[-1] == t_name for a in allowed_tables)
+                or t_name in cte_names
+                or t_name in subquery_aliases
+                or full_name in cte_names
+                or full_name in subquery_aliases
+            )
+            if not is_allowed:
+                issues.append(f"Table '{full_name}' does not exist in relevant schema {sorted(allowed_tables)}")
+
+        # Map alias and table name to canonical schema table name
+        canonical = full_name if full_name in table_columns_map else (t_name if t_name in table_columns_map else full_name)
+        if table_exp.alias:
+            table_alias_map[table_exp.alias.lower()] = canonical
+        if t_name:
+            table_alias_map[t_name] = canonical
+        if table_exp.db:
+            table_alias_map[full_name] = canonical
 
     # 2. Check referenced columns
     for col_exp in parsed.find_all(exp.Column):
         col_name = col_exp.name.lower()
-        # Skip star wildcard or expressions
-        if col_name in ("*", ""):
+        # Skip star wildcard or projected column aliases (e.g. AS total_sales in ORDER BY / HAVING)
+        if col_name in ("*", "") or col_name in query_column_aliases:
             continue
 
-        table_qualifier = col_exp.table.lower() if col_exp.table else None
+        raw_qualifier = col_exp.table.lower() if col_exp.table else None
+        table_qualifier = table_alias_map.get(raw_qualifier, raw_qualifier)
+
         if table_qualifier and table_qualifier in table_columns_map:
             if col_name not in table_columns_map[table_qualifier]:
                 issues.append(
                     f"Column '{col_name}' does not exist in table '{table_qualifier}'"
                 )
-        elif table_qualifier and table_qualifier not in allowed_tables:
+        elif table_qualifier and (table_qualifier in cte_names or table_qualifier in subquery_aliases):
+            continue
+        elif table_qualifier and table_qualifier not in allowed_tables and table_qualifier not in table_columns_map:
             # Qualifier might be an alias; check if col exists anywhere in allowed columns
             if col_name not in all_allowed_columns:
                 issues.append(

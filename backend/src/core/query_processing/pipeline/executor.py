@@ -26,22 +26,31 @@ class QueryExecutor:
         self.timeout_seconds = timeout_seconds or settings.query_timeout_seconds
         self.max_rows = max_rows or settings.max_result_rows
 
-    def execute(self, query: GeneratedQuery) -> tuple[list[str], list[dict[str, Any]]]:
+    def execute(
+        self,
+        query: GeneratedQuery,
+        connection: str | None = None,
+    ) -> tuple[list[str], list[dict[str, Any]]]:
         """Execute query safely and return (columns, rows)."""
         if query.database_type == DatabaseType.POSTGRESQL:
-            return self._execute_postgres(str(query.raw_query))
+            return self._execute_postgres(str(query.raw_query), dsn=connection)
         elif query.database_type == DatabaseType.MONGODB:
             if not isinstance(query.raw_query, MongoQuery):
                 raise ValueError("MongoDB query must be a MongoQuery model instance.")
-            return self._execute_mongo(query.raw_query)
+            return self._execute_mongo(query.raw_query, uri=connection)
         raise ValueError(f"Unsupported database type: {query.database_type}")
 
-    def _execute_postgres(self, sql: str) -> tuple[list[str], list[dict[str, Any]]]:
-        if not self.postgres_dsn:
+    def _execute_postgres(
+        self,
+        sql: str,
+        dsn: str | None = None,
+    ) -> tuple[list[str], list[dict[str, Any]]]:
+        conn_str = dsn or self.postgres_dsn
+        if not conn_str:
             raise ValueError("PostgreSQL connection string (POSTGRES_DSN) is not configured.")
 
         timeout_ms = int(self.timeout_seconds * 1000)
-        with psycopg.connect(self.postgres_dsn, autocommit=True) as conn:
+        with psycopg.connect(conn_str, autocommit=True) as conn:
             with conn.cursor() as cur:
                 # Set statement timeout for safe execution
                 cur.execute(f"SET statement_timeout = {timeout_ms};")
@@ -55,8 +64,13 @@ class QueryExecutor:
                 rows = [dict(zip(columns, row)) for row in rows_tuples]
                 return columns, rows
 
-    def _execute_mongo(self, query: MongoQuery) -> tuple[list[str], list[dict[str, Any]]]:
-        if not self.mongo_uri:
+    def _execute_mongo(
+        self,
+        query: MongoQuery,
+        uri: str | None = None,
+    ) -> tuple[list[str], list[dict[str, Any]]]:
+        conn_uri = uri or self.mongo_uri
+        if not conn_uri:
             raise ValueError("MongoDB connection URI (MONGODB_URI) is not configured.")
 
         client: MongoClient[dict[str, Any]] = MongoClient(

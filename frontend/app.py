@@ -53,7 +53,7 @@ def run_ingestion(database: str, use_mst: bool, api_url: str, force: bool = Fals
         resp = httpx.post(
             f"{api_url}/ingest/{database}",
             params={"use_mst": use_mst, "force": force},
-            timeout=600.0,
+            timeout=None,
         )
         resp.raise_for_status()
         return True, resp.json()
