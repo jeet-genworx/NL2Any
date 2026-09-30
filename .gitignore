@@ -53,3 +53,12 @@ schemas/*.toml
 mongo_embeddings.json
 postgres_embeddings.json
 # can be tracked or kept as artifacts
+
+# Databases added at runtime from a connection string. The registry holds
+# credentials in plain text, and the artifacts belong to whoever's database was
+# connected -- neither belongs in the repository.
+backend/src/data/schemas/connections.json
+backend/src/data/schemas/pg_*
+backend/src/data/schemas/mg_*
+backend/src/data/embeddings/pg_*
+backend/src/data/embeddings/mg_*

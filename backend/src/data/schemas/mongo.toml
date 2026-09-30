@@ -2,230 +2,230 @@
 type = "mongodb"
 name = "nl2anyquery_demo"
 schema_version = "1.0"
-last_updated = "2026-09-29T05:37:14.324112+00:00"
-description_generated_at = "2026-09-29T05:40:12.313756+00:00"
+last_updated = "2026-09-29T10:02:00.865745+00:00"
+description_generated_at = ""
 
 [collections.customers]
 kind = "collection"
-description = "The customers table stores information about customers, including their personal details, contact information, and address details. It includes the customer's ID, name, email, phone number, and full address with city, country, and zip code, along with the date they were created."
+description = ""
 
 [collections.customers.fields._id]
 type = "string"
-description = "unique identifier"
+description = ""
 nullable = false
 
 [collections.customers.fields.name]
 type = "string"
-description = "customer name"
+description = ""
 nullable = false
 
 [collections.customers.fields.email]
 type = "string"
-description = "contact email"
+description = ""
 nullable = false
 
 [collections.customers.fields.phone]
 type = "string"
-description = "phone number"
+description = ""
 nullable = false
 
 [collections.customers.fields.address]
 type = "object"
-description = "full address"
+description = ""
 nullable = false
 
 [collections.customers.fields.address.fields.city]
 type = "string"
-description = "city"
+description = ""
 nullable = false
 
 [collections.customers.fields.address.fields.country]
 type = "string"
-description = "country"
+description = ""
 nullable = false
 
 [collections.customers.fields.address.fields.zip_code]
 type = "string"
-description = "zip code"
+description = ""
 nullable = false
 
 [collections.customers.fields.created_at]
 type = "datetime"
-description = "creation date"
+description = ""
 nullable = false
 
 [collections.employees]
 kind = "collection"
-description = "The employees table stores information about employees, including their personal details, department, role, and location. It includes the employee's ID, name, email, department, role, city, and the date they were hired."
+description = ""
 
 [collections.employees.fields._id]
 type = "string"
-description = "unique identifier"
+description = ""
 nullable = false
 
 [collections.employees.fields.name]
 type = "string"
-description = "employee name"
+description = ""
 nullable = false
 
 [collections.employees.fields.email]
 type = "string"
-description = "contact email"
+description = ""
 nullable = false
 
 [collections.employees.fields.department]
 type = "string"
-description = "department"
+description = ""
 nullable = false
 
 [collections.employees.fields.role]
 type = "string"
-description = "job role"
+description = ""
 nullable = false
 
 [collections.employees.fields.city]
 type = "string"
-description = "city"
+description = ""
 nullable = false
 
 [collections.employees.fields.hire_date]
 type = "datetime"
-description = "hire date"
+description = ""
 nullable = false
 
 [collections.orders]
 kind = "collection"
-description = "The orders table records customer orders, including the customer ID, creation date, order status, total amount, shipping city, and a list of items with their product details, quantities, and prices."
+description = ""
 
 [collections.orders.fields._id]
 type = "string"
-description = "unique identifier"
+description = ""
 nullable = false
 
 [collections.orders.fields.customer_id]
 type = "string"
-description = "customer ID"
+description = ""
 nullable = false
 
 [collections.orders.fields.created_at]
 type = "datetime"
-description = "creation date"
+description = ""
 nullable = false
 
 [collections.orders.fields.status]
 type = "string"
-description = "order status"
+description = ""
 nullable = false
 
 [collections.orders.fields.total_amount]
 type = "number"
-description = "total amount"
+description = ""
 nullable = false
 
 [collections.orders.fields.shipping_city]
 type = "string"
-description = "shipping city"
+description = ""
 nullable = false
 
 [collections.orders.fields.items]
 type = "array[object]"
-description = "list of items"
+description = ""
 nullable = false
 
 [collections.orders.fields.items.fields.product_id]
 type = "string"
-description = "product ID"
+description = ""
 nullable = false
 
 [collections.orders.fields.items.fields.product_name]
 type = "string"
-description = "product name"
+description = ""
 nullable = false
 
 [collections.orders.fields.items.fields.quantity]
 type = "integer"
-description = "quantity"
+description = ""
 nullable = false
 
 [collections.orders.fields.items.fields.price]
 type = "number"
-description = "price"
+description = ""
 nullable = false
 
 [collections.products]
 kind = "collection"
-description = "The products table stores information about products, including their name, category, price, stock quantity, and creation date."
+description = ""
 
 [collections.products.fields._id]
 type = "string"
-description = "unique identifier"
+description = ""
 nullable = false
 
 [collections.products.fields.name]
 type = "string"
-description = "product name"
+description = ""
 nullable = false
 
 [collections.products.fields.category]
 type = "string"
-description = "product category"
+description = ""
 nullable = false
 
 [collections.products.fields.price]
 type = "number"
-description = "product price"
+description = ""
 nullable = false
 
 [collections.products.fields.stock_quantity]
 type = "integer"
-description = "stock quantity"
+description = ""
 nullable = false
 
 [collections.products.fields.created_at]
 type = "datetime"
-description = "creation date"
+description = ""
 nullable = false
 
 [collections.support_tickets]
 kind = "collection"
-description = "The support tickets table tracks customer support tickets, including the customer ID, assigned employee ID, ticket subject, status, priority, and dates of creation and resolution."
+description = ""
 
 [collections.support_tickets.fields._id]
 type = "string"
-description = "unique identifier"
+description = ""
 nullable = false
 
 [collections.support_tickets.fields.customer_id]
 type = "string"
-description = "customer ID"
+description = ""
 nullable = false
 
 [collections.support_tickets.fields.assigned_employee_id]
 type = "string"
-description = "assigned employee ID"
+description = ""
 nullable = false
 
 [collections.support_tickets.fields.subject]
 type = "string"
-description = "ticket subject"
+description = ""
 nullable = false
 
 [collections.support_tickets.fields.status]
 type = "string"
-description = "ticket status"
+description = ""
 nullable = false
 
 [collections.support_tickets.fields.priority]
 type = "string"
-description = "ticket priority"
+description = ""
 nullable = false
 
 [collections.support_tickets.fields.created_at]
 type = "datetime"
-description = "creation date"
+description = ""
 nullable = false
 
 [collections.support_tickets.fields.resolved_at]
 type = "datetime"
-description = "resolution date"
+description = ""
 nullable = true

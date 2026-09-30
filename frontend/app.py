@@ -18,33 +18,72 @@ st.title("🔍 NL2AnyQuery")
 st.caption("Proof-of-Concept: Natural Language to Safe Database Query Pipeline")
 
 
-DEFAULT_DATABASES = {
-    "postgres": "PostgreSQL (Relational)",
-    "mongo": "MongoDB (Document)",
-    "finops": "FinOps (PostgreSQL)",
-}
+DEFAULT_DATABASES = [
+    {"key": "postgres", "label": "PostgreSQL (Relational)", "database_type": "postgresql"},
+    {"key": "mongo", "label": "MongoDB (Document)", "database_type": "mongodb"},
+    {"key": "finops", "label": "FinOps (PostgreSQL)", "database_type": "postgresql"},
+]
 
 
 @st.cache_data(ttl=60)
-def fetch_databases(api_url: str) -> tuple[list[str], dict[str, str]]:
-    """Fetch selectable database targets from the API.
+def fetch_databases(api_url: str) -> list[dict]:
+    """Fetch the selectable databases from the API.
 
-    Unconfigured targets (no connection string set) are labelled so the reason a
-    database is unusable is visible in the picker rather than only on failure.
+    Returns the built-in targets followed by every database saved from a
+    connection string, so the picker stays in step with the backend registry
+    rather than hardcoding a list. Falls back to the built-in names when the
+    backend is not up yet.
+
+    Each row carries `configured` (a connection string is set) and `ingested`
+    (embeddings are already on disk), which the picker turns into a status
+    suffix so a database says why it is unusable, or that selecting it is free,
+    before anyone clicks it.
     """
     try:
         resp = httpx.get(f"{api_url}/databases", timeout=5.0)
         resp.raise_for_status()
-        rows = resp.json()["databases"]
+        return resp.json()["databases"]
     except Exception:
-        return list(DEFAULT_DATABASES), dict(DEFAULT_DATABASES)
+        return list(DEFAULT_DATABASES)
 
-    keys = [row["key"] for row in rows]
-    labels = {
-        row["key"]: row["label"] if row.get("configured", True) else f"{row['label']} - not configured"
-        for row in rows
-    }
-    return keys, labels
+
+def describe_database(row: dict) -> str:
+    """The picker's label for one database: its name plus its readiness."""
+    if not row.get("configured", True):
+        return f"{row['label']} - not configured"
+    if row.get("ingested"):
+        return f"{row['label']} - ready"
+    return f"{row['label']} - needs ingestion"
+
+
+def add_connection(api_url: str, connection_string: str, label: str) -> tuple[bool, object]:
+    """Save a connection string with the API. Returns (ok, response_or_error)."""
+    try:
+        resp = httpx.post(
+            f"{api_url}/connections",
+            json={
+                "connection_string": connection_string.strip(),
+                "label": label.strip() or None,
+            },
+            # Generous: the API proves the connection works before saving it,
+            # and an unreachable host takes as long as the driver's own timeout.
+            timeout=30.0,
+        )
+        resp.raise_for_status()
+        return True, resp.json()
+    except httpx.ConnectError:
+        return False, (
+            f"Could not connect to FastAPI backend at {api_url}. "
+            "Please make sure it is running via `uv run run-api`."
+        )
+    except httpx.HTTPStatusError as err:
+        try:
+            detail = err.response.json().get("detail", err.response.text)
+        except Exception:
+            detail = err.response.text
+        return False, detail
+    except Exception as err:
+        return False, str(err)
 
 
 def run_ingestion(database: str, use_mst: bool, api_url: str, force: bool = False) -> tuple[bool, object]:
@@ -74,16 +113,102 @@ def run_ingestion(database: str, use_mst: bool, api_url: str, force: bool = Fals
 # Sidebar
 with st.sidebar:
     st.header("Settings")
+    # Read before anything that calls the API, since the connection form and the
+    # database list both have to go to whichever backend is named here.
+    api_url = st.text_input("FastAPI Backend URL", value=API_BASE_URL)
+
+    # Adding a database is handled before the picker is drawn: a successful
+    # connect selects the new database, and Streamlit does not allow a widget's
+    # value to be set after that widget has been created in the same run.
+    #
+    # The result of the last attempt is read before the expander is built, so
+    # the expander can open itself to show it -- a connect is followed by a
+    # rerun, and a message rendered inside a collapsed expander is a message
+    # nobody sees.
+    notice = st.session_state.get("connection_notice")
+    with st.expander("➕ Add a database", expanded=bool(notice)):
+        st.caption(
+            "Paste a PostgreSQL DSN or MongoDB URI. The engine is detected from "
+            "the string, and the connection is tested before it is saved."
+        )
+        new_connection = st.text_input(
+            "Connection string",
+            type="password",
+            placeholder="postgresql://user:password@host:5432/dbname",
+            help=(
+                "Also accepts mongodb:// and mongodb+srv:// URIs, and libpq's "
+                "'host=... dbname=...' form. Stored on the backend; it is not "
+                "sent back to this page again."
+            ),
+        )
+        new_label = st.text_input(
+            "Label (optional)",
+            placeholder="Named after the database when left blank",
+        )
+        if st.button("Connect", use_container_width=True, type="primary"):
+            if not new_connection.strip():
+                st.session_state["connection_notice"] = ("error", "Enter a connection string first.")
+            else:
+                with st.spinner("Testing the connection..."):
+                    ok, payload = add_connection(api_url, new_connection, new_label)
+                if not ok:
+                    st.session_state["connection_notice"] = ("error", str(payload))
+                else:
+                    # A database already saved comes back as the existing entry
+                    # rather than a duplicate, with its ingested artifacts
+                    # intact -- so selecting it below reuses the embeddings
+                    # instead of running the pipeline again.
+                    if not payload.get("already_saved"):
+                        st.session_state["connection_notice"] = (
+                            "success",
+                            f"Saved '{payload['label']}' ({payload['database_type']}).",
+                        )
+                    elif payload.get("ingested"):
+                        st.session_state["connection_notice"] = (
+                            "info",
+                            f"'{payload['label']}' is already set up — "
+                            "loading its existing embeddings, not re-ingesting.",
+                        )
+                    else:
+                        st.session_state["connection_notice"] = (
+                            "info",
+                            f"'{payload['label']}' is already saved, but has not "
+                            "been ingested yet. Ingesting it now.",
+                        )
+                    # The picker is cached for a minute; drop it so the new
+                    # database is in the options this rerun builds.
+                    fetch_databases.clear()
+                    st.session_state["db_choice"] = payload["key"]
+                    st.rerun()
+
+        # Read at the top of this block, before the expander decided whether to
+        # open. Left in place rather than cleared, so the outcome of the last
+        # attempt stays readable until the next one replaces it.
+        if notice:
+            level, message = notice
+            getattr(st, level)(message)
+
     # Fetched from the API so the picker stays in step with the target registry
     # rather than hardcoding a list here; falls back to the built-in targets if
-    # the backend is not up yet.
-    db_options, db_labels = fetch_databases(API_BASE_URL)
+    # the backend is not up yet. Saved connections are listed alongside the
+    # configured databases, each labelled with whether it is ready to query.
+    db_rows = fetch_databases(api_url)
+    db_options = [row["key"] for row in db_rows]
+    db_labels = {row["key"]: describe_database(row) for row in db_rows}
+    db_types = {row["key"]: row.get("database_type", "postgresql") for row in db_rows}
+
+    # A database removed from the backend between reruns would leave a stale
+    # selection pointing at a key that no longer exists.
+    if st.session_state.get("db_choice") not in db_options:
+        st.session_state.pop("db_choice", None)
+
     db_choice = st.selectbox(
         "Database",
         options=db_options,
         format_func=lambda key: db_labels.get(key, key),
+        key="db_choice",
     )
-    api_url = st.text_input("FastAPI Backend URL", value=API_BASE_URL)
+    db_type = db_types.get(db_choice, "postgresql")
 
     st.divider()
     st.markdown("### Database Ingestion")
@@ -110,7 +235,9 @@ with st.sidebar:
     # selection changes only -- Streamlit reruns this script on every widget
     # interaction, and re-ingesting on each of those would be needlessly expensive.
     if st.session_state.get("ingested_db") != db_choice or ingest_btn:
-        with st.spinner(f"Running ingestion pipeline for {db_choice}... this can take a minute."):
+        # A database that has been ingested before returns in milliseconds with
+        # its existing artifacts, so this spinner covers both cases.
+        with st.spinner(f"Preparing {db_labels.get(db_choice, db_choice)}..."):
             # The button means "do it again"; an automatic run on selection
             # reuses existing embeddings instead of re-ingesting.
             ok, payload = run_ingestion(db_choice, use_mst, api_url, force=ingest_btn)
@@ -123,18 +250,32 @@ with st.sidebar:
         st.error(st.session_state["ingestion_error"])
     elif st.session_state.get("ingestion_summary"):
         summary = st.session_state["ingestion_summary"]
-        st.success(
-            f"Ingested {summary['table_count']} tables → "
-            f"{summary['description_count']} descriptions → "
-            f"{summary['embedding_count']} embeddings "
-            f"({summary['embedding_dimensions']}-dim, MST used: {summary['used_mst']})."
-        )
+        # `skipped` says the pipeline did not run: the embeddings were already
+        # on disk and were loaded as they were. Worth saying plainly, so a fast
+        # response does not look like ingestion silently did nothing.
+        if summary.get("skipped"):
+            st.success(
+                f"Loaded existing embeddings: {summary['embedding_count']} tables "
+                f"({summary['embedding_dimensions']}-dim). Not re-ingested."
+            )
+        else:
+            st.success(
+                f"Ingested {summary['table_count']} tables → "
+                f"{summary['description_count']} descriptions → "
+                f"{summary['embedding_count']} embeddings "
+                f"({summary['embedding_dimensions']}-dim, MST used: {summary['used_mst']})."
+            )
         st.caption(f"Query retrieval uses: `{summary['embeddings_path']}`")
         with st.expander("Ingestion details"):
             st.json(summary)
 
     st.divider()
     st.markdown("### Example Questions")
+    # Written against the two seeded demo databases, so they are only offered
+    # for those. Any other database -- FinOps, or one added from a connection
+    # string -- has its own tables, and canned questions about customers and
+    # orders would be misleading rather than helpful.
+    sample_questions: list[str] = []
     if db_choice == "postgres":
         sample_questions = [
             "Show me all customers from Chicago",
@@ -147,7 +288,7 @@ with st.sidebar:
             "Delete all customers",  # Negative test
             "Show me all astronauts",  # Unknown domain
         ]
-    else:
+    elif db_choice == "mongo":
         sample_questions = [
             "Which customers have placed the most orders?",
             "What are the top-selling products?",
@@ -158,9 +299,15 @@ with st.sidebar:
             "Find all spaceships",  # Unknown domain
         ]
 
-    for q in sample_questions:
-        if st.button(q, key=f"btn_{q}"):
-            st.session_state["question_input"] = q
+    if sample_questions:
+        for q in sample_questions:
+            if st.button(q, key=f"btn_{q}"):
+                st.session_state["question_input"] = q
+    else:
+        st.caption(
+            "No canned questions for this database — ask anything about its own "
+            "tables. Open 'Relevant Schema' after a query to see what was found."
+        )
 
 # Main question form
 current_question = st.session_state.get("question_input", "")
@@ -280,7 +427,9 @@ if run_btn and question.strip():
     with st.expander("Generated Query"):
         gen_q = data.get("generated_query")
         if gen_q:
-            if db_choice == "postgres":
+            # Driven by the engine, not the target key, so a PostgreSQL database
+            # added from a connection string is still highlighted as SQL.
+            if db_type == "postgresql":
                 st.code(gen_q, language="sql")
             else:
                 st.code(

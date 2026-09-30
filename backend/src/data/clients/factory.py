@@ -23,4 +23,10 @@ def get_adapter(database: DatabaseTarget | DatabaseType) -> DatabaseAdapter:
     target = as_target(database)
     if target.db_type == DatabaseType.POSTGRESQL:
         return PostgreSQLAdapter(dsn=target.connection)
-    return MongoDBAdapter(uri=target.connection, database=settings.mongodb_database)
+    # The database within a MongoDB server comes from the target when it carries
+    # one -- a user-supplied URI names it in the path -- and from settings only
+    # for the built-in target, whose URI has no path.
+    return MongoDBAdapter(
+        uri=target.connection,
+        database=target.mongo_database or settings.mongodb_database,
+    )

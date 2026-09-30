@@ -143,12 +143,22 @@ def test_databases_endpoint_lists_finops():
 
     assert response.status_code == 200
     rows = {row["key"]: row for row in response.json()["databases"]}
-    assert set(rows) == {"postgres", "mongo", "finops"}
+    # A superset, because databases added from a connection string are listed
+    # here alongside the configured ones.
+    assert {"postgres", "mongo", "finops"} <= set(rows)
     assert rows["finops"]["label"] == "FinOps (PostgreSQL)"
     assert rows["finops"]["database_type"] == "postgresql"
-    # The picker needs to know whether a target is usable and whether it has
-    # been ingested yet.
-    assert set(rows["finops"]) == {"key", "label", "database_type", "configured", "ingested"}
+    assert rows["finops"]["source"] == "builtin"
+    # The picker needs to know whether a target is usable, whether it has been
+    # ingested yet, and whether it is one the user can remove.
+    assert set(rows["finops"]) == {
+        "key",
+        "label",
+        "database_type",
+        "configured",
+        "ingested",
+        "source",
+    }
 
 
 def test_schema_endpoint_serves_finops_separately_from_postgres():

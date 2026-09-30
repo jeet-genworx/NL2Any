@@ -2,16 +2,16 @@
 type = "postgresql"
 name = "nl2anyquery_db"
 schema_version = "1.0"
-last_updated = "2026-09-29T05:31:02.782298+00:00"
-description_generated_at = "2026-09-29T05:31:29.043232+00:00"
+last_updated = "2026-09-29T10:43:58.803973+00:00"
+description_generated_at = "2026-09-29T10:46:19.791995+00:00"
 
 [tables.customers]
 kind = "table"
-description = "This table stores customer information, including their personal details and creation timestamp. It is linked to orders and support tickets via customer_id, representing the entity that initiates and is associated with these interactions."
+description = "Stores information about customers, including their personal details and when they were created. This table links to orders and support tickets via customer_id."
 
 [tables.customers.columns.id]
 type = "integer"
-description = "Primary key identifier"
+description = "Primary key identifying the customer"
 nullable = false
 
 [tables.customers.columns.name]
@@ -31,21 +31,21 @@ nullable = true
 
 [tables.customers.columns.city]
 type = "character varying"
-description = "Customer's location city"
+description = "Customer's city of residence"
 nullable = true
 
 [tables.customers.columns.created_at]
 type = "timestamp with time zone"
-description = "Timestamp when the customer was created"
+description = "Timestamp when the customer was added"
 nullable = false
 
 [tables.employees]
 kind = "table"
-description = "This table stores employee information, including their name, contact details, department, role, and hire date. It is linked to support tickets via employee_id, representing the personnel managing customer interactions."
+description = "Stores information about employees, including their name, department, role, and hire date. This table links to support tickets via foreign keys."
 
 [tables.employees.columns.id]
 type = "integer"
-description = "Primary key identifier"
+description = "Primary key identifying the employee"
 nullable = false
 
 [tables.employees.columns.name]
@@ -60,7 +60,7 @@ nullable = false
 
 [tables.employees.columns.department]
 type = "character varying"
-description = "Employee's work department"
+description = "Employee's department"
 nullable = false
 
 [tables.employees.columns.role]
@@ -70,21 +70,21 @@ nullable = false
 
 [tables.employees.columns.city]
 type = "character varying"
-description = "Employee's location city"
+description = "Employee's city of residence"
 nullable = true
 
 [tables.employees.columns.hire_date]
 type = "timestamp with time zone"
-description = "Timestamp when the employee was hired"
+description = "Timestamp when the employee started"
 nullable = false
 
 [tables.order_items]
 kind = "table"
-description = "This table tracks individual items within orders, linking to the orders table via order_id. It records product details such as quantity and unit price, representing the components of a transaction."
+description = "Records items in orders, including product details, quantity, and unit price. This table links to orders and products via foreign keys."
 
 [tables.order_items.columns.id]
 type = "integer"
-description = "Primary key identifier"
+description = "Primary key identifying the item"
 nullable = false
 
 [tables.order_items.columns.order_id]
@@ -94,26 +94,26 @@ nullable = false
 
 [tables.order_items.columns.product_id]
 type = "integer"
-description = "Identifier for the product"
+description = "FK to products"
 nullable = false
 
 [tables.order_items.columns.quantity]
 type = "integer"
-description = "Number of units purchased"
+description = "Number of items ordered"
 nullable = false
 
 [tables.order_items.columns.unit_price]
 type = "numeric"
-description = "Price per unit of the product"
+description = "Price per item"
 nullable = false
 
 [tables.orders]
 kind = "table"
-description = "This table tracks customer orders, linking to the customers table via customer_id. It records order details such as date, status, total amount, and shipping city, representing transactions initiated by customers."
+description = "Records customer orders, including details like order date, status, total amount, and shipping city. This table links to customers and order items via foreign keys."
 
 [tables.orders.columns.id]
 type = "integer"
-description = "Primary key identifier"
+description = "Primary key identifying the order"
 nullable = false
 
 [tables.orders.columns.customer_id]
@@ -133,21 +133,21 @@ nullable = false
 
 [tables.orders.columns.total_amount]
 type = "numeric"
-description = "Total monetary value of the order"
+description = "Total cost of the order"
 nullable = false
 
 [tables.orders.columns.shipping_city]
 type = "character varying"
-description = "City where the order is shipped"
+description = "City for order delivery"
 nullable = true
 
 [tables.products]
 kind = "table"
-description = "This table stores information about products, including their unique identifiers, names, categories, prices, stock levels, and creation timestamps. It is used to look up product details and track inventory changes over time."
+description = "This table stores detailed information about products, including their unique identifier, name, category, price, stock quantity, and creation timestamp. It is used to look up product details for inventory management, pricing, and historical records."
 
 [tables.products.columns.id]
 type = "integer"
-description = "Unique identifier for the product"
+description = "Primary key identifier for the product"
 nullable = false
 
 [tables.products.columns.name]
@@ -167,7 +167,7 @@ nullable = false
 
 [tables.products.columns.stock_quantity]
 type = "integer"
-description = "Quantity in stock"
+description = "Quantity of product in stock"
 nullable = false
 
 [tables.products.columns.created_at]
@@ -177,11 +177,11 @@ nullable = false
 
 [tables.support_tickets]
 kind = "table"
-description = "This table tracks customer support tickets, linking to customers and employees via customer_id and employee_id. It records ticket details such as subject, priority, and timestamps for creation and resolution, representing support interactions."
+description = "Tracks support tickets for customers, including subject, status, priority, and timestamps. This table links to customers and employees via foreign keys."
 
 [tables.support_tickets.columns.id]
 type = "integer"
-description = "Primary key identifier"
+description = "Primary key identifying the ticket"
 nullable = false
 
 [tables.support_tickets.columns.customer_id]
@@ -206,17 +206,17 @@ nullable = false
 
 [tables.support_tickets.columns.priority]
 type = "character varying"
-description = "Severity level of the issue"
+description = "Urgency level of the ticket"
 nullable = false
 
 [tables.support_tickets.columns.created_at]
 type = "timestamp with time zone"
-description = "Timestamp when the ticket was created"
+description = "Timestamp when the ticket was opened"
 nullable = false
 
 [tables.support_tickets.columns.resolved_at]
 type = "timestamp with time zone"
-description = "Timestamp when the ticket was resolved"
+description = "Timestamp when the ticket was closed"
 nullable = true
 
 [[relationships]]

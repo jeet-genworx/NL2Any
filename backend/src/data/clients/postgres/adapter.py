@@ -31,6 +31,11 @@ class PostgreSQLAdapter(DatabaseAdapter):
         extractor = PostgreSQLMetadataExtractor(conn)
         return extractor.extract_schema()
 
+    def ping(self) -> None:
+        """Connect and run a trivial statement, raising if the DSN does not work."""
+        with self._get_connection().cursor() as cur:
+            cur.execute("SELECT 1;")
+
     def close(self) -> None:
         """Close database connection."""
         if self._conn is not None and not self._conn.closed:

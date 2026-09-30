@@ -2,1564 +2,1564 @@
 type = "postgresql"
 name = "finopsiq_be"
 schema_version = "1.0"
-last_updated = "2026-09-25T10:10:19.405953+00:00"
-description_generated_at = ""
+last_updated = "2026-09-29T10:46:48.285626+00:00"
+description_generated_at = "2026-09-29T10:58:27.889237+00:00"
 
 [tables."auth.alembic_version"]
 kind = "table"
-description = ""
+description = "Stores the current version of the database schema. Contains a single column, version_num, which represents the version number of the schema."
 
 [tables."auth.alembic_version".columns.version_num]
 type = "character varying"
-description = ""
+description = "Stores the current database schema version number"
 nullable = false
 
 [tables."auth.default_idp_config"]
 kind = "table"
-description = ""
+description = "Stores configuration details for the default identity provider. Includes provider, tenant ID, client ID, redirect URI, and other metadata for identity provider setup."
 
 [tables."auth.default_idp_config".columns.id]
 type = "uuid"
-description = ""
+description = "Unique identifier for the identity provider configuration"
 nullable = false
 
 [tables."auth.default_idp_config".columns.provider]
 type = "character varying"
-description = ""
+description = "Identity provider name or type"
 nullable = false
 
 [tables."auth.default_idp_config".columns.tenant_id]
 type = "text"
-description = ""
+description = "Identifier for the tenant or organization"
 nullable = true
 
 [tables."auth.default_idp_config".columns.client_id]
 type = "text"
-description = ""
+description = "Client identifier for the identity provider"
 nullable = false
 
 [tables."auth.default_idp_config".columns.redirect_uri]
 type = "text"
-description = ""
+description = "URL for redirecting after authentication"
 nullable = false
 
 [tables."auth.default_idp_config".columns.is_enabled]
 type = "boolean"
-description = ""
+description = "Boolean indicating if the identity provider is active"
 nullable = false
 
 [tables."auth.default_idp_config".columns.created_at]
 type = "timestamp with time zone"
-description = ""
+description = "Timestamp when the configuration was created"
 nullable = false
 
 [tables."auth.default_idp_config".columns.updated_at]
 type = "timestamp with time zone"
-description = ""
+description = "Timestamp when the configuration was last updated"
 nullable = false
 
 [tables."auth.default_idp_config".columns.created_by]
 type = "character varying"
-description = ""
+description = "Name of the user who created the configuration"
 nullable = true
 
 [tables."auth.default_idp_config".columns.updated_by]
 type = "character varying"
-description = ""
+description = "Name of the user who last updated the configuration"
 nullable = true
 
 [tables."auth.default_idp_config".columns.client_secret]
 type = "text"
-description = ""
+description = "Secret key for the identity provider"
 nullable = true
 
 [tables."auth.org_custom_role_privileges"]
 kind = "table"
-description = ""
+description = "Junction table linking custom roles to privileges. Each role is associated with one or more privileges, and records the timestamps and creator for these associations."
 
 [tables."auth.org_custom_role_privileges".columns.id]
 type = "uuid"
-description = ""
+description = "Unique identifier for the role privilege relationship"
 nullable = false
 
 [tables."auth.org_custom_role_privileges".columns.role_id]
 type = "uuid"
-description = ""
+description = "FK to org_custom_roles"
 nullable = false
 
 [tables."auth.org_custom_role_privileges".columns.privilege_id]
 type = "uuid"
-description = ""
+description = "FK to product_privileges"
 nullable = false
 
 [tables."auth.org_custom_role_privileges".columns.created_at]
 type = "timestamp with time zone"
-description = ""
+description = "Timestamp when the privilege was added to the role"
 nullable = false
 
 [tables."auth.org_custom_role_privileges".columns.created_by]
 type = "character varying"
-description = ""
+description = "User who created the role privilege relationship"
 nullable = true
 
 [tables."auth.org_custom_roles"]
 kind = "table"
-description = ""
+description = "Stores definitions for custom roles within an organization. Includes product-specific details, role name, description, and timestamps for creation and updates."
 
 [tables."auth.org_custom_roles".columns.id]
 type = "uuid"
-description = ""
+description = "Unique identifier for the custom role"
 nullable = false
 
 [tables."auth.org_custom_roles".columns.organisation_id]
 type = "uuid"
-description = ""
+description = "Identifier for the organization"
 nullable = false
 
 [tables."auth.org_custom_roles".columns.product]
 type = "character varying"
-description = ""
+description = "Product associated with the role"
 nullable = false
 
 [tables."auth.org_custom_roles".columns.name]
 type = "character varying"
-description = ""
+description = "Name of the custom role"
 nullable = false
 
 [tables."auth.org_custom_roles".columns.description]
 type = "text"
-description = ""
+description = "Description of the custom role"
 nullable = true
 
 [tables."auth.org_custom_roles".columns.is_default]
 type = "boolean"
-description = ""
+description = "Boolean indicating if the role is default"
 nullable = false
 
 [tables."auth.org_custom_roles".columns.created_at]
 type = "timestamp with time zone"
-description = ""
+description = "Timestamp when the role was created"
 nullable = false
 
 [tables."auth.org_custom_roles".columns.created_by]
 type = "character varying"
-description = ""
+description = "User who created the role"
 nullable = true
 
 [tables."auth.org_custom_roles".columns.updated_at]
 type = "timestamp with time zone"
-description = ""
+description = "Timestamp when the role was last updated"
 nullable = false
 
 [tables."auth.org_custom_roles".columns.updated_by]
 type = "character varying"
-description = ""
+description = "User who last updated the role"
 nullable = true
 
 [tables."auth.org_domains"]
 kind = "table"
-description = ""
+description = "This table stores domains associated with organizations, including their creation and update timestamps, and the users responsible. It links to the organisations table via organisation_id to track which organization owns the domain."
 
 [tables."auth.org_domains".columns.id]
 type = "uuid"
-description = ""
+description = "Primary key of the domain"
 nullable = false
 
 [tables."auth.org_domains".columns.organisation_id]
 type = "uuid"
-description = ""
+description = "FK to organisations"
 nullable = false
 
 [tables."auth.org_domains".columns.domain]
 type = "character varying"
-description = ""
+description = "Domain name associated with the organization"
 nullable = false
 
 [tables."auth.org_domains".columns.created_at]
 type = "timestamp with time zone"
-description = ""
+description = "Timestamp when the domain was created"
 nullable = false
 
 [tables."auth.org_domains".columns.updated_at]
 type = "timestamp with time zone"
-description = ""
+description = "Timestamp of the last update to the domain"
 nullable = false
 
 [tables."auth.org_domains".columns.created_by]
 type = "character varying"
-description = ""
+description = "User who created the domain"
 nullable = true
 
 [tables."auth.org_domains".columns.updated_by]
 type = "character varying"
-description = ""
+description = "User who last updated the domain"
 nullable = true
 
 [tables."auth.org_group_members"]
 kind = "table"
-description = ""
+description = "auth.org_group_members tracks users who are members of specific groups. It includes the group ID, the user ID, and the timestamps for when the group membership was created and by whom. This table is used to manage and look up group memberships for users."
 
 [tables."auth.org_group_members".columns.id]
 type = "uuid"
-description = ""
+description = "primary key"
 nullable = false
 
 [tables."auth.org_group_members".columns.group_id]
 type = "uuid"
-description = ""
+description = "group_id"
 nullable = false
 
 [tables."auth.org_group_members".columns.user_id]
 type = "uuid"
-description = ""
+description = "FK to users"
 nullable = false
 
 [tables."auth.org_group_members".columns.created_at]
 type = "timestamp with time zone"
-description = ""
+description = "timestamp"
 nullable = false
 
 [tables."auth.org_group_members".columns.created_by]
 type = "character varying"
-description = ""
+description = "character varying"
 nullable = true
 
 [tables."auth.org_groups"]
 kind = "table"
-description = ""
+description = "This table represents groups within organizations, storing their names, descriptions, and metadata. It connects to the organisations table via organisation_id to track which organization the group belongs to."
 
 [tables."auth.org_groups".columns.id]
 type = "uuid"
-description = ""
+description = "Primary key of the group"
 nullable = false
 
 [tables."auth.org_groups".columns.organisation_id]
 type = "uuid"
-description = ""
+description = "FK to organisations"
 nullable = false
 
 [tables."auth.org_groups".columns.name]
 type = "character varying"
-description = ""
+description = "Name of the group"
 nullable = false
 
 [tables."auth.org_groups".columns.description]
 type = "text"
-description = ""
+description = "Description of the group"
 nullable = true
 
 [tables."auth.org_groups".columns.metadata]
 type = "jsonb"
-description = ""
+description = "Additional structured data for the group"
 nullable = false
 
 [tables."auth.org_groups".columns.created_at]
 type = "timestamp with time zone"
-description = ""
+description = "Timestamp when the group was created"
 nullable = false
 
 [tables."auth.org_groups".columns.created_by]
 type = "character varying"
-description = ""
+description = "User who created the group"
 nullable = true
 
 [tables."auth.org_groups".columns.updated_at]
 type = "timestamp with time zone"
-description = ""
+description = "Timestamp of the last update to the group"
 nullable = false
 
 [tables."auth.org_groups".columns.updated_by]
 type = "character varying"
-description = ""
+description = "User who last updated the group"
 nullable = true
 
 [tables."auth.org_idp_config"]
 kind = "table"
-description = ""
+description = "This table stores identity provider (IDP) configurations for organizations, including provider details, client credentials, and enablement status. It links to the organisations table via organisation_id to track which organization the IDP is associated with."
 
 [tables."auth.org_idp_config".columns.id]
 type = "uuid"
-description = ""
+description = "Primary key of the IDP configuration"
 nullable = false
 
 [tables."auth.org_idp_config".columns.organisation_id]
 type = "uuid"
-description = ""
+description = "FK to organisations"
 nullable = false
 
 [tables."auth.org_idp_config".columns.provider]
 type = "character varying"
-description = ""
+description = "Name of the identity provider"
 nullable = false
 
 [tables."auth.org_idp_config".columns.tenant_id]
 type = "text"
-description = ""
+description = "Tenant ID for the identity provider"
 nullable = true
 
 [tables."auth.org_idp_config".columns.client_id]
 type = "text"
-description = ""
+description = "Client ID for the identity provider"
 nullable = false
 
 [tables."auth.org_idp_config".columns.redirect_uri]
 type = "text"
-description = ""
+description = "Redirect URI for the identity provider"
 nullable = false
 
 [tables."auth.org_idp_config".columns.is_enabled]
 type = "boolean"
-description = ""
+description = "Boolean indicating if the IDP is enabled"
 nullable = false
 
 [tables."auth.org_idp_config".columns.created_at]
 type = "timestamp with time zone"
-description = ""
+description = "Timestamp when the IDP configuration was created"
 nullable = false
 
 [tables."auth.org_idp_config".columns.updated_at]
 type = "timestamp with time zone"
-description = ""
+description = "Timestamp of the last update to the IDP configuration"
 nullable = false
 
 [tables."auth.org_idp_config".columns.created_by]
 type = "character varying"
-description = ""
+description = "User who created the IDP configuration"
 nullable = true
 
 [tables."auth.org_idp_config".columns.updated_by]
 type = "character varying"
-description = ""
+description = "User who last updated the IDP configuration"
 nullable = true
 
 [tables."auth.org_idp_config".columns.client_secret]
 type = "text"
-description = ""
+description = "Secret key for the identity provider"
 nullable = true
 
 [tables."auth.org_token_version"]
 kind = "table"
-description = ""
+description = "This table tracks versions of tokens associated with organizations, including the version number and timestamp of the last update. It links to the organisations table via org_id to track which organization the token version belongs to."
 
 [tables."auth.org_token_version".columns.org_id]
 type = "uuid"
-description = ""
+description = "FK to organisations"
 nullable = false
 
 [tables."auth.org_token_version".columns.version]
 type = "integer"
-description = ""
+description = "Version number of the token"
 nullable = false
 
 [tables."auth.org_token_version".columns.updated_at]
 type = "timestamp with time zone"
-description = ""
+description = "Timestamp of the last update to the token version"
 nullable = false
 
 [tables."auth.organisations"]
 kind = "table"
-description = ""
+description = "This table represents organizations, storing their unique identifiers, names, statuses, and metadata. It contains columns for ID, name, slug, status, timestamps, creators, plans, and billing details. It connects to other tables like org_domains, org_groups, and org_idp_config via foreign keys to organisation_id."
 
 [tables."auth.organisations".columns.id]
 type = "uuid"
-description = ""
+description = "Primary key of the organization"
 nullable = false
 
 [tables."auth.organisations".columns.name]
 type = "text"
-description = ""
+description = "Name of the organization"
 nullable = false
 
 [tables."auth.organisations".columns.slug]
 type = "character varying"
-description = ""
+description = "URL-friendly identifier for the organization"
 nullable = false
 
 [tables."auth.organisations".columns.status]
 type = "character varying"
-description = ""
+description = "Current status of the organization"
 nullable = false
 
 [tables."auth.organisations".columns.created_at]
 type = "timestamp with time zone"
-description = ""
+description = "Timestamp when the organization was created"
 nullable = false
 
 [tables."auth.organisations".columns.updated_at]
 type = "timestamp with time zone"
-description = ""
+description = "Timestamp of the last update to the organization"
 nullable = false
 
 [tables."auth.organisations".columns.created_by]
 type = "character varying"
-description = ""
+description = "User who created the organization"
 nullable = true
 
 [tables."auth.organisations".columns.updated_by]
 type = "character varying"
-description = ""
+description = "User who last updated the organization"
 nullable = true
 
 [tables."auth.organisations".columns.plan]
 type = "character varying"
-description = ""
+description = "Subscription plan for the organization"
 nullable = true
 
 [tables."auth.organisations".columns.plan_status]
 type = "character varying"
-description = ""
+description = "Status of the organization's subscription plan"
 nullable = false
 
 [tables."auth.organisations".columns.trial_ends_at]
 type = "timestamp with time zone"
-description = ""
+description = "Timestamp when the organization's trial period ends"
 nullable = true
 
 [tables."auth.organisations".columns.seat_limit]
 type = "integer"
-description = ""
+description = "Maximum number of seats allowed for the organization"
 nullable = true
 
 [tables."auth.organisations".columns.billing_customer_id]
 type = "character varying"
-description = ""
+description = "ID of the billing customer associated with the organization"
 nullable = true
 
 [tables."auth.organisations".columns.billing_email]
 type = "text"
-description = ""
+description = "Email address for billing purposes"
 nullable = true
 
 [tables."auth.organisations".columns.stripe_subscription_id]
 type = "character varying"
-description = ""
+description = "Stripe subscription ID for the organization"
 nullable = true
 
 [tables."auth.organisations".columns.metadata]
 type = "jsonb"
-description = ""
+description = "Additional structured data for the organization"
 nullable = false
 
 [tables."auth.organisations".columns.custom_domain]
 type = "character varying"
-description = ""
+description = "Custom domain name associated with the organization"
 nullable = true
 
 [tables."auth.otp_codes"]
 kind = "table"
-description = ""
+description = "auth.otp_codes stores one-time passwords (OTPs) for users, including the purpose, code hash, expiration, and usage details. This table is used to manage and look up OTPs for authentication purposes."
 
 [tables."auth.otp_codes".columns.id]
 type = "uuid"
-description = ""
+description = "primary key"
 nullable = false
 
 [tables."auth.otp_codes".columns.user_id]
 type = "uuid"
-description = ""
+description = "FK to users"
 nullable = false
 
 [tables."auth.otp_codes".columns.purpose]
 type = "character varying"
-description = ""
+description = "purpose of OTP"
 nullable = false
 
 [tables."auth.otp_codes".columns.code_hash]
 type = "character varying"
-description = ""
+description = "OTP code hash"
 nullable = false
 
 [tables."auth.otp_codes".columns.expires_at]
 type = "timestamp with time zone"
-description = ""
+description = "expiration timestamp"
 nullable = false
 
 [tables."auth.otp_codes".columns.consumed_at]
 type = "timestamp with time zone"
-description = ""
+description = "consumption timestamp"
 nullable = true
 
 [tables."auth.otp_codes".columns.attempts]
 type = "integer"
-description = ""
+description = "number of attempts"
 nullable = false
 
 [tables."auth.otp_codes".columns.last_resend_at]
 type = "timestamp with time zone"
-description = ""
+description = "last resend timestamp"
 nullable = true
 
 [tables."auth.otp_codes".columns.created_at]
 type = "timestamp with time zone"
-description = ""
+description = "creation timestamp"
 nullable = false
 
 [tables."auth.otp_codes".columns.updated_at]
 type = "timestamp with time zone"
-description = ""
+description = "last update timestamp"
 nullable = false
 
 [tables."auth.otp_codes".columns.created_by]
 type = "character varying"
-description = ""
+description = "creator user"
 nullable = true
 
 [tables."auth.otp_codes".columns.updated_by]
 type = "character varying"
-description = ""
+description = "last updater user"
 nullable = true
 
 [tables."auth.plans"]
 kind = "table"
-description = ""
+description = "This table stores plan configurations, including names, seat limits, product details, and metadata. It tracks creation and update timestamps, and is used to manage platform-wide plan settings and their associated data."
 
 [tables."auth.plans".columns.id]
 type = "uuid"
-description = ""
+description = "Unique identifier for the plan"
 nullable = false
 
 [tables."auth.plans".columns.name]
 type = "character varying"
-description = ""
+description = "Plan name"
 nullable = false
 
 [tables."auth.plans".columns.seat_limit]
 type = "integer"
-description = ""
+description = "Maximum number of seats allowed"
 nullable = false
 
 [tables."auth.plans".columns.products]
 type = "jsonb"
-description = ""
+description = "JSONB storage for plan products"
 nullable = false
 
 [tables."auth.plans".columns.is_platform_default]
 type = "boolean"
-description = ""
+description = "Boolean indicating default platform plan status"
 nullable = false
 
 [tables."auth.plans".columns.metadata]
 type = "jsonb"
-description = ""
+description = "JSONB storage for additional plan data"
 nullable = false
 
 [tables."auth.plans".columns.created_at]
 type = "timestamp with time zone"
-description = ""
+description = "Timestamp of plan creation"
 nullable = false
 
 [tables."auth.plans".columns.created_by]
 type = "character varying"
-description = ""
+description = "User who created the plan"
 nullable = true
 
 [tables."auth.plans".columns.updated_at]
 type = "timestamp with time zone"
-description = ""
+description = "Timestamp of last plan update"
 nullable = false
 
 [tables."auth.plans".columns.updated_by]
 type = "character varying"
-description = ""
+description = "User who last modified the plan"
 nullable = true
 
 [tables."auth.product_privileges"]
 kind = "table"
-description = ""
+description = "Stores product-specific privileges, including keys, labels, risk levels, and order. Used to define permissions for different products and track their status and timestamps."
 
 [tables."auth.product_privileges".columns.id]
 type = "uuid"
-description = ""
+description = "Unique identifier for the product privilege"
 nullable = false
 
 [tables."auth.product_privileges".columns.product]
 type = "character varying"
-description = ""
+description = "Product associated with the privilege"
 nullable = false
 
 [tables."auth.product_privileges".columns.key]
 type = "character varying"
-description = ""
+description = "Key or identifier for the privilege"
 nullable = false
 
 [tables."auth.product_privileges".columns.label]
 type = "character varying"
-description = ""
+description = "Human-readable label for the privilege"
 nullable = true
 
 [tables."auth.product_privileges".columns.group_name]
 type = "character varying"
-description = ""
+description = "Group name for the privilege"
 nullable = true
 
 [tables."auth.product_privileges".columns.risk]
 type = "character varying"
-description = ""
+description = "Risk level associated with the privilege"
 nullable = true
 
 [tables."auth.product_privileges".columns.order]
 type = "integer"
-description = ""
+description = "Order or priority of the privilege"
 nullable = false
 
 [tables."auth.product_privileges".columns.is_deprecated]
 type = "boolean"
-description = ""
+description = "Boolean indicating if the privilege is deprecated"
 nullable = false
 
 [tables."auth.product_privileges".columns.created_at]
 type = "timestamp with time zone"
-description = ""
+description = "Timestamp when the privilege was created"
 nullable = false
 
 [tables."auth.product_privileges".columns.updated_at]
 type = "timestamp with time zone"
-description = ""
+description = "Timestamp when the privilege was last updated"
 nullable = false
 
 [tables."auth.refresh_tokens"]
 kind = "table"
-description = ""
+description = "auth.refresh_tokens stores refresh tokens for users, including the token hash, expiration, revocation details, and usage information. This table is used to manage and look up refresh tokens for authentication."
 
 [tables."auth.refresh_tokens".columns.id]
 type = "uuid"
-description = ""
+description = "primary key"
 nullable = false
 
 [tables."auth.refresh_tokens".columns.user_id]
 type = "uuid"
-description = ""
+description = "FK to users"
 nullable = false
 
 [tables."auth.refresh_tokens".columns.token_hash]
 type = "character varying"
-description = ""
+description = "token hash"
 nullable = false
 
 [tables."auth.refresh_tokens".columns.expires_at]
 type = "timestamp with time zone"
-description = ""
+description = "expiration timestamp"
 nullable = false
 
 [tables."auth.refresh_tokens".columns.revoked_at]
 type = "timestamp with time zone"
-description = ""
+description = "revocation timestamp"
 nullable = true
 
 [tables."auth.refresh_tokens".columns.rotated_from]
 type = "uuid"
-description = ""
+description = "token rotation source"
 nullable = true
 
 [tables."auth.refresh_tokens".columns.created_at]
 type = "timestamp with time zone"
-description = ""
+description = "creation timestamp"
 nullable = false
 
 [tables."auth.refresh_tokens".columns.updated_at]
 type = "timestamp with time zone"
-description = ""
+description = "last update timestamp"
 nullable = false
 
 [tables."auth.refresh_tokens".columns.created_by]
 type = "character varying"
-description = ""
+description = "creator user"
 nullable = true
 
 [tables."auth.refresh_tokens".columns.revoked_by]
 type = "character varying"
-description = ""
+description = "revocation user"
 nullable = true
 
 [tables."auth.refresh_tokens".columns.last_used_at]
 type = "timestamp with time zone"
-description = ""
+description = "last usage timestamp"
 nullable = true
 
 [tables."auth.roles"]
 kind = "table"
-description = ""
+description = "This table defines role metadata, including names, descriptions, and timestamps for creation and updates. It is referenced by user roles to associate roles with users, with fields tracking when roles were last modified."
 
 [tables."auth.roles".columns.id]
 type = "uuid"
-description = ""
+description = "Unique identifier for the role"
 nullable = false
 
 [tables."auth.roles".columns.name]
 type = "character varying"
-description = ""
+description = "Role name"
 nullable = false
 
 [tables."auth.roles".columns.description]
 type = "text"
-description = ""
+description = "Role description"
 nullable = true
 
 [tables."auth.roles".columns.created_at]
 type = "timestamp with time zone"
-description = ""
+description = "Timestamp of role creation"
 nullable = false
 
 [tables."auth.roles".columns.updated_at]
 type = "timestamp with time zone"
-description = ""
+description = "Timestamp of last role update"
 nullable = false
 
 [tables."auth.roles".columns.created_by]
 type = "character varying"
-description = ""
+description = "User who created the role"
 nullable = true
 
 [tables."auth.roles".columns.updated_by]
 type = "character varying"
-description = ""
+description = "User who last modified the role"
 nullable = true
 
 [tables."auth.service_clients"]
 kind = "table"
-description = ""
+description = "This table manages service client configurations, including client IDs, secret hashes, activation status, and usage tracking. It stores metadata about service clients and tracks when they were last used and modified."
 
 [tables."auth.service_clients".columns.id]
 type = "uuid"
-description = ""
+description = "Unique identifier for the service client"
 nullable = false
 
 [tables."auth.service_clients".columns.client_id]
 type = "character varying"
-description = ""
+description = "Service client identifier"
 nullable = false
 
 [tables."auth.service_clients".columns.description]
 type = "text"
-description = ""
+description = "Client description"
 nullable = true
 
 [tables."auth.service_clients".columns.secret_hash]
 type = "text"
-description = ""
+description = "Hashed client secret"
 nullable = false
 
 [tables."auth.service_clients".columns.is_active]
 type = "boolean"
-description = ""
+description = "Boolean indicating client activation status"
 nullable = false
 
 [tables."auth.service_clients".columns.last_used_at]
 type = "timestamp with time zone"
-description = ""
+description = "Timestamp of last client usage"
 nullable = true
 
 [tables."auth.service_clients".columns.created_at]
 type = "timestamp with time zone"
-description = ""
+description = "Timestamp of client creation"
 nullable = false
 
 [tables."auth.service_clients".columns.updated_at]
 type = "timestamp with time zone"
-description = ""
+description = "Timestamp of last client update"
 nullable = false
 
 [tables."auth.service_clients".columns.created_by]
 type = "character varying"
-description = ""
+description = "User who created the client"
 nullable = true
 
 [tables."auth.service_clients".columns.updated_by]
 type = "character varying"
-description = ""
+description = "User who last modified the client"
 nullable = true
 
 [tables."auth.user_custom_roles"]
 kind = "table"
-description = ""
+description = "auth.user_custom_roles tracks custom roles assigned to users within specific organizations. It includes the user's ID, the role ID, the organization ID, and the product context in which the role is applied. The table also records the timestamp of when the role was created and the user who created it. This table is used to manage and look up user roles in different products and organizations."
 
 [tables."auth.user_custom_roles".columns.id]
 type = "uuid"
-description = ""
+description = "primary key"
 nullable = false
 
 [tables."auth.user_custom_roles".columns.user_id]
 type = "uuid"
-description = ""
+description = "FK to users"
 nullable = false
 
 [tables."auth.user_custom_roles".columns.role_id]
 type = "uuid"
-description = ""
+description = "role_id"
 nullable = false
 
 [tables."auth.user_custom_roles".columns.organisation_id]
 type = "uuid"
-description = ""
+description = "organisation_id"
 nullable = false
 
 [tables."auth.user_custom_roles".columns.product]
 type = "character varying"
-description = ""
+description = "product"
 nullable = false
 
 [tables."auth.user_custom_roles".columns.created_at]
 type = "timestamp with time zone"
-description = ""
+description = "timestamp"
 nullable = false
 
 [tables."auth.user_custom_roles".columns.created_by]
 type = "character varying"
-description = ""
+description = "character varying"
 nullable = true
 
 [tables."auth.user_roles"]
 kind = "table"
-description = ""
+description = "This table tracks user roles and their creation details. It links users to roles via user_id and role_id, storing timestamps for when roles were assigned and by whom. Columns include unique identifiers, role references, and creation metadata."
 
 [tables."auth.user_roles".columns.id]
 type = "uuid"
-description = ""
+description = "Unique identifier for the role assignment"
 nullable = false
 
 [tables."auth.user_roles".columns.user_id]
 type = "uuid"
-description = ""
+description = "FK to users"
 nullable = false
 
 [tables."auth.user_roles".columns.role_id]
 type = "uuid"
-description = ""
+description = "FK to roles"
 nullable = false
 
 [tables."auth.user_roles".columns.created_at]
 type = "timestamp with time zone"
-description = ""
+description = "Timestamp of role assignment"
 nullable = false
 
 [tables."auth.user_roles".columns.created_by]
 type = "character varying"
-description = ""
+description = "User who created the role assignment"
 nullable = true
 
 [tables."auth.users"]
 kind = "table"
-description = ""
+description = "auth.users stores comprehensive information about users, including their email, full name, organization, authentication details, and status. It tracks login attempts, account lock status, and timestamps for creation and updates. This table is used to manage and look up user profiles and authentication status."
 
 [tables."auth.users".columns.id]
 type = "uuid"
-description = ""
+description = "primary key"
 nullable = false
 
 [tables."auth.users".columns.email]
 type = "text"
-description = ""
+description = "email address"
 nullable = false
 
 [tables."auth.users".columns.full_name]
 type = "text"
-description = ""
+description = "user full name"
 nullable = true
 
 [tables."auth.users".columns.organisation_id]
 type = "uuid"
-description = ""
+description = "organisation_id"
 nullable = true
 
 [tables."auth.users".columns.password_hash]
 type = "text"
-description = ""
+description = "hashed password"
 nullable = true
 
 [tables."auth.users".columns.external_id]
 type = "text"
-description = ""
+description = "external identifier"
 nullable = true
 
 [tables."auth.users".columns.auth_provider]
 type = "character varying"
-description = ""
+description = "authentication provider"
 nullable = false
 
 [tables."auth.users".columns.status]
 type = "character varying"
-description = ""
+description = "user status"
 nullable = false
 
 [tables."auth.users".columns.failed_login_attempts]
 type = "integer"
-description = ""
+description = "number of failed attempts"
 nullable = false
 
 [tables."auth.users".columns.locked_until]
 type = "timestamp with time zone"
-description = ""
+description = "lockout until timestamp"
 nullable = true
 
 [tables."auth.users".columns.invite_token_hash]
 type = "character varying"
-description = ""
+description = "invite token hash"
 nullable = true
 
 [tables."auth.users".columns.invite_expires_at]
 type = "timestamp with time zone"
-description = ""
+description = "invite expiration timestamp"
 nullable = true
 
 [tables."auth.users".columns.created_at]
 type = "timestamp with time zone"
-description = ""
+description = "creation timestamp"
 nullable = false
 
 [tables."auth.users".columns.updated_at]
 type = "timestamp with time zone"
-description = ""
+description = "last update timestamp"
 nullable = false
 
 [tables."auth.users".columns.created_by]
 type = "character varying"
-description = ""
+description = "creator user"
 nullable = true
 
 [tables."auth.users".columns.updated_by]
 type = "character varying"
-description = ""
+description = "last updater user"
 nullable = true
 
 [tables."connector_service.connector_alembic_version"]
 kind = "table"
-description = ""
+description = "This table stores the current version number of the Alembic migration schema, used to track database versioning and ensure consistency across deployments."
 
 [tables."connector_service.connector_alembic_version".columns.version_num]
 type = "character varying"
-description = ""
+description = "Current Alembic migration version"
 nullable = false
 
 [tables."connector_service.connectors"]
 kind = "table"
-description = ""
+description = "The connectors table stores integration configurations for external services. It contains details like name, API key, client credentials, and authentication scope. The table links to other tables via connector_id, representing active integrations that manage single-login capabilities, webhooks, and timestamps for creation and updates."
 
 [tables."connector_service.connectors".columns.id]
 type = "integer"
-description = ""
+description = "Primary key identifier for the connector"
 nullable = false
 
 [tables."connector_service.connectors".columns.name]
 type = "character varying"
-description = ""
+description = "Display name of the external service integration"
 nullable = false
 
 [tables."connector_service.connectors".columns.key]
 type = "character varying"
-description = ""
+description = "API key for authenticating with the external service"
 nullable = false
 
 [tables."connector_service.connectors".columns.client_id]
 type = "character varying"
-description = ""
+description = "OAuth client ID for the external service"
 nullable = false
 
 [tables."connector_service.connectors".columns.client_secret]
 type = "character varying"
-description = ""
+description = "OAuth client secret for the external service"
 nullable = false
 
 [tables."connector_service.connectors".columns.scope]
 type = "character varying"
-description = ""
+description = "Permissions granted to the connector for the external service"
 nullable = false
 
 [tables."connector_service.connectors".columns.enables_single_login]
 type = "boolean"
-description = ""
+description = "Boolean flag for single-login capability"
 nullable = false
 
 [tables."connector_service.connectors".columns.webhook_secret_id]
 type = "character varying"
-description = ""
+description = "Secret used for webhook authentication"
 nullable = true
 
 [tables."connector_service.connectors".columns.is_active]
 type = "boolean"
-description = ""
+description = "Status indicating if the connector is currently active"
 nullable = false
 
 [tables."connector_service.connectors".columns.created_at]
 type = "timestamp with time zone"
-description = ""
+description = "Timestamp when the connector was first created"
 nullable = false
 
 [tables."connector_service.connectors".columns.updated_at]
 type = "timestamp with time zone"
-description = ""
+description = "Timestamp when the connector was last modified"
 nullable = false
 
 [tables."connector_service.connectors".columns.created_by]
 type = "character varying"
-description = ""
+description = "User who initiated the connector creation"
 nullable = true
 
 [tables."connector_service.connectors".columns.updated_by]
 type = "character varying"
-description = ""
+description = "User who last modified the connector"
 nullable = true
 
 [tables."connector_service.email_context"]
 kind = "table"
-description = ""
+description = "This table stores email contexts related to connectors, including sender email, content, category, status, and timestamps. It contains columns for unique identifiers, email details, and metadata about the email's receipt and creation. The tenant_id column links to tenant information, and the table is used to track email interactions for connectors."
 
 [tables."connector_service.email_context".columns.id]
 type = "text"
-description = ""
+description = "unique identifier"
 nullable = false
 
 [tables."connector_service.email_context".columns.sender_email]
 type = "character varying"
-description = ""
+description = "sender's email"
 nullable = true
 
 [tables."connector_service.email_context".columns.tenant_id]
 type = "character varying"
-description = ""
+description = "tenant ID"
 nullable = false
 
 [tables."connector_service.email_context".columns.content]
 type = "jsonb"
-description = ""
+description = "email content"
 nullable = true
 
 [tables."connector_service.email_context".columns.category]
 type = "character varying"
-description = ""
+description = "email category"
 nullable = false
 
 [tables."connector_service.email_context".columns.status]
 type = "character varying"
-description = ""
+description = "email status"
 nullable = true
 
 [tables."connector_service.email_context".columns.received_time]
 type = "timestamp with time zone"
-description = ""
+description = "received time"
 nullable = true
 
 [tables."connector_service.email_context".columns.created_at]
 type = "timestamp with time zone"
-description = ""
+description = "created timestamp"
 nullable = false
 
 [tables."connector_service.email_context".columns.updated_at]
 type = "timestamp with time zone"
-description = ""
+description = "updated timestamp"
 nullable = false
 
 [tables."connector_service.email_context".columns.created_by]
 type = "character varying"
-description = ""
+description = "creator"
 nullable = true
 
 [tables."connector_service.email_context".columns.updated_by]
 type = "character varying"
-description = ""
+description = "last updater"
 nullable = true
 
 [tables."connector_service.oauth_state"]
 kind = "table"
-description = ""
+description = "The oauth_state table tracks OAuth session states for connectors. It stores the OAuth state, tenant ID, and expiration details, linking to the connectors table via connector_id. This table manages authentication sessions and their validity periods for external services."
 
 [tables."connector_service.oauth_state".columns.state]
 type = "character varying"
-description = ""
+description = "OAuth session state value for the connector"
 nullable = false
 
 [tables."connector_service.oauth_state".columns.tenant_id]
 type = "character varying"
-description = ""
+description = "Identifier for the tenant using the connector"
 nullable = false
 
 [tables."connector_service.oauth_state".columns.connector_id]
 type = "integer"
-description = ""
+description = "FK to connectors.id"
 nullable = false
 
 [tables."connector_service.oauth_state".columns.expires_at]
 type = "timestamp with time zone"
-description = ""
+description = "Timestamp when the OAuth session expires"
 nullable = false
 
 [tables."connector_service.oauth_state".columns.created_at]
 type = "timestamp with time zone"
-description = ""
+description = "Timestamp when the OAuth state was created"
 nullable = false
 
 [tables."connector_service.oauth_state".columns.updated_at]
 type = "timestamp with time zone"
-description = ""
+description = "Timestamp when the OAuth state was last modified"
 nullable = false
 
 [tables."connector_service.oauth_state".columns.created_by]
 type = "character varying"
-description = ""
+description = "User who initiated the OAuth state creation"
 nullable = true
 
 [tables."connector_service.oauth_state".columns.updated_by]
 type = "character varying"
-description = ""
+description = "User who last modified the OAuth state"
 nullable = true
 
 [tables."connector_service.outlook_subscriptions"]
 kind = "table"
-description = ""
+description = "The outlook_subscriptions table tracks folder subscriptions for Microsoft Outlook integrations. It links to the connectors table via connector_id and stores details like folder ID, sync status, and expiration. This table manages real-time changes for email folders and webhooks."
 
 [tables."connector_service.outlook_subscriptions".columns.id]
 type = "integer"
-description = ""
+description = "Primary key identifier for the subscription"
 nullable = false
 
 [tables."connector_service.outlook_subscriptions".columns.tenant_id]
 type = "character varying"
-description = ""
+description = "Identifier for the tenant using the subscription"
 nullable = false
 
 [tables."connector_service.outlook_subscriptions".columns.connector_id]
 type = "integer"
-description = ""
+description = "FK to connectors.id"
 nullable = false
 
 [tables."connector_service.outlook_subscriptions".columns.subscription_id]
 type = "character varying"
-description = ""
+description = "Microsoft Outlook subscription ID"
 nullable = false
 
 [tables."connector_service.outlook_subscriptions".columns.ms_tenant_id]
 type = "character varying"
-description = ""
+description = "Microsoft tenant ID for the subscription"
 nullable = true
 
 [tables."connector_service.outlook_subscriptions".columns.user_id]
 type = "character varying"
-description = ""
+description = "User ID associated with the subscription"
 nullable = true
 
 [tables."connector_service.outlook_subscriptions".columns.user_email]
 type = "character varying"
-description = ""
+description = "Email address of the user"
 nullable = true
 
 [tables."connector_service.outlook_subscriptions".columns.folder_id]
 type = "text"
-description = ""
+description = "Outlook folder ID"
 nullable = true
 
 [tables."connector_service.outlook_subscriptions".columns.folder_name]
 type = "text"
-description = ""
+description = "Name of the Outlook folder"
 nullable = true
 
 [tables."connector_service.outlook_subscriptions".columns.folder_type]
 type = "character varying"
-description = ""
+description = "Type of Outlook folder (e.g., inbox, calendar)"
 nullable = true
 
 [tables."connector_service.outlook_subscriptions".columns.last_synced_at]
 type = "timestamp with time zone"
-description = ""
+description = "Timestamp of the last sync operation"
 nullable = true
 
 [tables."connector_service.outlook_subscriptions".columns.resource]
 type = "text"
-description = ""
+description = "Resource type for the subscription"
 nullable = false
 
 [tables."connector_service.outlook_subscriptions".columns.change_type]
 type = "character varying"
-description = ""
+description = "Type of change (e.g., add, update, delete)"
 nullable = false
 
 [tables."connector_service.outlook_subscriptions".columns.notification_url]
 type = "text"
-description = ""
+description = "Webhook URL for notifications"
 nullable = false
 
 [tables."connector_service.outlook_subscriptions".columns.expires_at]
 type = "timestamp with time zone"
-description = ""
+description = "Timestamp when the subscription expires"
 nullable = false
 
 [tables."connector_service.outlook_subscriptions".columns.is_active]
 type = "boolean"
-description = ""
+description = "Status indicating if the subscription is active"
 nullable = false
 
 [tables."connector_service.outlook_subscriptions".columns.last_webhook_at]
 type = "timestamp with time zone"
-description = ""
+description = "Timestamp of the last webhook event"
 nullable = true
 
 [tables."connector_service.outlook_subscriptions".columns.last_webhook_status]
 type = "character varying"
-description = ""
+description = "Status of the last webhook event"
 nullable = true
 
 [tables."connector_service.outlook_subscriptions".columns.created_at]
 type = "timestamp with time zone"
-description = ""
+description = "Timestamp when the subscription was created"
 nullable = false
 
 [tables."connector_service.outlook_subscriptions".columns.updated_at]
 type = "timestamp with time zone"
-description = ""
+description = "Timestamp when the subscription was last modified"
 nullable = false
 
 [tables."connector_service.outlook_subscriptions".columns.created_by]
 type = "character varying"
-description = ""
+description = "User who initiated the subscription creation"
 nullable = true
 
 [tables."connector_service.outlook_subscriptions".columns.updated_by]
 type = "character varying"
-description = ""
+description = "User who last modified the subscription"
 nullable = true
 
 [tables."connector_service.sync_jobs"]
 kind = "table"
-description = ""
+description = "The sync_jobs table tracks synchronization tasks for connectors. It stores job details like entity type, status, and record counts, linking to the connectors table via connector_id. This table manages data sync operations between systems, tracking success, failure, and error logs."
 
 [tables."connector_service.sync_jobs".columns.id]
 type = "bigint"
-description = ""
+description = "Primary key identifier for the sync job"
 nullable = false
 
 [tables."connector_service.sync_jobs".columns.tenant_id]
 type = "character varying"
-description = ""
+description = "Identifier for the tenant using the job"
 nullable = false
 
 [tables."connector_service.sync_jobs".columns.connector_id]
 type = "integer"
-description = ""
+description = "FK to connectors.id"
 nullable = false
 
 [tables."connector_service.sync_jobs".columns.external_realm_id]
 type = "character varying"
-description = ""
+description = "External realm ID for the sync job"
 nullable = true
 
 [tables."connector_service.sync_jobs".columns.user_email]
 type = "character varying"
-description = ""
+description = "Email address of the user associated with the job"
 nullable = true
 
 [tables."connector_service.sync_jobs".columns.entity_type]
 type = "character varying"
-description = ""
+description = "Type of entity being synced"
 nullable = false
 
 [tables."connector_service.sync_jobs".columns.sync_type]
 type = "character varying"
-description = ""
+description = "Type of synchronization operation"
 nullable = false
 
 [tables."connector_service.sync_jobs".columns.status]
 type = "character varying"
-description = ""
+description = "Current status of the sync job"
 nullable = false
 
 [tables."connector_service.sync_jobs".columns.total_records]
 type = "integer"
-description = ""
+description = "Total number of records to sync"
 nullable = false
 
 [tables."connector_service.sync_jobs".columns.processed_records]
 type = "integer"
-description = ""
+description = "Number of records processed"
 nullable = false
 
 [tables."connector_service.sync_jobs".columns.new_records]
 type = "integer"
-description = ""
+description = "Number of new records created"
 nullable = false
 
 [tables."connector_service.sync_jobs".columns.updated_records]
 type = "integer"
-description = ""
+description = "Number of records updated"
 nullable = false
 
 [tables."connector_service.sync_jobs".columns.failed_records]
 type = "integer"
-description = ""
+description = "Number of failed records"
 nullable = false
 
 [tables."connector_service.sync_jobs".columns.error_message]
 type = "text"
-description = ""
+description = "Error message from the sync job"
 nullable = true
 
 [tables."connector_service.sync_jobs".columns.triggered_by]
 type = "character varying"
-description = ""
+description = "User or system that initiated the job"
 nullable = true
 
 [tables."connector_service.sync_jobs".columns.started_at]
 type = "bigint"
-description = ""
+description = "Timestamp when the job started"
 nullable = true
 
 [tables."connector_service.sync_jobs".columns.completed_at]
 type = "bigint"
-description = ""
+description = "Timestamp when the job completed"
 nullable = true
 
 [tables."connector_service.sync_jobs".columns.created_at]
 type = "timestamp with time zone"
-description = ""
+description = "Timestamp when the job was created"
 nullable = false
 
 [tables."connector_service.sync_jobs".columns.updated_at]
 type = "timestamp with time zone"
-description = ""
+description = "Timestamp when the job was last modified"
 nullable = false
 
 [tables."connector_service.sync_jobs".columns.created_by]
 type = "character varying"
-description = ""
+description = "User who initiated the job creation"
 nullable = true
 
 [tables."connector_service.sync_jobs".columns.updated_by]
 type = "character varying"
-description = ""
+description = "User who last modified the job"
 nullable = true
 
 [tables."connector_service.tenant_connector_auth"]
 kind = "table"
-description = ""
+description = "The tenant_connector_auth table stores authentication tokens for connectors. It links to the connectors table via connector_id and tracks access tokens, refresh tokens, and expiration dates. This table manages OAuth credentials for tenant-level integrations."
 
 [tables."connector_service.tenant_connector_auth".columns.id]
 type = "integer"
-description = ""
+description = "Primary key identifier for the authentication record"
 nullable = false
 
 [tables."connector_service.tenant_connector_auth".columns.tenant_id]
 type = "character varying"
-description = ""
+description = "Identifier for the tenant using the authentication"
 nullable = false
 
 [tables."connector_service.tenant_connector_auth".columns.connector_id]
 type = "integer"
-description = ""
+description = "FK to connectors.id"
 nullable = false
 
 [tables."connector_service.tenant_connector_auth".columns.external_realm_id]
 type = "bigint"
-description = ""
+description = "External realm ID for the authentication"
 nullable = true
 
 [tables."connector_service.tenant_connector_auth".columns.access_token]
 type = "text"
-description = ""
+description = "OAuth access token for the connector"
 nullable = true
 
 [tables."connector_service.tenant_connector_auth".columns.refresh_token]
 type = "text"
-description = ""
+description = "OAuth refresh token for the connector"
 nullable = true
 
 [tables."connector_service.tenant_connector_auth".columns.token_type]
 type = "character varying"
-description = ""
+description = "Type of token (e.g., Bearer)"
 nullable = false
 
 [tables."connector_service.tenant_connector_auth".columns.access_expires_at]
 type = "timestamp with time zone"
-description = ""
+description = "Timestamp when the access token expires"
 nullable = true
 
 [tables."connector_service.tenant_connector_auth".columns.refresh_expires_at]
 type = "timestamp with time zone"
-description = ""
+description = "Timestamp when the refresh token expires"
 nullable = true
 
 [tables."connector_service.tenant_connector_auth".columns.is_active]
 type = "boolean"
-description = ""
+description = "Status indicating if the authentication is active"
 nullable = false
 
 [tables."connector_service.tenant_connector_auth".columns.disconnected_at]
 type = "timestamp with time zone"
-description = ""
+description = "Timestamp when the authentication was disconnected"
 nullable = true
 
 [tables."connector_service.tenant_connector_auth".columns.organization_name]
 type = "character varying"
-description = ""
+description = "Name of the organization associated with the token"
 nullable = true
 
 [tables."connector_service.tenant_connector_auth".columns.last_token_refreshed_at]
 type = "timestamp with time zone"
-description = ""
+description = "Timestamp of the last token refresh"
 nullable = true
 
 [tables."connector_service.tenant_connector_auth".columns.created_at]
 type = "timestamp with time zone"
-description = ""
+description = "Timestamp when the authentication was created"
 nullable = false
 
 [tables."connector_service.tenant_connector_auth".columns.updated_at]
 type = "timestamp with time zone"
-description = ""
+description = "Timestamp when the authentication was last modified"
 nullable = false
 
 [tables."connector_service.tenant_connector_auth".columns.created_by]
 type = "character varying"
-description = ""
+description = "User who initiated the authentication creation"
 nullable = true
 
 [tables."connector_service.tenant_connector_auth".columns.updated_by]
 type = "character varying"
-description = ""
+description = "User who last modified the authentication"
 nullable = true
 
 [tables."finopsiq.alembic_version_finopsiq"]
 kind = "table"
-description = ""
+description = "This table tracks the version of the database schema for Alembic migrations. It contains a single column, version_num, which stores the version number of the database schema."
 
 [tables."finopsiq.alembic_version_finopsiq".columns.version_num]
 type = "character varying"
-description = ""
+description = "Alembic version number"
 nullable = false
 
 [tables."finopsiq.contracts"]
 kind = "table"
-description = ""
+description = "This table stores detailed information about contracts, including contract details, dates, amounts, and relationships with customers and files. It includes columns for contract identifiers, document metadata, financial terms, and links to customer and file records. The customer_id and file_id columns connect to the customers and genbooks_file_metadata tables, respectively."
 
 [tables."finopsiq.contracts".columns.contract_id]
 type = "uuid"
-description = ""
+description = "contract ID"
 nullable = false
 
 [tables."finopsiq.contracts".columns.request_for_proposal_number]
 type = "character varying"
-description = ""
+description = "RFP number"
 nullable = true
 
 [tables."finopsiq.contracts".columns.original_file_name]
 type = "character varying"
-description = ""
+description = "original file name"
 nullable = true
 
 [tables."finopsiq.contracts".columns.purchasing_contact_name_or_department]
 type = "character varying"
-description = ""
+description = "purchasing contact"
 nullable = true
 
 [tables."finopsiq.contracts".columns.official_document_title]
 type = "character varying"
-description = ""
+description = "official title"
 nullable = false
 
 [tables."finopsiq.contracts".columns.assigned_contract_number]
 type = "character varying"
-description = ""
+description = "contract number"
 nullable = true
 
 [tables."finopsiq.contracts".columns.agreement_signed_date]
 type = "date"
-description = ""
+description = "signed date"
 nullable = true
 
 [tables."finopsiq.contracts".columns.start_date]
 type = "date"
-description = ""
+description = "start date"
 nullable = true
 
 [tables."finopsiq.contracts".columns.start_date_description_text]
 type = "text"
-description = ""
+description = "start date description"
 nullable = true
 
 [tables."finopsiq.contracts".columns.expiry_date]
 type = "date"
-description = ""
+description = "expiry date"
 nullable = true
 
 [tables."finopsiq.contracts".columns.term_in_months]
 type = "integer"
-description = ""
+description = "term in months"
 nullable = false
 
 [tables."finopsiq.contracts".columns.overall_contract_term_description]
 type = "text"
-description = ""
+description = "term description"
 nullable = true
 
 [tables."finopsiq.contracts".columns.renewal_term_description]
 type = "text"
-description = ""
+description = "renewal term"
 nullable = true
 
 [tables."finopsiq.contracts".columns.termination_notice_period_description]
 type = "text"
-description = ""
+description = "notice period"
 nullable = true
 
 [tables."finopsiq.contracts".columns.total_contract_amount_value]
 type = "numeric"
-description = ""
+description = "total amount"
 nullable = true
 
 [tables."finopsiq.contracts".columns.total_contract_amount_derivation_info]
 type = "jsonb"
-description = ""
+description = "derivation info"
 nullable = true
 
 [tables."finopsiq.contracts".columns.renewal_contract_amount_value]
 type = "numeric"
-description = ""
+description = "renewal amount"
 nullable = true
 
 [tables."finopsiq.contracts".columns.initial_annual_fee_value]
 type = "numeric"
-description = ""
+description = "annual fee"
 nullable = true
 
 [tables."finopsiq.contracts".columns.price_escalation_terms_description]
 type = "text"
-description = ""
+description = "escalation terms"
 nullable = true
 
 [tables."finopsiq.contracts".columns.payment_terms_description]
 type = "text"
-description = ""
+description = "payment terms"
 nullable = true
 
 [tables."finopsiq.contracts".columns.tenant_id]
 type = "uuid"
-description = ""
+description = "tenant ID"
 nullable = false
 
 [tables."finopsiq.contracts".columns.vendor_id]
 type = "uuid"
-description = ""
+description = "vendor ID"
 nullable = true
 
 [tables."finopsiq.contracts".columns.customer_id]
 type = "uuid"
-description = ""
+description = "FK to customers"
 nullable = true
 
 [tables."finopsiq.contracts".columns.invoice_id]
 type = "uuid"
-description = ""
+description = "invoice ID"
 nullable = true
 
 [tables."finopsiq.contracts".columns.source]
 type = "character varying"
-description = ""
+description = "source"
 nullable = true
 
 [tables."finopsiq.contracts".columns.internet_message_id]
 type = "character varying"
-description = ""
+description = "message ID"
 nullable = true
 
 [tables."finopsiq.contracts".columns.file_id]
 type = "uuid"
-description = ""
+description = "FK to genbooks_file_metadata"
 nullable = true
 
 [tables."finopsiq.contracts".columns.contract_intelligence]
@@ -1579,722 +1579,722 @@ nullable = true
 
 [tables."finopsiq.contracts".columns.is_deleted]
 type = "boolean"
-description = ""
+description = "deleted flag"
 nullable = false
 
 [tables."finopsiq.contracts".columns.deleted_at]
 type = "timestamp with time zone"
-description = ""
+description = "deletion time"
 nullable = true
 
 [tables."finopsiq.contracts".columns.created_at]
 type = "timestamp with time zone"
-description = ""
+description = "created timestamp"
 nullable = false
 
 [tables."finopsiq.contracts".columns.updated_at]
 type = "timestamp with time zone"
-description = ""
+description = "updated timestamp"
 nullable = false
 
 [tables."finopsiq.contracts".columns.created_by]
 type = "character varying"
-description = ""
+description = "creator"
 nullable = true
 
 [tables."finopsiq.contracts".columns.updated_by]
 type = "character varying"
-description = ""
+description = "last updater"
 nullable = true
 
 [tables."finopsiq.currency_rates"]
 kind = "table"
-description = ""
+description = "This table stores currency exchange rates, including USD rates, sources, and timestamps for updates and creation. It is used to look up currency values for financial calculations and tracking rate changes."
 
 [tables."finopsiq.currency_rates".columns.currency]
 type = "character varying"
-description = ""
+description = "Currency code"
 nullable = false
 
 [tables."finopsiq.currency_rates".columns.usd_rate]
 type = "numeric"
-description = ""
+description = "USD exchange rate"
 nullable = false
 
 [tables."finopsiq.currency_rates".columns.source]
 type = "character varying"
-description = ""
+description = "Data source"
 nullable = false
 
 [tables."finopsiq.currency_rates".columns.updated_at]
 type = "timestamp with time zone"
-description = ""
+description = "Last update timestamp"
 nullable = false
 
 [tables."finopsiq.currency_rates".columns.created_at]
 type = "timestamp with time zone"
-description = ""
+description = "Creation timestamp"
 nullable = false
 
 [tables."finopsiq.currency_rates".columns.rate_date]
 type = "date"
-description = ""
+description = "Rate validity date"
 nullable = false
 
 [tables."finopsiq.customers"]
 kind = "table"
-description = ""
+description = "This table stores customer information, including contact details, addresses, balance, and status. It includes columns for customer identifiers, tenant information, and links to contracts. The customer_id column connects to the contracts table, and the table is used to manage customer records across tenants and systems."
 
 [tables."finopsiq.customers".columns.customer_id]
 type = "uuid"
-description = ""
+description = "FK to contracts"
 nullable = false
 
 [tables."finopsiq.customers".columns.tenant_id]
 type = "uuid"
-description = ""
+description = "tenant ID"
 nullable = false
 
 [tables."finopsiq.customers".columns.connector_id]
 type = "integer"
-description = ""
+description = "connector ID"
 nullable = true
 
 [tables."finopsiq.customers".columns.external_realm_id]
 type = "bigint"
-description = ""
+description = "external realm ID"
 nullable = true
 
 [tables."finopsiq.customers".columns.external_customer_id]
 type = "bigint"
-description = ""
+description = "external customer ID"
 nullable = true
 
 [tables."finopsiq.customers".columns.source]
 type = "character varying"
-description = ""
+description = "source"
 nullable = true
 
 [tables."finopsiq.customers".columns.title]
 type = "character varying"
-description = ""
+description = "title"
 nullable = true
 
 [tables."finopsiq.customers".columns.given_name]
 type = "character varying"
-description = ""
+description = "given name"
 nullable = true
 
 [tables."finopsiq.customers".columns.middle_name]
 type = "character varying"
-description = ""
+description = "middle name"
 nullable = true
 
 [tables."finopsiq.customers".columns.family_name]
 type = "character varying"
-description = ""
+description = "family name"
 nullable = true
 
 [tables."finopsiq.customers".columns.company_name]
 type = "character varying"
-description = ""
+description = "company name"
 nullable = true
 
 [tables."finopsiq.customers".columns.display_name]
 type = "character varying"
-description = ""
+description = "display name"
 nullable = true
 
 [tables."finopsiq.customers".columns.name]
 type = "character varying"
-description = ""
+description = "name"
 nullable = true
 
 [tables."finopsiq.customers".columns.phone]
 type = "character varying"
-description = ""
+description = "phone"
 nullable = true
 
 [tables."finopsiq.customers".columns.email]
 type = "character varying"
-description = ""
+description = "email"
 nullable = true
 
 [tables."finopsiq.customers".columns.tin]
 type = "character varying"
-description = ""
+description = "tax ID"
 nullable = true
 
 [tables."finopsiq.customers".columns.balance]
 type = "numeric"
-description = ""
+description = "balance"
 nullable = true
 
 [tables."finopsiq.customers".columns.is_active]
 type = "boolean"
-description = ""
+description = "active status"
 nullable = false
 
 [tables."finopsiq.customers".columns.is_taxable]
 type = "boolean"
-description = ""
+description = "taxable status"
 nullable = false
 
 [tables."finopsiq.customers".columns.shipping_address]
 type = "jsonb"
-description = ""
+description = "shipping address"
 nullable = true
 
 [tables."finopsiq.customers".columns.billing_address]
 type = "jsonb"
-description = ""
+description = "billing address"
 nullable = true
 
 [tables."finopsiq.customers".columns.sync_hash]
 type = "character varying"
-description = ""
+description = "sync hash"
 nullable = true
 
 [tables."finopsiq.customers".columns.created_at]
 type = "timestamp with time zone"
-description = ""
+description = "created timestamp"
 nullable = false
 
 [tables."finopsiq.customers".columns.updated_at]
 type = "timestamp with time zone"
-description = ""
+description = "updated timestamp"
 nullable = false
 
 [tables."finopsiq.customers".columns.updated_by]
 type = "character varying"
-description = ""
+description = "last updater"
 nullable = true
 
 [tables."finopsiq.customers".columns.created_by]
 type = "character varying"
-description = ""
+description = "creator"
 nullable = true
 
 [tables."finopsiq.discrepancies_details"]
 kind = "table"
-description = ""
+description = "This table tracks discrepancies in financial data, linking to relevant documents and storing validation details. It is used to identify and resolve discrepancies in invoice processing."
 
 [tables."finopsiq.discrepancies_details".columns.discrepancies_id]
 type = "uuid"
-description = ""
+description = "Unique discrepancy identifier"
 nullable = false
 
 [tables."finopsiq.discrepancies_details".columns.tenant_id]
 type = "uuid"
-description = ""
+description = "Tenant ID"
 nullable = false
 
 [tables."finopsiq.discrepancies_details".columns.match_id]
 type = "uuid"
-description = ""
+description = "FK to relevant_document_details"
 nullable = false
 
 [tables."finopsiq.discrepancies_details".columns.match_type]
 type = "character varying"
-description = ""
+description = "Discrepancy type"
 nullable = false
 
 [tables."finopsiq.discrepancies_details".columns.has_discrepancy]
 type = "boolean"
-description = ""
+description = "Discrepancy presence flag"
 nullable = false
 
 [tables."finopsiq.discrepancies_details".columns.confidence_score]
 type = "numeric"
-description = ""
+description = "Confidence level in discrepancy"
 nullable = false
 
 [tables."finopsiq.discrepancies_details".columns.confidence_breakdown]
 type = "jsonb"
-description = ""
+description = "Detailed confidence analysis"
 nullable = false
 
 [tables."finopsiq.discrepancies_details".columns.comparison_discrepancies_details]
 type = "jsonb"
-description = ""
+description = "Discrepancy comparison data"
 nullable = false
 
 [tables."finopsiq.discrepancies_details".columns.basic_validation_details]
 type = "jsonb"
-description = ""
+description = "Validation results"
 nullable = false
 
 [tables."finopsiq.discrepancies_details".columns.missing_relevant_documents]
 type = "boolean"
-description = ""
+description = "Document absence flag"
 nullable = false
 
 [tables."finopsiq.discrepancies_details".columns.missing_relevant_documents_info]
 type = "jsonb"
-description = ""
+description = "Document info"
 nullable = true
 
 [tables."finopsiq.discrepancies_details".columns.matched_details]
 type = "jsonb"
-description = ""
+description = "Matched data"
 nullable = false
 
 [tables."finopsiq.discrepancies_details".columns.discrepancy_summary]
 type = "jsonb"
-description = ""
+description = "Discrepancy summary"
 nullable = false
 
 [tables."finopsiq.discrepancies_details".columns.processing_metadata]
 type = "jsonb"
-description = ""
+description = "Processing logs"
 nullable = false
 
 [tables."finopsiq.discrepancies_details".columns.enriched_findings]
 type = "jsonb"
-description = ""
+description = "Enhanced findings"
 nullable = true
 
 [tables."finopsiq.discrepancies_details".columns.pre_revalidation_details]
 type = "jsonb"
-description = ""
+description = "Pre-validation data"
 nullable = true
 
 [tables."finopsiq.discrepancies_details".columns.created_by_user_id]
 type = "uuid"
-description = ""
+description = "Creator user ID"
 nullable = true
 
 [tables."finopsiq.discrepancies_details".columns.resolved_by_user_id]
 type = "uuid"
-description = ""
+description = "Resolver user ID"
 nullable = true
 
 [tables."finopsiq.discrepancies_details".columns.created_at]
 type = "timestamp with time zone"
-description = ""
+description = "Creation timestamp"
 nullable = false
 
 [tables."finopsiq.discrepancies_details".columns.updated_at]
 type = "timestamp with time zone"
-description = ""
+description = "Last update timestamp"
 nullable = false
 
 [tables."finopsiq.discrepancies_details".columns.dra_trigger_status]
 type = "character varying"
-description = ""
+description = "DRA status"
 nullable = false
 
 [tables."finopsiq.discrepancies_details".columns.dra_claimed_at]
 type = "timestamp with time zone"
-description = ""
+description = "DRA claim timestamp"
 nullable = true
 
 [tables."finopsiq.discrepancies_details".columns.dra_completed_at]
 type = "timestamp with time zone"
-description = ""
+description = "DRA completion timestamp"
 nullable = true
 
 [tables."finopsiq.discrepancies_details".columns.dra_attempts]
 type = "integer"
-description = ""
+description = "DRA attempt count"
 nullable = false
 
 [tables."finopsiq.discrepancy_resolution"]
 kind = "table"
-description = ""
+description = "This table tracks resolution of discrepancies, including status, vendor contact details, and resolution notes. It is used to manage and document discrepancy resolution processes."
 
 [tables."finopsiq.discrepancy_resolution".columns.discrepancy_id]
 type = "uuid"
-description = ""
+description = "Discrepancy identifier"
 nullable = true
 
 [tables."finopsiq.discrepancy_resolution".columns.resolution_id]
 type = "uuid"
-description = ""
+description = "Resolution identifier"
 nullable = false
 
 [tables."finopsiq.discrepancy_resolution".columns.match_id]
 type = "uuid"
-description = ""
+description = "FK to relevant_document_details"
 nullable = false
 
 [tables."finopsiq.discrepancy_resolution".columns.invoice_type]
 type = "character varying"
-description = ""
+description = "Invoice type"
 nullable = true
 
 [tables."finopsiq.discrepancy_resolution".columns.discrepancy_type]
 type = "character varying"
-description = ""
+description = "Discrepancy category"
 nullable = false
 
 [tables."finopsiq.discrepancy_resolution".columns.vendor_email]
 type = "character varying"
-description = ""
+description = "Vendor contact email"
 nullable = false
 
 [tables."finopsiq.discrepancy_resolution".columns.finance_admin_id]
 type = "character varying"
-description = ""
+description = "Admin ID"
 nullable = false
 
 [tables."finopsiq.discrepancy_resolution".columns.status]
 type = "character varying"
-description = ""
+description = "Resolution status"
 nullable = false
 
 [tables."finopsiq.discrepancy_resolution".columns.retry_count]
 type = "integer"
-description = ""
+description = "Retry attempts"
 nullable = false
 
 [tables."finopsiq.discrepancy_resolution".columns.trigger_time]
 type = "timestamp with time zone"
-description = ""
+description = "Trigger timestamp"
 nullable = false
 
 [tables."finopsiq.discrepancy_resolution".columns.resolution_time]
 type = "timestamp with time zone"
-description = ""
+description = "Resolution timestamp"
 nullable = true
 
 [tables."finopsiq.discrepancy_resolution".columns.resolution_notes]
 type = "text"
-description = ""
+description = "Notes"
 nullable = true
 
 [tables."finopsiq.discrepancy_resolution".columns.created_at]
 type = "timestamp with time zone"
-description = ""
+description = "Creation timestamp"
 nullable = false
 
 [tables."finopsiq.discrepancy_resolution".columns.updated_at]
 type = "timestamp with time zone"
-description = ""
+description = "Last update timestamp"
 nullable = false
 
 [tables."finopsiq.dra_mailbox_config"]
 kind = "table"
-description = ""
+description = "Stores configuration details for email mailboxes, including address, validation status, and subscription settings. It links to tenants via tenant_id and tracks mailbox validation errors and subscription expiration dates."
 
 [tables."finopsiq.dra_mailbox_config".columns.tenant_id]
 type = "uuid"
-description = ""
+description = "FK to tenant entity"
 nullable = false
 
 [tables."finopsiq.dra_mailbox_config".columns.mailbox_address]
 type = "character varying"
-description = ""
+description = "Email address for the mailbox"
 nullable = true
 
 [tables."finopsiq.dra_mailbox_config".columns.status]
 type = "character varying"
-description = ""
+description = "Validation or subscription status"
 nullable = false
 
 [tables."finopsiq.dra_mailbox_config".columns.validated_at]
 type = "timestamp with time zone"
-description = ""
+description = "When mailbox was validated"
 nullable = true
 
 [tables."finopsiq.dra_mailbox_config".columns.validation_error]
 type = "text"
-description = ""
+description = "Error message from validation"
 nullable = true
 
 [tables."finopsiq.dra_mailbox_config".columns.graph_subscription_id]
 type = "character varying"
-description = ""
+description = "Graph subscription identifier"
 nullable = true
 
 [tables."finopsiq.dra_mailbox_config".columns.graph_subscription_expires_at]
 type = "timestamp with time zone"
-description = ""
+description = "When subscription expires"
 nullable = true
 
 [tables."finopsiq.dra_mailbox_config".columns.created_at]
 type = "timestamp with time zone"
-description = ""
+description = "When configuration was created"
 nullable = false
 
 [tables."finopsiq.dra_mailbox_config".columns.updated_at]
 type = "timestamp with time zone"
-description = ""
+description = "Last update timestamp"
 nullable = false
 
 [tables."finopsiq.dra_mailbox_config".columns.created_by]
 type = "character varying"
-description = ""
+description = "User who created the config"
 nullable = true
 
 [tables."finopsiq.dra_mailbox_config".columns.updated_by]
 type = "character varying"
-description = ""
+description = "User who last updated the config"
 nullable = true
 
 [tables."finopsiq.email_context"]
 kind = "table"
-description = ""
+description = "Captures email context details, including subject, sender, recipients, intent, and extracted references. It links to email_context_link via conversation_id and tracks email processing metadata and timestamps."
 
 [tables."finopsiq.email_context".columns.id]
 type = "uuid"
-description = ""
+description = "Unique identifier for email context"
 nullable = false
 
 [tables."finopsiq.email_context".columns.internet_message_id]
 type = "character varying"
-description = ""
+description = "Email message ID"
 nullable = false
 
 [tables."finopsiq.email_context".columns.tenant_id]
 type = "uuid"
-description = ""
+description = "FK to tenant entity"
 nullable = false
 
 [tables."finopsiq.email_context".columns.conversation_id]
 type = "character varying"
-description = ""
+description = "FK to email_context_link"
 nullable = false
 
 [tables."finopsiq.email_context".columns.subject]
 type = "character varying"
-description = ""
+description = "Email subject line"
 nullable = true
 
 [tables."finopsiq.email_context".columns.sender]
 type = "text"
-description = ""
+description = "Email sender address"
 nullable = false
 
 [tables."finopsiq.email_context".columns.recipients]
 type = "ARRAY"
-description = ""
+description = "Array of recipient addresses"
 nullable = false
 
 [tables."finopsiq.email_context".columns.intent_category]
 type = "text"
-description = ""
+description = "Intent category (e.g., request, inquiry)"
 nullable = false
 
 [tables."finopsiq.email_context".columns.intent_type]
 type = "text"
-description = ""
+description = "Specific intent type"
 nullable = true
 
 [tables."finopsiq.email_context".columns.context_summary]
 type = "text"
-description = ""
+description = "Summary of email content"
 nullable = true
 
 [tables."finopsiq.email_context".columns.extracted_references]
 type = "ARRAY"
-description = ""
+description = "Array of extracted references"
 nullable = true
 
 [tables."finopsiq.email_context".columns.pending_link]
 type = "boolean"
-description = ""
+description = "Flag for pending link status"
 nullable = false
 
 [tables."finopsiq.email_context".columns.received_at]
 type = "timestamp with time zone"
-description = ""
+description = "When email was received"
 nullable = false
 
 [tables."finopsiq.email_context".columns.body_text]
 type = "text"
-description = ""
+description = "Plain text email body"
 nullable = true
 
 [tables."finopsiq.email_context".columns.body_html]
 type = "text"
-description = ""
+description = "HTML email body"
 nullable = true
 
 [tables."finopsiq.email_context".columns.body_tables]
 type = "jsonb"
-description = ""
+description = "JSONB containing tables"
 nullable = true
 
 [tables."finopsiq.email_context".columns.body_cid_refs]
 type = "jsonb"
-description = ""
+description = "JSONB containing CID references"
 nullable = true
 
 [tables."finopsiq.email_context".columns.processed_at]
 type = "timestamp with time zone"
-description = ""
+description = "When email was processed"
 nullable = false
 
 [tables."finopsiq.email_context".columns.created_at]
 type = "timestamp with time zone"
-description = ""
+description = "When context was created"
 nullable = false
 
 [tables."finopsiq.email_context".columns.updated_at]
 type = "timestamp with time zone"
-description = ""
+description = "Last update timestamp"
 nullable = false
 
 [tables."finopsiq.email_context_link"]
 kind = "table"
-description = ""
+description = "Links email contexts to external entities, tracking link type, entity type, and timestamps. It connects email_context to other entities via context_id and links to tenant entities via tenant_id."
 
 [tables."finopsiq.email_context_link".columns.id]
 type = "uuid"
-description = ""
+description = "Unique identifier for link"
 nullable = false
 
 [tables."finopsiq.email_context_link".columns.tenant_id]
 type = "uuid"
-description = ""
+description = "FK to tenant entity"
 nullable = false
 
 [tables."finopsiq.email_context_link".columns.context_id]
 type = "uuid"
-description = ""
+description = "FK to email_context"
 nullable = false
 
 [tables."finopsiq.email_context_link".columns.entity_type]
 type = "text"
-description = ""
+description = "Type of linked entity"
 nullable = false
 
 [tables."finopsiq.email_context_link".columns.entity_id]
 type = "uuid"
-description = ""
+description = "ID of linked entity"
 nullable = false
 
 [tables."finopsiq.email_context_link".columns.linked_by]
 type = "uuid"
-description = ""
+description = "User who created the link"
 nullable = false
 
 [tables."finopsiq.email_context_link".columns.linked_at]
 type = "timestamp with time zone"
-description = ""
+description = "When link was created"
 nullable = false
 
 [tables."finopsiq.email_context_link".columns.link_type]
 type = "text"
-description = ""
+description = "Type of relationship"
 nullable = false
 
 [tables."finopsiq.email_context_link".columns.created_at]
 type = "timestamp with time zone"
-description = ""
+description = "When link was created"
 nullable = false
 
 [tables."finopsiq.email_context_link".columns.updated_at]
 type = "timestamp with time zone"
-description = ""
+description = "Last update timestamp"
 nullable = false
 
 [tables."finopsiq.entity_audit_log"]
 kind = "table"
-description = ""
+description = "This table tracks changes to entities, logging audit entries with unique identifiers, invoice references, and action details. It includes timestamps, user-performed actions, and JSONB fields for changes and metadata, used to monitor entity modifications across tenants."
 
 [tables."finopsiq.entity_audit_log".columns.audit_id]
 type = "uuid"
-description = ""
+description = "unique identifier for audit entry"
 nullable = false
 
 [tables."finopsiq.entity_audit_log".columns.invoice_id]
 type = "uuid"
-description = ""
+description = "links to invoice"
 nullable = false
 
 [tables."finopsiq.entity_audit_log".columns.tenant_id]
 type = "uuid"
-description = ""
+description = "links to tenant"
 nullable = false
 
 [tables."finopsiq.entity_audit_log".columns.action_type]
 type = "character varying"
-description = ""
+description = "type of action"
 nullable = false
 
 [tables."finopsiq.entity_audit_log".columns.performed_by]
 type = "character varying"
-description = ""
+description = "user who performed action"
 nullable = false
 
 [tables."finopsiq.entity_audit_log".columns.performed_by_name]
 type = "character varying"
-description = ""
+description = "name of user"
 nullable = true
 
 [tables."finopsiq.entity_audit_log".columns.summary]
 type = "text"
-description = ""
+description = "summary of action"
 nullable = true
 
 [tables."finopsiq.entity_audit_log".columns.changes]
 type = "jsonb"
-description = ""
+description = "JSONB of changes"
 nullable = false
 
 [tables."finopsiq.entity_audit_log".columns.metadata]
 type = "jsonb"
-description = ""
+description = "JSONB of metadata"
 nullable = true
 
 [tables."finopsiq.entity_audit_log".columns.revision_number]
 type = "integer"
-description = ""
+description = "version number"
 nullable = true
 
 [tables."finopsiq.entity_audit_log".columns.created_at]
 type = "timestamp with time zone"
-description = ""
+description = "timestamp"
 nullable = false
 
 [tables."finopsiq.genbooks_entity_aliases"]
 kind = "table"
-description = ""
+description = "This table stores aliases for entities in GenBooks, linking entities to tenants, raw names, and types. It tracks creation and update timestamps, used to manage entity name variations across tenants."
 
 [tables."finopsiq.genbooks_entity_aliases".columns.id]
 type = "uuid"
-description = ""
+description = "unique identifier"
 nullable = false
 
 [tables."finopsiq.genbooks_entity_aliases".columns.tenant_id]
 type = "uuid"
-description = ""
+description = "links to tenant"
 nullable = false
 
 [tables."finopsiq.genbooks_entity_aliases".columns.raw_name]
 type = "text"
-description = ""
+description = "name of entity"
 nullable = false
 
 [tables."finopsiq.genbooks_entity_aliases".columns.entity_type]
 type = "character varying"
-description = ""
+description = "type of entity"
 nullable = false
 
 [tables."finopsiq.genbooks_entity_aliases".columns.entity_id]
 type = "uuid"
-description = ""
+description = "identifier for entity"
 nullable = false
 
 [tables."finopsiq.genbooks_entity_aliases".columns.created_at]
 type = "timestamp with time zone"
-description = ""
+description = "timestamp"
 nullable = false
 
 [tables."finopsiq.genbooks_entity_aliases".columns.updated_at]
 type = "timestamp with time zone"
-description = ""
+description = "timestamp"
 nullable = false
 
 [tables."finopsiq.genbooks_file_metadata"]
 kind = "table"
-description = ""
+description = "This table stores metadata for files, including original filename, MD5 hash, file size, source, and links to contracts and POs. It includes columns for file identifiers, document metadata, and relationships to other tables. The id column connects to the contracts table, and the table is used to track file processing and storage details."
 
 [tables."finopsiq.genbooks_file_metadata".columns.id]
 type = "uuid"
-description = ""
+description = "FK to contracts"
 nullable = false
 
 [tables."finopsiq.genbooks_file_metadata".columns.session_id]
@@ -2349,32 +2349,32 @@ nullable = true
 
 [tables."finopsiq.genbooks_file_metadata".columns.contract_id]
 type = "uuid"
-description = ""
+description = "contract ID"
 nullable = true
 
 [tables."finopsiq.genbooks_file_metadata".columns.po_id]
 type = "uuid"
-description = ""
+description = "PO ID"
 nullable = true
 
 [tables."finopsiq.genbooks_file_metadata".columns.general_document_id]
 type = "uuid"
-description = ""
+description = "document ID"
 nullable = true
 
 [tables."finopsiq.genbooks_file_metadata".columns.document_type]
 type = "character varying"
-description = ""
+description = "document type"
 nullable = true
 
 [tables."finopsiq.genbooks_file_metadata".columns.error_message]
 type = "text"
-description = ""
+description = "error message"
 nullable = true
 
 [tables."finopsiq.genbooks_file_metadata".columns.extraction_json]
 type = "jsonb"
-description = ""
+description = "extraction JSON"
 nullable = true
 
 [tables."finopsiq.genbooks_file_metadata".columns.file_name]
@@ -2409,7 +2409,7 @@ nullable = true
 
 [tables."finopsiq.genbooks_file_metadata".columns.storage_path]
 type = "character varying"
-description = ""
+description = "storage path"
 nullable = true
 
 [tables."finopsiq.genbooks_file_metadata".columns.storage_provider]
@@ -2419,7 +2419,7 @@ nullable = true
 
 [tables."finopsiq.genbooks_file_metadata".columns.cache_name]
 type = "character varying"
-description = ""
+description = "cache name"
 nullable = true
 
 [tables."finopsiq.genbooks_file_metadata".columns.internet_message_id]
@@ -2429,57 +2429,57 @@ nullable = true
 
 [tables."finopsiq.genbooks_file_metadata".columns.attachment_id]
 type = "character varying"
-description = ""
+description = "attachment ID"
 nullable = true
 
 [tables."finopsiq.genbooks_file_metadata".columns.attachment_kind]
 type = "character varying"
-description = ""
+description = "attachment type"
 nullable = true
 
 [tables."finopsiq.genbooks_file_metadata".columns.attempts]
 type = "integer"
-description = ""
+description = "attempts"
 nullable = false
 
 [tables."finopsiq.genbooks_file_metadata".columns.max_attempts]
 type = "integer"
-description = ""
+description = "max attempts"
 nullable = false
 
 [tables."finopsiq.genbooks_file_metadata".columns.next_retry_at]
 type = "timestamp with time zone"
-description = ""
+description = "next retry time"
 nullable = true
 
 [tables."finopsiq.genbooks_file_metadata".columns.locked_by]
 type = "character varying"
-description = ""
+description = "locked by"
 nullable = true
 
 [tables."finopsiq.genbooks_file_metadata".columns.locked_at]
 type = "timestamp with time zone"
-description = ""
+description = "locked time"
 nullable = true
 
 [tables."finopsiq.genbooks_file_metadata".columns.is_deleted]
 type = "boolean"
-description = ""
+description = "deleted flag"
 nullable = false
 
 [tables."finopsiq.genbooks_file_metadata".columns.deleted_at]
 type = "timestamp with time zone"
-description = ""
+description = "deletion time"
 nullable = true
 
 [tables."finopsiq.genbooks_file_metadata".columns.created_at]
 type = "timestamp with time zone"
-description = ""
+description = "created timestamp"
 nullable = false
 
 [tables."finopsiq.genbooks_file_metadata".columns.updated_at]
 type = "timestamp with time zone"
-description = ""
+description = "updated timestamp"
 nullable = false
 
 [tables."finopsiq.genbooks_file_metadata".columns.reprocess_attempts]
@@ -2504,1875 +2504,1875 @@ nullable = true
 
 [tables."finopsiq.genbooks_requests"]
 kind = "table"
-description = ""
+description = "This table tracks GenBooks invoice requests, linking to documents and storing status and error details. It is used to manage invoice processing and track discrepancies."
 
 [tables."finopsiq.genbooks_requests".columns.request_id]
 type = "uuid"
-description = ""
+description = "Request identifier"
 nullable = false
 
 [tables."finopsiq.genbooks_requests".columns.invoice_id]
 type = "uuid"
-description = ""
+description = "Invoice identifier"
 nullable = false
 
 [tables."finopsiq.genbooks_requests".columns.tenant_id]
 type = "uuid"
-description = ""
+description = "Tenant ID"
 nullable = false
 
 [tables."finopsiq.genbooks_requests".columns.file_urls]
 type = "jsonb"
-description = ""
+description = "Document URLs"
 nullable = true
 
 [tables."finopsiq.genbooks_requests".columns.status]
 type = "character varying"
-description = ""
+description = "Request status"
 nullable = false
 
 [tables."finopsiq.genbooks_requests".columns.match_id]
 type = "uuid"
-description = ""
+description = "FK to relevant_document_details"
 nullable = true
 
 [tables."finopsiq.genbooks_requests".columns.discrepancies_id]
 type = "uuid"
-description = ""
+description = "FK to discrepancies_details"
 nullable = true
 
 [tables."finopsiq.genbooks_requests".columns.channel]
 type = "character varying"
-description = ""
+description = "Request channel"
 nullable = false
 
 [tables."finopsiq.genbooks_requests".columns.agent_updated]
 type = "character varying"
-description = ""
+description = "Agent update status"
 nullable = true
 
 [tables."finopsiq.genbooks_requests".columns.error_message]
 type = "text"
-description = ""
+description = "Error details"
 nullable = true
 
 [tables."finopsiq.genbooks_requests".columns.invoice_type]
 type = "character varying"
-description = ""
+description = "Invoice type"
 nullable = true
 
 [tables."finopsiq.genbooks_requests".columns.ar_status]
 type = "character varying"
-description = ""
+description = "Accounts receivable status"
 nullable = true
 
 [tables."finopsiq.genbooks_requests".columns.status_reason]
 type = "text"
-description = ""
+description = "Status explanation"
 nullable = true
 
 [tables."finopsiq.genbooks_requests".columns.is_deleted]
 type = "boolean"
-description = ""
+description = "Deletion flag"
 nullable = false
 
 [tables."finopsiq.genbooks_requests".columns.deleted_at]
 type = "timestamp with time zone"
-description = ""
+description = "Deletion timestamp"
 nullable = true
 
 [tables."finopsiq.genbooks_requests".columns.created_at]
 type = "timestamp with time zone"
-description = ""
+description = "Creation timestamp"
 nullable = false
 
 [tables."finopsiq.genbooks_requests".columns.updated_at]
 type = "timestamp with time zone"
-description = ""
+description = "Last update timestamp"
 nullable = false
 
 [tables."finopsiq.general_documents"]
 kind = "table"
-description = ""
+description = "This table stores general documents, including invoices and purchase orders, with metadata like file names, source, and classification. It links to vendors and customers via foreign keys and contains extracted data and document type information."
 
 [tables."finopsiq.general_documents".columns.general_document_id]
 type = "uuid"
-description = ""
+description = "Unique identifier for the document"
 nullable = false
 
 [tables."finopsiq.general_documents".columns.tenant_id]
 type = "uuid"
-description = ""
+description = "FK to tenants"
 nullable = false
 
 [tables."finopsiq.general_documents".columns.file_id]
 type = "uuid"
-description = ""
+description = "FK to files"
 nullable = true
 
 [tables."finopsiq.general_documents".columns.original_file_name]
 type = "character varying"
-description = ""
+description = "Name of the original document file"
 nullable = true
 
 [tables."finopsiq.general_documents".columns.source]
 type = "character varying"
-description = ""
+description = "Source of the document"
 nullable = true
 
 [tables."finopsiq.general_documents".columns.internet_message_id]
 type = "character varying"
-description = ""
+description = "Message ID for email tracking"
 nullable = true
 
 [tables."finopsiq.general_documents".columns.document_subtype]
 type = "character varying"
-description = ""
+description = "Document subtype (e.g., invoice)"
 nullable = true
 
 [tables."finopsiq.general_documents".columns.classification_confidence]
 type = "numeric"
-description = ""
+description = "Confidence level in classification"
 nullable = true
 
 [tables."finopsiq.general_documents".columns.extracted_data]
 type = "jsonb"
-description = ""
+description = "JSONB field for extracted data"
 nullable = true
 
 [tables."finopsiq.general_documents".columns.invoice_number_refs]
 type = "ARRAY"
-description = ""
+description = "Array of invoice numbers"
 nullable = true
 
 [tables."finopsiq.general_documents".columns.sync_hash]
 type = "character varying"
-description = ""
+description = "Sync hash for data consistency"
 nullable = true
 
 [tables."finopsiq.general_documents".columns.document_type]
 type = "character varying"
-description = ""
+description = "Type of document"
 nullable = true
 
 [tables."finopsiq.general_documents".columns.vendor_id]
 type = "uuid"
-description = ""
+description = "FK to vendors"
 nullable = true
 
 [tables."finopsiq.general_documents".columns.customer_id]
 type = "uuid"
-description = ""
+description = "FK to customers"
 nullable = true
 
 [tables."finopsiq.general_documents".columns.is_deleted]
 type = "boolean"
-description = ""
+description = "Deletion flag"
 nullable = false
 
 [tables."finopsiq.general_documents".columns.deleted_at]
 type = "timestamp with time zone"
-description = ""
+description = "Timestamp of deletion"
 nullable = true
 
 [tables."finopsiq.general_documents".columns.created_at]
 type = "timestamp with time zone"
-description = ""
+description = "Creation timestamp"
 nullable = false
 
 [tables."finopsiq.general_documents".columns.updated_at]
 type = "timestamp with time zone"
-description = ""
+description = "Last update timestamp"
 nullable = false
 
 [tables."finopsiq.general_documents".columns.created_by]
 type = "character varying"
-description = ""
+description = "Creator user ID"
 nullable = true
 
 [tables."finopsiq.general_documents".columns.updated_by]
 type = "character varying"
-description = ""
+description = "Last updater user ID"
 nullable = true
 
 [tables."finopsiq.ignored_discrepancies"]
 kind = "table"
-description = ""
+description = "This table records discrepancies that are ignored, storing details like vendor, invoice, discrepancy ID, and severity. It tracks timestamps, user IDs, and reasons for ignoring discrepancies across tenants."
 
 [tables."finopsiq.ignored_discrepancies".columns.ignored_discrepancy_id]
 type = "uuid"
-description = ""
+description = "unique identifier"
 nullable = false
 
 [tables."finopsiq.ignored_discrepancies".columns.tenant_id]
 type = "uuid"
-description = ""
+description = "links to tenant"
 nullable = false
 
 [tables."finopsiq.ignored_discrepancies".columns.vendor_id]
 type = "uuid"
-description = ""
+description = "links to vendor"
 nullable = false
 
 [tables."finopsiq.ignored_discrepancies".columns.invoice_id]
 type = "uuid"
-description = ""
+description = "links to invoice"
 nullable = false
 
 [tables."finopsiq.ignored_discrepancies".columns.discrepancy_id]
 type = "character varying"
-description = ""
+description = "ID of discrepancy"
 nullable = true
 
 [tables."finopsiq.ignored_discrepancies".columns.discrepancy_uid]
 type = "character varying"
-description = ""
+description = "unique identifier for discrepancy"
 nullable = true
 
 [tables."finopsiq.ignored_discrepancies".columns.item_key]
 type = "character varying"
-description = ""
+description = "key for item"
 nullable = true
 
 [tables."finopsiq.ignored_discrepancies".columns.discrepancy_type]
 type = "character varying"
-description = ""
+description = "type of discrepancy"
 nullable = false
 
 [tables."finopsiq.ignored_discrepancies".columns.check_name]
 type = "character varying"
-description = ""
+description = "name of check"
 nullable = true
 
 [tables."finopsiq.ignored_discrepancies".columns.severity]
 type = "character varying"
-description = ""
+description = "severity level"
 nullable = true
 
 [tables."finopsiq.ignored_discrepancies".columns.message]
 type = "text"
-description = ""
+description = "message text"
 nullable = true
 
 [tables."finopsiq.ignored_discrepancies".columns.group_id]
 type = "character varying"
-description = ""
+description = "identifier for group"
 nullable = true
 
 [tables."finopsiq.ignored_discrepancies".columns.group_reason]
 type = "text"
-description = ""
+description = "reason for group"
 nullable = true
 
 [tables."finopsiq.ignored_discrepancies".columns.is_future_rule]
 type = "boolean"
-description = ""
+description = "boolean flag"
 nullable = false
 
 [tables."finopsiq.ignored_discrepancies".columns.effective_from]
 type = "timestamp with time zone"
-description = ""
+description = "timestamp"
 nullable = true
 
 [tables."finopsiq.ignored_discrepancies".columns.restored_invoice_ids]
 type = "jsonb"
-description = ""
+description = "JSONB of restored invoices"
 nullable = true
 
 [tables."finopsiq.ignored_discrepancies".columns.ignored_by_user_id]
 type = "uuid"
-description = ""
+description = "user ID"
 nullable = false
 
 [tables."finopsiq.ignored_discrepancies".columns.is_active]
 type = "boolean"
-description = ""
+description = "boolean flag"
 nullable = false
 
 [tables."finopsiq.ignored_discrepancies".columns.created_at]
 type = "timestamp with time zone"
-description = ""
+description = "timestamp"
 nullable = false
 
 [tables."finopsiq.invoice_document_links"]
 kind = "table"
-description = ""
+description = "This table links invoices to other documents like purchase orders or general documents via foreign keys. It tracks relationships between documents, including the source and target document IDs, and provides metadata for document linking."
 
 [tables."finopsiq.invoice_document_links".columns.link_id]
 type = "uuid"
-description = ""
+description = "Unique identifier for the link"
 nullable = false
 
 [tables."finopsiq.invoice_document_links".columns.tenant_id]
 type = "uuid"
-description = ""
+description = "FK to tenants"
 nullable = false
 
 [tables."finopsiq.invoice_document_links".columns.source_document_type]
 type = "character varying"
-description = ""
+description = "Type of source document"
 nullable = false
 
 [tables."finopsiq.invoice_document_links".columns.source_document_id]
 type = "uuid"
-description = ""
+description = "FK to invoices"
 nullable = false
 
 [tables."finopsiq.invoice_document_links".columns.target_document_type]
 type = "character varying"
-description = ""
+description = "Type of target document"
 nullable = false
 
 [tables."finopsiq.invoice_document_links".columns.target_po_id]
 type = "uuid"
-description = ""
+description = "FK to purchase orders"
 nullable = true
 
 [tables."finopsiq.invoice_document_links".columns.target_contract_id]
 type = "uuid"
-description = ""
+description = "FK to contracts"
 nullable = true
 
 [tables."finopsiq.invoice_document_links".columns.target_general_document_id]
 type = "uuid"
-description = ""
+description = "FK to general documents"
 nullable = true
 
 [tables."finopsiq.invoice_document_links".columns.linked_by]
 type = "character varying"
-description = ""
+description = "User who created the link"
 nullable = true
 
 [tables."finopsiq.invoice_document_links".columns.relationship_role]
 type = "character varying"
-description = ""
+description = "Role in the relationship"
 nullable = false
 
 [tables."finopsiq.invoice_document_links".columns.created_at]
 type = "timestamp with time zone"
-description = ""
+description = "Creation timestamp"
 nullable = false
 
 [tables."finopsiq.invoice_document_links".columns.updated_at]
 type = "timestamp with time zone"
-description = ""
+description = "Last update timestamp"
 nullable = false
 
 [tables."finopsiq.invoice_line_items"]
 kind = "table"
-description = ""
+description = "This table tracks individual line items of invoices, capturing details like product information, quantity, unit price, and tax data. It includes columns for invoice_id, product_id, customer_id, and timestamps for creation and updates. The product_id references the products table, and customer_id links to a customer table not in this batch. It is used to look up invoice line item details and manage billable status and discounts."
 
 [tables."finopsiq.invoice_line_items".columns.invoice_line_item_id]
 type = "uuid"
-description = ""
+description = "Primary key for invoice line items"
 nullable = false
 
 [tables."finopsiq.invoice_line_items".columns.invoice_id]
 type = "uuid"
-description = ""
+description = "FK to invoices"
 nullable = false
 
 [tables."finopsiq.invoice_line_items".columns.tenant_id]
 type = "uuid"
-description = ""
+description = "FK to tenants"
 nullable = false
 
 [tables."finopsiq.invoice_line_items".columns.po_line_item_id]
 type = "uuid"
-description = ""
+description = "FK to po_line_items"
 nullable = true
 
 [tables."finopsiq.invoice_line_items".columns.external_line_item_id]
 type = "bigint"
-description = ""
+description = "External line item ID"
 nullable = true
 
 [tables."finopsiq.invoice_line_items".columns.line_number]
 type = "integer"
-description = ""
+description = "Line number"
 nullable = true
 
 [tables."finopsiq.invoice_line_items".columns.line_item_type]
 type = "character varying"
-description = ""
+description = "Line item type"
 nullable = true
 
 [tables."finopsiq.invoice_line_items".columns.product_id]
 type = "integer"
-description = ""
+description = "FK to products"
 nullable = true
 
 [tables."finopsiq.invoice_line_items".columns.billable_status]
 type = "character varying"
-description = ""
+description = "Billable status"
 nullable = true
 
 [tables."finopsiq.invoice_line_items".columns.description]
 type = "text"
-description = ""
+description = "Description"
 nullable = true
 
 [tables."finopsiq.invoice_line_items".columns.item_name]
 type = "text"
-description = ""
+description = "Item name"
 nullable = true
 
 [tables."finopsiq.invoice_line_items".columns.quantity_text]
 type = "character varying"
-description = ""
+description = "Quantity text"
 nullable = true
 
 [tables."finopsiq.invoice_line_items".columns.quantity]
 type = "numeric"
-description = ""
+description = "Quantity"
 nullable = true
 
 [tables."finopsiq.invoice_line_items".columns.quantity_unit]
 type = "character varying"
-description = ""
+description = "Quantity unit"
 nullable = true
 
 [tables."finopsiq.invoice_line_items".columns.unit_price_text]
 type = "character varying"
-description = ""
+description = "Unit price text"
 nullable = true
 
 [tables."finopsiq.invoice_line_items".columns.unit_price]
 type = "numeric"
-description = ""
+description = "Unit price"
 nullable = true
 
 [tables."finopsiq.invoice_line_items".columns.unit_price_unit]
 type = "character varying"
-description = ""
+description = "Unit price unit"
 nullable = true
 
 [tables."finopsiq.invoice_line_items".columns.line_total]
 type = "numeric"
-description = ""
+description = "Line total"
 nullable = true
 
 [tables."finopsiq.invoice_line_items".columns.discount_type]
 type = "character varying"
-description = ""
+description = "Discount type"
 nullable = true
 
 [tables."finopsiq.invoice_line_items".columns.discount_amount]
 type = "numeric"
-description = ""
+description = "Discount amount"
 nullable = true
 
 [tables."finopsiq.invoice_line_items".columns.discount_percentage]
 type = "numeric"
-description = ""
+description = "Discount percentage"
 nullable = true
 
 [tables."finopsiq.invoice_line_items".columns.apply_tax_after_discount]
 type = "boolean"
-description = ""
+description = "Tax applied after discount"
 nullable = false
 
 [tables."finopsiq.invoice_line_items".columns.taxes]
 type = "jsonb"
-description = ""
+description = "Taxes data"
 nullable = true
 
 [tables."finopsiq.invoice_line_items".columns.customer_id]
 type = "uuid"
-description = ""
+description = "FK to customers"
 nullable = true
 
 [tables."finopsiq.invoice_line_items".columns.customer_name]
 type = "character varying"
-description = ""
+description = "Customer name"
 nullable = true
 
 [tables."finopsiq.invoice_line_items".columns.created_at]
 type = "timestamp with time zone"
-description = ""
+description = "Creation time"
 nullable = false
 
 [tables."finopsiq.invoice_line_items".columns.updated_at]
 type = "timestamp with time zone"
-description = ""
+description = "Last updated time"
 nullable = false
 
 [tables."finopsiq.invoice_reminder_state"]
 kind = "table"
-description = ""
+description = "This table tracks the state of invoice reminders, including status, next reminder times, customer details, and financial information. It logs timestamps for creation, updates, and alerts, used to manage reminder workflows."
 
 [tables."finopsiq.invoice_reminder_state".columns.invoice_id]
 type = "uuid"
-description = ""
+description = "links to invoice"
 nullable = false
 
 [tables."finopsiq.invoice_reminder_state".columns.tenant_id]
 type = "uuid"
-description = ""
+description = "links to tenant"
 nullable = false
 
 [tables."finopsiq.invoice_reminder_state".columns.status]
 type = "character varying"
-description = ""
+description = "current status"
 nullable = false
 
 [tables."finopsiq.invoice_reminder_state".columns.next_reminder_at]
 type = "timestamp with time zone"
-description = ""
+description = "next reminder time"
 nullable = true
 
 [tables."finopsiq.invoice_reminder_state".columns.next_level]
 type = "smallint"
-description = ""
+description = "level of reminder"
 nullable = false
 
 [tables."finopsiq.invoice_reminder_state".columns.customer_email]
 type = "character varying"
-description = ""
+description = "customer email"
 nullable = true
 
 [tables."finopsiq.invoice_reminder_state".columns.customer_name]
 type = "character varying"
-description = ""
+description = "customer name"
 nullable = true
 
 [tables."finopsiq.invoice_reminder_state".columns.invoice_number]
 type = "character varying"
-description = ""
+description = "invoice number"
 nullable = true
 
 [tables."finopsiq.invoice_reminder_state".columns.total_amount]
 type = "numeric"
-description = ""
+description = "total amount"
 nullable = true
 
 [tables."finopsiq.invoice_reminder_state".columns.amount_paid]
 type = "numeric"
-description = ""
+description = "amount paid"
 nullable = false
 
 [tables."finopsiq.invoice_reminder_state".columns.amount_due]
 type = "numeric"
-description = ""
+description = "amount due"
 nullable = true
 
 [tables."finopsiq.invoice_reminder_state".columns.due_date]
 type = "timestamp with time zone"
-description = ""
+description = "due date"
 nullable = true
 
 [tables."finopsiq.invoice_reminder_state".columns.currency]
 type = "character varying"
-description = ""
+description = "currency type"
 nullable = true
 
 [tables."finopsiq.invoice_reminder_state".columns.last_payment_at]
 type = "timestamp with time zone"
-description = ""
+description = "last payment time"
 nullable = true
 
 [tables."finopsiq.invoice_reminder_state".columns.invoice_json]
 type = "jsonb"
-description = ""
+description = "JSONB of invoice"
 nullable = true
 
 [tables."finopsiq.invoice_reminder_state".columns.created_at]
 type = "timestamp with time zone"
-description = ""
+description = "timestamp"
 nullable = false
 
 [tables."finopsiq.invoice_reminder_state".columns.updated_at]
 type = "timestamp with time zone"
-description = ""
+description = "timestamp"
 nullable = false
 
 [tables."finopsiq.invoice_reminder_state".columns.max_reached_at]
 type = "timestamp with time zone"
-description = ""
+description = "timestamp"
 nullable = true
 
 [tables."finopsiq.invoice_reminder_state".columns.admin_alert_sent_at]
 type = "timestamp with time zone"
-description = ""
+description = "timestamp"
 nullable = true
 
 [tables."finopsiq.invoice_revisions"]
 kind = "table"
-description = ""
+description = "This table tracks revisions of invoices, storing metadata like revision numbers, file IDs, and edit sources. It links to the invoices table via invoice_id and includes timestamps for creation and updates. Used to manage historical changes to invoice data."
 
 [tables."finopsiq.invoice_revisions".columns.revision_id]
 type = "uuid"
-description = ""
+description = "Primary key for invoice revisions"
 nullable = false
 
 [tables."finopsiq.invoice_revisions".columns.invoice_id]
 type = "uuid"
-description = ""
+description = "FK to invoices"
 nullable = false
 
 [tables."finopsiq.invoice_revisions".columns.revision_number]
 type = "integer"
-description = ""
+description = "Revision number"
 nullable = false
 
 [tables."finopsiq.invoice_revisions".columns.file_id]
 type = "character varying"
-description = ""
+description = "File ID"
 nullable = true
 
 [tables."finopsiq.invoice_revisions".columns.snapshot]
 type = "jsonb"
-description = ""
+description = "Snapshot data"
 nullable = false
 
 [tables."finopsiq.invoice_revisions".columns.edit_source]
 type = "character varying"
-description = ""
+description = "Edit source"
 nullable = true
 
 [tables."finopsiq.invoice_revisions".columns.edited_by]
 type = "character varying"
-description = ""
+description = "Edited by"
 nullable = true
 
 [tables."finopsiq.invoice_revisions".columns.user_acknowledged_risk]
 type = "boolean"
-description = ""
+description = "Risk acknowledged"
 nullable = true
 
 [tables."finopsiq.invoice_revisions".columns.created_at]
 type = "timestamp with time zone"
-description = ""
+description = "Creation time"
 nullable = false
 
 [tables."finopsiq.invoices"]
 kind = "table"
-description = ""
+description = "This table tracks invoice records, containing details like invoice_id, tenant_id, purchase_order_number, and vendor/customer relationships. It includes financial data such as total_amount, currency, and tax information, and links to related documents via foreign keys to vendors, customers, and purchase orders."
 
 [tables."finopsiq.invoices".columns.invoice_id]
 type = "uuid"
-description = ""
+description = "Unique identifier for the invoice"
 nullable = false
 
 [tables."finopsiq.invoices".columns.tenant_id]
 type = "uuid"
-description = ""
+description = "FK to tenants"
 nullable = false
 
 [tables."finopsiq.invoices".columns.purchase_order_number]
 type = "character varying"
-description = ""
+description = "Purchase order number linked to the invoice"
 nullable = true
 
 [tables."finopsiq.invoices".columns.original_file_name]
 type = "character varying"
-description = ""
+description = "Name of the original invoice file"
 nullable = true
 
 [tables."finopsiq.invoices".columns.contract_number]
 type = "character varying"
-description = ""
+description = "Contract number associated with the invoice"
 nullable = true
 
 [tables."finopsiq.invoices".columns.vendor_id]
 type = "uuid"
-description = ""
+description = "FK to vendors"
 nullable = true
 
 [tables."finopsiq.invoices".columns.customer_id]
 type = "uuid"
-description = ""
+description = "FK to customers"
 nullable = true
 
 [tables."finopsiq.invoices".columns.connector_id]
 type = "integer"
-description = ""
+description = "FK to connectors"
 nullable = true
 
 [tables."finopsiq.invoices".columns.external_invoice_id]
 type = "bigint"
-description = ""
+description = "External invoice ID from a system"
 nullable = true
 
 [tables."finopsiq.invoices".columns.external_realm_id]
 type = "bigint"
-description = ""
+description = "External realm ID from a system"
 nullable = true
 
 [tables."finopsiq.invoices".columns.source]
 type = "character varying"
-description = ""
+description = "Source of the invoice data"
 nullable = true
 
 [tables."finopsiq.invoices".columns.internet_message_id]
 type = "character varying"
-description = ""
+description = "Message ID for email tracking"
 nullable = true
 
 [tables."finopsiq.invoices".columns.show_status]
 type = "boolean"
-description = ""
+description = "Status flag for invoice visibility"
 nullable = false
 
 [tables."finopsiq.invoices".columns.invoice_type]
 type = "character varying"
-description = ""
+description = "Type of invoice (e.g., pro forma)"
 nullable = true
 
 [tables."finopsiq.invoices".columns.status]
 type = "character varying"
-description = ""
+description = "Current status of the invoice"
 nullable = true
 
 [tables."finopsiq.invoices".columns.email_status]
 type = "character varying"
-description = ""
+description = "Status of email notifications"
 nullable = true
 
 [tables."finopsiq.invoices".columns.invoice_number]
 type = "character varying"
-description = ""
+description = "Unique invoice number"
 nullable = true
 
 [tables."finopsiq.invoices".columns.invoice_received_date]
 type = "timestamp with time zone"
-description = ""
+description = "Date the invoice was received"
 nullable = true
 
 [tables."finopsiq.invoices".columns.invoice_date]
 type = "date"
-description = ""
+description = "Date the invoice was issued"
 nullable = true
 
 [tables."finopsiq.invoices".columns.shipping_date]
 type = "date"
-description = ""
+description = "Date the invoice was shipped"
 nullable = true
 
 [tables."finopsiq.invoices".columns.due_date]
 type = "date"
-description = ""
+description = "Date the invoice is due"
 nullable = true
 
 [tables."finopsiq.invoices".columns.currency]
 type = "character varying"
-description = ""
+description = "Currency code for the invoice"
 nullable = true
 
 [tables."finopsiq.invoices".columns.exchange_rate]
 type = "numeric"
-description = ""
+description = "Exchange rate for currency conversion"
 nullable = true
 
 [tables."finopsiq.invoices".columns.total_quantity]
 type = "numeric"
-description = ""
+description = "Total quantity of items"
 nullable = true
 
 [tables."finopsiq.invoices".columns.subtotal]
 type = "numeric"
-description = ""
+description = "Subtotal amount before discounts/taxes"
 nullable = true
 
 [tables."finopsiq.invoices".columns.discount_type]
 type = "character varying"
-description = ""
+description = "Type of discount (e.g., percentage)"
 nullable = true
 
 [tables."finopsiq.invoices".columns.discount_amount]
 type = "numeric"
-description = ""
+description = "Amount of discount"
 nullable = true
 
 [tables."finopsiq.invoices".columns.discount_percentage]
 type = "numeric"
-description = ""
+description = "Discount percentage"
 nullable = true
 
 [tables."finopsiq.invoices".columns.discount_account_id]
 type = "character varying"
-description = ""
+description = "Account ID for discount"
 nullable = true
 
 [tables."finopsiq.invoices".columns.discount_account_name]
 type = "character varying"
-description = ""
+description = "Name of discount account"
 nullable = true
 
 [tables."finopsiq.invoices".columns.is_discount_before_tax]
 type = "boolean"
-description = ""
+description = "Flag for discount application order"
 nullable = true
 
 [tables."finopsiq.invoices".columns.shipping_charges]
 type = "numeric"
-description = ""
+description = "Shipping charges amount"
 nullable = true
 
 [tables."finopsiq.invoices".columns.apply_tax_after_discount]
 type = "boolean"
-description = ""
+description = "Flag for tax application after discount"
 nullable = false
 
 [tables."finopsiq.invoices".columns.tax_calculation_level]
 type = "character varying"
-description = ""
+description = "Tax calculation level (e.g., per item)"
 nullable = true
 
 [tables."finopsiq.invoices".columns.taxes]
 type = "jsonb"
-description = ""
+description = "JSONB field for tax details"
 nullable = true
 
 [tables."finopsiq.invoices".columns.total_amount]
 type = "numeric"
-description = ""
+description = "Total amount after discounts/taxes"
 nullable = true
 
 [tables."finopsiq.invoices".columns.balance_due]
 type = "numeric"
-description = ""
+description = "Amount still due"
 nullable = true
 
 [tables."finopsiq.invoices".columns.deposit]
 type = "numeric"
-description = ""
+description = "Deposit amount"
 nullable = true
 
 [tables."finopsiq.invoices".columns.is_reverse_charge_applied]
 type = "boolean"
-description = ""
+description = "Flag for reverse charge application"
 nullable = true
 
 [tables."finopsiq.invoices".columns.reverse_charge_total]
 type = "numeric"
-description = ""
+description = "Total amount for reverse charge"
 nullable = true
 
 [tables."finopsiq.invoices".columns.tax_identity_info]
 type = "jsonb"
-description = ""
+description = "JSONB field for tax identity details"
 nullable = true
 
 [tables."finopsiq.invoices".columns.deductions_total]
 type = "numeric"
-description = ""
+description = "Total deductions"
 nullable = true
 
 [tables."finopsiq.invoices".columns.deductions_details]
 type = "jsonb"
-description = ""
+description = "JSONB field for deductions"
 nullable = true
 
 [tables."finopsiq.invoices".columns.additional_charges]
 type = "jsonb"
-description = ""
+description = "JSONB field for additional charges"
 nullable = true
 
 [tables."finopsiq.invoices".columns.round_off]
 type = "numeric"
-description = ""
+description = "Rounded-off amount"
 nullable = true
 
 [tables."finopsiq.invoices".columns.vendor_email]
 type = "character varying"
-description = ""
+description = "Vendor's email address"
 nullable = true
 
 [tables."finopsiq.invoices".columns.customer_email]
 type = "character varying"
-description = ""
+description = "Customer's email address"
 nullable = true
 
 [tables."finopsiq.invoices".columns.memo]
 type = "text"
-description = ""
+description = "Memo or notes for the invoice"
 nullable = true
 
 [tables."finopsiq.invoices".columns.private_note]
 type = "text"
-description = ""
+description = "Private notes for the invoice"
 nullable = true
 
 [tables."finopsiq.invoices".columns.description]
 type = "text"
-description = ""
+description = "Detailed description of the invoice"
 nullable = true
 
 [tables."finopsiq.invoices".columns.billing_address]
 type = "jsonb"
-description = ""
+description = "JSONB field for billing address"
 nullable = true
 
 [tables."finopsiq.invoices".columns.shipping_address]
 type = "jsonb"
-description = ""
+description = "JSONB field for shipping address"
 nullable = true
 
 [tables."finopsiq.invoices".columns.vendor_address]
 type = "jsonb"
-description = ""
+description = "JSONB field for vendor address"
 nullable = true
 
 [tables."finopsiq.invoices".columns.linked_transactions]
 type = "jsonb"
-description = ""
+description = "JSONB field for linked transactions"
 nullable = true
 
 [tables."finopsiq.invoices".columns.file_id]
 type = "uuid"
-description = ""
+description = "FK to files"
 nullable = true
 
 [tables."finopsiq.invoices".columns.sync_hash]
 type = "character varying"
-description = ""
+description = "Sync hash for data consistency"
 nullable = true
 
 [tables."finopsiq.invoices".columns.invoice_json]
 type = "jsonb"
-description = ""
+description = "JSONB field for invoice data"
 nullable = true
 
 [tables."finopsiq.invoices".columns.rejected_references]
 type = "jsonb"
-description = ""
+description = "JSONB field for rejected references"
 nullable = true
 
 [tables."finopsiq.invoices".columns.created_at]
 type = "timestamp with time zone"
-description = ""
+description = "Creation timestamp"
 nullable = false
 
 [tables."finopsiq.invoices".columns.updated_at]
 type = "timestamp with time zone"
-description = ""
+description = "Last update timestamp"
 nullable = false
 
 [tables."finopsiq.invoices".columns.is_deleted]
 type = "boolean"
-description = ""
+description = "Deletion flag"
 nullable = false
 
 [tables."finopsiq.invoices".columns.deleted_at]
 type = "timestamp with time zone"
-description = ""
+description = "Timestamp of deletion"
 nullable = true
 
 [tables."finopsiq.invoices".columns.created_by]
 type = "character varying"
-description = ""
+description = "Creator user ID"
 nullable = true
 
 [tables."finopsiq.invoices".columns.updated_by]
 type = "character varying"
-description = ""
+description = "Last updater user ID"
 nullable = true
 
 [tables."finopsiq.invoices".columns.fx_rate_used]
 type = "numeric"
-description = ""
+description = "Foreign exchange rate used"
 nullable = true
 
 [tables."finopsiq.invoices".columns.amount_usd]
 type = "numeric"
-description = ""
+description = "Amount in USD"
 nullable = true
 
 [tables."finopsiq.invoices".columns.fx_rate_date]
 type = "date"
-description = ""
+description = "Date of foreign exchange rate"
 nullable = true
 
 [tables."finopsiq.invoices".columns.fx_is_provisional]
 type = "boolean"
-description = ""
+description = "Flag for provisional rate"
 nullable = false
 
 [tables."finopsiq.invoices".columns.fx_source]
 type = "character varying"
-description = ""
+description = "Source of foreign exchange rate"
 nullable = true
 
 [tables."finopsiq.parser_headers"]
 kind = "table"
-description = ""
+description = "This table stores metadata about parsed document headers, including unique identifiers, tenant associations, and configuration details. It contains columns for the header ID, tenant ID (FK to tenant_profiles), document fingerprint, type, vendor ID, field rules, table configuration, orphan configuration, match count, status, template schema version, learned by, and timestamps for creation and update. It is used to look up parsed document headers and their associated configurations."
 
 [tables."finopsiq.parser_headers".columns.parser_header_id]
 type = "uuid"
-description = ""
+description = "Unique identifier for the header"
 nullable = false
 
 [tables."finopsiq.parser_headers".columns.tenant_id]
 type = "uuid"
-description = ""
+description = "FK to tenant_profiles"
 nullable = false
 
 [tables."finopsiq.parser_headers".columns.fingerprint]
 type = "character varying"
-description = ""
+description = "Hash of the document's content"
 nullable = false
 
 [tables."finopsiq.parser_headers".columns.doc_type]
 type = "character varying"
-description = ""
+description = "Type of document processed"
 nullable = false
 
 [tables."finopsiq.parser_headers".columns.vendor_id]
 type = "character varying"
-description = ""
+description = "Identifier for the document vendor"
 nullable = true
 
 [tables."finopsiq.parser_headers".columns.field_rules]
 type = "jsonb"
-description = ""
+description = "JSONB rules for field parsing"
 nullable = false
 
 [tables."finopsiq.parser_headers".columns.table_config]
 type = "jsonb"
-description = ""
+description = "JSONB configuration for table structure"
 nullable = false
 
 [tables."finopsiq.parser_headers".columns.orphan_config]
 type = "jsonb"
-description = ""
+description = "JSONB configuration for orphan fields"
 nullable = false
 
 [tables."finopsiq.parser_headers".columns.match_count]
 type = "integer"
-description = ""
+description = "Number of matched fields"
 nullable = false
 
 [tables."finopsiq.parser_headers".columns.status]
 type = "character varying"
-description = ""
+description = "Current processing status"
 nullable = false
 
 [tables."finopsiq.parser_headers".columns.template_schema_version]
 type = "smallint"
-description = ""
+description = "Version of the schema template"
 nullable = false
 
 [tables."finopsiq.parser_headers".columns.learned_by]
 type = "character varying"
-description = ""
+description = "Model or system that learned the configuration"
 nullable = false
 
 [tables."finopsiq.parser_headers".columns.created_at]
 type = "timestamp with time zone"
-description = ""
+description = "Timestamp of creation"
 nullable = false
 
 [tables."finopsiq.parser_headers".columns.updated_at]
 type = "timestamp with time zone"
-description = ""
+description = "Timestamp of last update"
 nullable = false
 
 [tables."finopsiq.payment_history"]
 kind = "table"
-description = ""
+description = "This table records payment transactions for invoices, including payment amounts, dates, actions, and currency. It is linked to tenant_profiles via the tenant_id foreign key and is used to look up payment history for specific tenants."
 
 [tables."finopsiq.payment_history".columns.payment_id]
 type = "uuid"
-description = ""
+description = "Unique identifier for the payment"
 nullable = false
 
 [tables."finopsiq.payment_history".columns.tenant_id]
 type = "uuid"
-description = ""
+description = "FK to tenant_profiles"
 nullable = false
 
 [tables."finopsiq.payment_history".columns.invoice_id]
 type = "uuid"
-description = ""
+description = "Identifier for the associated invoice"
 nullable = false
 
 [tables."finopsiq.payment_history".columns.amount]
 type = "numeric"
-description = ""
+description = "Payment amount in currency"
 nullable = false
 
 [tables."finopsiq.payment_history".columns.payment_date]
 type = "date"
-description = ""
+description = "Date of the payment"
 nullable = true
 
 [tables."finopsiq.payment_history".columns.action]
 type = "character varying"
-description = ""
+description = "Type of payment action"
 nullable = true
 
 [tables."finopsiq.payment_history".columns.currency]
 type = "character varying"
-description = ""
+description = "Currency code"
 nullable = true
 
 [tables."finopsiq.payment_history".columns.balance_after]
 type = "numeric"
-description = ""
+description = "Remaining balance after payment"
 nullable = true
 
 [tables."finopsiq.payment_history".columns.recorded_by]
 type = "character varying"
-description = ""
+description = "User who recorded the payment"
 nullable = true
 
 [tables."finopsiq.payment_history".columns.created_at]
 type = "timestamp with time zone"
-description = ""
+description = "Timestamp of creation"
 nullable = false
 
 [tables."finopsiq.payment_history".columns.updated_at]
 type = "timestamp with time zone"
-description = ""
+description = "Timestamp of last update"
 nullable = false
 
 [tables."finopsiq.po_line_items"]
 kind = "table"
-description = ""
+description = "This table tracks line items of purchase orders, capturing product details, quantity, unit price, and tax data. It links to the products table via product_id and includes timestamps for creation and updates. Used to manage purchase order line item details."
 
 [tables."finopsiq.po_line_items".columns.po_line_item_id]
 type = "uuid"
-description = ""
+description = "Primary key for po line items"
 nullable = false
 
 [tables."finopsiq.po_line_items".columns.po_id]
 type = "uuid"
-description = ""
+description = "FK to purchase orders"
 nullable = false
 
 [tables."finopsiq.po_line_items".columns.tenant_id]
 type = "uuid"
-description = ""
+description = "FK to tenants"
 nullable = false
 
 [tables."finopsiq.po_line_items".columns.external_line_item_id]
 type = "bigint"
-description = ""
+description = "External line item ID"
 nullable = true
 
 [tables."finopsiq.po_line_items".columns.line_number]
 type = "integer"
-description = ""
+description = "Line number"
 nullable = true
 
 [tables."finopsiq.po_line_items".columns.line_item_type]
 type = "character varying"
-description = ""
+description = "Line item type"
 nullable = true
 
 [tables."finopsiq.po_line_items".columns.product_id]
 type = "integer"
-description = ""
+description = "FK to products"
 nullable = true
 
 [tables."finopsiq.po_line_items".columns.billable_status]
 type = "character varying"
-description = ""
+description = "Billable status"
 nullable = true
 
 [tables."finopsiq.po_line_items".columns.item_name]
 type = "text"
-description = ""
+description = "Item name"
 nullable = true
 
 [tables."finopsiq.po_line_items".columns.description]
 type = "text"
-description = ""
+description = "Description"
 nullable = true
 
 [tables."finopsiq.po_line_items".columns.quantity_text]
 type = "character varying"
-description = ""
+description = "Quantity text"
 nullable = true
 
 [tables."finopsiq.po_line_items".columns.quantity]
 type = "numeric"
-description = ""
+description = "Quantity"
 nullable = true
 
 [tables."finopsiq.po_line_items".columns.quantity_unit]
 type = "character varying"
-description = ""
+description = "Quantity unit"
 nullable = true
 
 [tables."finopsiq.po_line_items".columns.unit_price_text]
 type = "character varying"
-description = ""
+description = "Unit price text"
 nullable = true
 
 [tables."finopsiq.po_line_items".columns.unit_price]
 type = "numeric"
-description = ""
+description = "Unit price"
 nullable = true
 
 [tables."finopsiq.po_line_items".columns.unit_price_unit]
 type = "character varying"
-description = ""
+description = "Unit price unit"
 nullable = true
 
 [tables."finopsiq.po_line_items".columns.line_total]
 type = "numeric"
-description = ""
+description = "Line total"
 nullable = true
 
 [tables."finopsiq.po_line_items".columns.discount_type]
 type = "character varying"
-description = ""
+description = "Discount type"
 nullable = true
 
 [tables."finopsiq.po_line_items".columns.discount_amount]
 type = "numeric"
-description = ""
+description = "Discount amount"
 nullable = true
 
 [tables."finopsiq.po_line_items".columns.discount_percentage]
 type = "numeric"
-description = ""
+description = "Discount percentage"
 nullable = true
 
 [tables."finopsiq.po_line_items".columns.apply_tax_after_discount]
 type = "boolean"
-description = ""
+description = "Tax applied after discount"
 nullable = false
 
 [tables."finopsiq.po_line_items".columns.taxes]
 type = "jsonb"
-description = ""
+description = "Taxes data"
 nullable = true
 
 [tables."finopsiq.po_line_items".columns.customer_id]
 type = "uuid"
-description = ""
+description = "FK to customers"
 nullable = true
 
 [tables."finopsiq.po_line_items".columns.customer_name]
 type = "character varying"
-description = ""
+description = "Customer name"
 nullable = true
 
 [tables."finopsiq.po_line_items".columns.created_at]
 type = "timestamp with time zone"
-description = ""
+description = "Creation time"
 nullable = false
 
 [tables."finopsiq.po_line_items".columns.updated_at]
 type = "timestamp with time zone"
-description = ""
+description = "Last updated time"
 nullable = false
 
 [tables."finopsiq.po_line_items".columns.processed_quantity]
 type = "numeric"
-description = ""
+description = "Processed quantity"
 nullable = true
 
 [tables."finopsiq.po_revisions"]
 kind = "table"
-description = ""
+description = "This table tracks revisions of purchase orders, storing metadata like revision numbers, file IDs, and edit sources. It links to the purchase orders table via po_id and includes timestamps for creation and updates. Used to manage historical changes to purchase order data."
 
 [tables."finopsiq.po_revisions".columns.revision_id]
 type = "uuid"
-description = ""
+description = "Primary key for po revisions"
 nullable = false
 
 [tables."finopsiq.po_revisions".columns.po_id]
 type = "uuid"
-description = ""
+description = "FK to purchase orders"
 nullable = false
 
 [tables."finopsiq.po_revisions".columns.revision_number]
 type = "integer"
-description = ""
+description = "Revision number"
 nullable = false
 
 [tables."finopsiq.po_revisions".columns.file_id]
 type = "character varying"
-description = ""
+description = "File ID"
 nullable = true
 
 [tables."finopsiq.po_revisions".columns.snapshot]
 type = "jsonb"
-description = ""
+description = "Snapshot data"
 nullable = false
 
 [tables."finopsiq.po_revisions".columns.edit_source]
 type = "character varying"
-description = ""
+description = "Edit source"
 nullable = true
 
 [tables."finopsiq.po_revisions".columns.context_id]
 type = "uuid"
-description = ""
+description = "Context ID"
 nullable = true
 
 [tables."finopsiq.po_revisions".columns.edited_by]
 type = "character varying"
-description = ""
+description = "Edited by"
 nullable = true
 
 [tables."finopsiq.po_revisions".columns.user_acknowledged_risk]
 type = "boolean"
-description = ""
+description = "Risk acknowledged"
 nullable = true
 
 [tables."finopsiq.po_revisions".columns.created_at]
 type = "timestamp with time zone"
-description = ""
+description = "Creation time"
 nullable = false
 
 [tables."finopsiq.products"]
 kind = "table"
-description = ""
+description = "This table stores product information, including product codes, default descriptions, and timestamps for creation and updates. It is referenced by invoice_line_items and po_line_items tables via product_id. Used to look up product details and manage product data."
 
 [tables."finopsiq.products".columns.product_id]
 type = "integer"
-description = ""
+description = "Primary key for products"
 nullable = false
 
 [tables."finopsiq.products".columns.product_code]
 type = "character varying"
-description = ""
+description = "Product code"
 nullable = false
 
 [tables."finopsiq.products".columns.default_description]
 type = "text"
-description = ""
+description = "Default description"
 nullable = true
 
 [tables."finopsiq.products".columns.created_at]
 type = "timestamp with time zone"
-description = ""
+description = "Creation time"
 nullable = false
 
 [tables."finopsiq.products".columns.updated_at]
 type = "timestamp with time zone"
-description = ""
+description = "Last updated time"
 nullable = false
 
 [tables."finopsiq.purchase_orders"]
 kind = "table"
-description = ""
+description = "This table tracks purchase orders, including vendor and customer details, order status, and financial data. It links to invoices and general documents via foreign keys and contains fields like currency, exchange rate, and tax information for order management."
 
 [tables."finopsiq.purchase_orders".columns.po_id]
 type = "uuid"
-description = ""
+description = "Unique identifier for the purchase order"
 nullable = false
 
 [tables."finopsiq.purchase_orders".columns.tenant_id]
 type = "uuid"
-description = ""
+description = "FK to tenants"
 nullable = false
 
 [tables."finopsiq.purchase_orders".columns.connector_id]
 type = "integer"
-description = ""
+description = "FK to connectors"
 nullable = true
 
 [tables."finopsiq.purchase_orders".columns.external_po_id]
 type = "bigint"
-description = ""
+description = "External PO ID from a system"
 nullable = true
 
 [tables."finopsiq.purchase_orders".columns.external_realm_id]
 type = "bigint"
-description = ""
+description = "FK to realms"
 nullable = true
 
 [tables."finopsiq.purchase_orders".columns.source]
 type = "character varying"
-description = ""
+description = "Source of the purchase order"
 nullable = true
 
 [tables."finopsiq.purchase_orders".columns.internet_message_id]
 type = "character varying"
-description = ""
+description = "Message ID for email tracking"
 nullable = true
 
 [tables."finopsiq.purchase_orders".columns.invoice_id]
 type = "uuid"
-description = ""
+description = "FK to invoices"
 nullable = true
 
 [tables."finopsiq.purchase_orders".columns.vendor_id]
 type = "uuid"
-description = ""
+description = "FK to vendors"
 nullable = true
 
 [tables."finopsiq.purchase_orders".columns.customer_id]
 type = "uuid"
-description = ""
+description = "FK to customers"
 nullable = true
 
 [tables."finopsiq.purchase_orders".columns.show_status]
 type = "boolean"
-description = ""
+description = "Status flag for visibility"
 nullable = false
 
 [tables."finopsiq.purchase_orders".columns.is_deleted]
 type = "boolean"
-description = ""
+description = "Deletion flag"
 nullable = false
 
 [tables."finopsiq.purchase_orders".columns.deleted_at]
 type = "timestamp with time zone"
-description = ""
+description = "Timestamp of deletion"
 nullable = true
 
 [tables."finopsiq.purchase_orders".columns.order_status]
 type = "character varying"
-description = ""
+description = "Order status (e.g., pending)"
 nullable = true
 
 [tables."finopsiq.purchase_orders".columns.billed_status]
 type = "character varying"
-description = ""
+description = "Billing status"
 nullable = true
 
 [tables."finopsiq.purchase_orders".columns.received_status]
 type = "character varying"
-description = ""
+description = "Received status"
 nullable = true
 
 [tables."finopsiq.purchase_orders".columns.email_status]
 type = "character varying"
-description = ""
+description = "Email notification status"
 nullable = true
 
 [tables."finopsiq.purchase_orders".columns.po_number]
 type = "character varying"
-description = ""
+description = "Purchase order number"
 nullable = false
 
 [tables."finopsiq.purchase_orders".columns.original_file_name]
 type = "character varying"
-description = ""
+description = "Name of the original PO file"
 nullable = true
 
 [tables."finopsiq.purchase_orders".columns.po_received_date]
 type = "timestamp with time zone"
-description = ""
+description = "Date the PO was received"
 nullable = true
 
 [tables."finopsiq.purchase_orders".columns.po_date]
 type = "date"
-description = ""
+description = "Date the PO was issued"
 nullable = true
 
 [tables."finopsiq.purchase_orders".columns.expected_delivery_date]
 type = "date"
-description = ""
+description = "Expected delivery date"
 nullable = true
 
 [tables."finopsiq.purchase_orders".columns.delivery_date]
 type = "date"
-description = ""
+description = "Actual delivery date"
 nullable = true
 
 [tables."finopsiq.purchase_orders".columns.po_expiry_date]
 type = "date"
-description = ""
+description = "Expiry date"
 nullable = true
 
 [tables."finopsiq.purchase_orders".columns.currency]
 type = "character varying"
-description = ""
+description = "Currency code"
 nullable = true
 
 [tables."finopsiq.purchase_orders".columns.exchange_rate]
 type = "numeric"
-description = ""
+description = "Exchange rate for currency conversion"
 nullable = true
 
 [tables."finopsiq.purchase_orders".columns.total_quantity]
 type = "numeric"
-description = ""
+description = "Total quantity of items"
 nullable = true
 
 [tables."finopsiq.purchase_orders".columns.subtotal]
 type = "numeric"
-description = ""
+description = "Subtotal amount"
 nullable = true
 
 [tables."finopsiq.purchase_orders".columns.discount_type]
 type = "character varying"
-description = ""
+description = "Type of discount"
 nullable = true
 
 [tables."finopsiq.purchase_orders".columns.discount_amount]
 type = "numeric"
-description = ""
+description = "Discount amount"
 nullable = true
 
 [tables."finopsiq.purchase_orders".columns.discount_percentage]
 type = "numeric"
-description = ""
+description = "Discount percentage"
 nullable = true
 
 [tables."finopsiq.purchase_orders".columns.discount_account_id]
 type = "character varying"
-description = ""
+description = "Account ID for discount"
 nullable = true
 
 [tables."finopsiq.purchase_orders".columns.discount_account_name]
 type = "character varying"
-description = ""
+description = "Name of discount account"
 nullable = true
 
 [tables."finopsiq.purchase_orders".columns.is_discount_before_tax]
 type = "boolean"
-description = ""
+description = "Flag for discount application order"
 nullable = true
 
 [tables."finopsiq.purchase_orders".columns.shipping_charges]
 type = "numeric"
-description = ""
+description = "Shipping charges amount"
 nullable = true
 
 [tables."finopsiq.purchase_orders".columns.apply_tax_after_discount]
 type = "boolean"
-description = ""
+description = "Flag for tax application after discount"
 nullable = false
 
 [tables."finopsiq.purchase_orders".columns.tax_calculation_level]
 type = "character varying"
-description = ""
+description = "Tax calculation level"
 nullable = true
 
 [tables."finopsiq.purchase_orders".columns.taxes]
 type = "jsonb"
-description = ""
+description = "JSONB field for tax details"
 nullable = true
 
 [tables."finopsiq.purchase_orders".columns.total_amount]
 type = "numeric"
-description = ""
+description = "Total amount after discounts/taxes"
 nullable = true
 
 [tables."finopsiq.purchase_orders".columns.is_reverse_charge_applied]
 type = "boolean"
-description = ""
+description = "Flag for reverse charge application"
 nullable = true
 
 [tables."finopsiq.purchase_orders".columns.reverse_charge_total]
 type = "numeric"
-description = ""
+description = "Total amount for reverse charge"
 nullable = true
 
 [tables."finopsiq.purchase_orders".columns.gst_number]
 type = "character varying"
-description = ""
+description = "GST number"
 nullable = true
 
 [tables."finopsiq.purchase_orders".columns.gst_treatment]
 type = "character varying"
-description = ""
+description = "GST treatment details"
 nullable = true
 
 [tables."finopsiq.purchase_orders".columns.vendor_name]
 type = "character varying"
-description = ""
+description = "Vendor name"
 nullable = true
 
 [tables."finopsiq.purchase_orders".columns.email]
 type = "character varying"
-description = ""
+description = "Vendor email address"
 nullable = true
 
 [tables."finopsiq.purchase_orders".columns.notes]
 type = "text"
-description = ""
+description = "Notes for the PO"
 nullable = true
 
 [tables."finopsiq.purchase_orders".columns.terms_and_conditions]
 type = "text"
-description = ""
+description = "Terms and conditions"
 nullable = true
 
 [tables."finopsiq.purchase_orders".columns.message_to_vendor]
 type = "text"
-description = ""
+description = "Message to vendor"
 nullable = true
 
 [tables."finopsiq.purchase_orders".columns.memo]
 type = "text"
-description = ""
+description = "Memo or notes"
 nullable = true
 
 [tables."finopsiq.purchase_orders".columns.billing_address]
 type = "jsonb"
-description = ""
+description = "JSONB field for billing address"
 nullable = true
 
 [tables."finopsiq.purchase_orders".columns.vendor_address]
 type = "jsonb"
-description = ""
+description = "JSONB field for vendor address"
 nullable = true
 
 [tables."finopsiq.purchase_orders".columns.delivery_customer_id]
 type = "uuid"
-description = ""
+description = "FK to customers"
 nullable = true
 
 [tables."finopsiq.purchase_orders".columns.delivery_customer_address]
 type = "jsonb"
-description = ""
+description = "JSONB field for delivery address"
 nullable = true
 
 [tables."finopsiq.purchase_orders".columns.delivery_customer_name]
 type = "character varying"
-description = ""
+description = "Delivery customer name"
 nullable = true
 
 [tables."finopsiq.purchase_orders".columns.contact_persons_associated]
 type = "jsonb"
-description = ""
+description = "JSONB field for contact persons"
 nullable = true
 
 [tables."finopsiq.purchase_orders".columns.linked_transactions]
 type = "jsonb"
-description = ""
+description = "JSONB field for linked transactions"
 nullable = true
 
 [tables."finopsiq.purchase_orders".columns.file_id]
 type = "uuid"
-description = ""
+description = "FK to files"
 nullable = true
 
 [tables."finopsiq.purchase_orders".columns.sync_hash]
 type = "character varying"
-description = ""
+description = "Sync hash for data consistency"
 nullable = true
 
 [tables."finopsiq.purchase_orders".columns.po_type]
 type = "character varying"
-description = ""
+description = "Type of purchase order"
 nullable = true
 
 [tables."finopsiq.purchase_orders".columns.billing_type]
 type = "character varying"
-description = ""
+description = "Billing type"
 nullable = true
 
 [tables."finopsiq.purchase_orders".columns.po_json]
 type = "jsonb"
-description = ""
+description = "JSONB field for PO data"
 nullable = true
 
 [tables."finopsiq.purchase_orders".columns.created_at]
 type = "timestamp with time zone"
-description = ""
+description = "Creation timestamp"
 nullable = false
 
 [tables."finopsiq.purchase_orders".columns.updated_at]
 type = "timestamp with time zone"
-description = ""
+description = "Last update timestamp"
 nullable = false
 
 [tables."finopsiq.purchase_orders".columns.created_by]
 type = "character varying"
-description = ""
+description = "Creator user ID"
 nullable = true
 
 [tables."finopsiq.purchase_orders".columns.updated_by]
 type = "character varying"
-description = ""
+description = "Last updater user ID"
 nullable = true
 
 [tables."finopsiq.relevant_document_details"]
 kind = "table"
-description = ""
+description = "This table stores metadata for documents linked to invoices, including match status and processing details. It is used to track document validation and synchronization."
 
 [tables."finopsiq.relevant_document_details".columns.match_id]
 type = "uuid"
-description = ""
+description = "FK to discrepancies_details"
 nullable = false
 
 [tables."finopsiq.relevant_document_details".columns.tenant_id]
 type = "uuid"
-description = ""
+description = "Tenant ID"
 nullable = false
 
 [tables."finopsiq.relevant_document_details".columns.invoice_id]
 type = "uuid"
-description = ""
+description = "Invoice identifier"
 nullable = true
 
 [tables."finopsiq.relevant_document_details".columns.match_status]
 type = "character varying"
-description = ""
+description = "Document status"
 nullable = false
 
 [tables."finopsiq.relevant_document_details".columns.source_type]
 type = "character varying"
-description = ""
+description = "Document source type"
 nullable = true
 
 [tables."finopsiq.relevant_document_details".columns.match_type]
 type = "character varying"
-description = ""
+description = "Match category"
 nullable = true
 
 [tables."finopsiq.relevant_document_details".columns.match_confidence]
 type = "numeric"
-description = ""
+description = "Match confidence score"
 nullable = true
 
 [tables."finopsiq.relevant_document_details".columns.po_details]
 type = "jsonb"
-description = ""
+description = "Purchase order data"
 nullable = true
 
 [tables."finopsiq.relevant_document_details".columns.contracts_details]
 type = "jsonb"
-description = ""
+description = "Contract data"
 nullable = true
 
 [tables."finopsiq.relevant_document_details".columns.invoice_details]
 type = "jsonb"
-description = ""
+description = "Invoice data"
 nullable = true
 
 [tables."finopsiq.relevant_document_details".columns.general_document_details]
 type = "jsonb"
-description = ""
+description = "Document metadata"
 nullable = true
 
 [tables."finopsiq.relevant_document_details".columns.internet_message_id]
 type = "character varying"
-description = ""
+description = "Message ID"
 nullable = true
 
 [tables."finopsiq.relevant_document_details".columns.processing_metadata]
 type = "jsonb"
-description = ""
+description = "Processing logs"
 nullable = true
 
 [tables."finopsiq.relevant_document_details".columns.source_sync_hash]
 type = "character varying"
-description = ""
+description = "Sync hash"
 nullable = true
 
 [tables."finopsiq.relevant_document_details".columns.processed_at]
 type = "timestamp with time zone"
-description = ""
+description = "Processing timestamp"
 nullable = true
 
 [tables."finopsiq.relevant_document_details".columns.created_at]
 type = "timestamp with time zone"
-description = ""
+description = "Creation timestamp"
 nullable = false
 
 [tables."finopsiq.relevant_document_details".columns.updated_at]
 type = "timestamp with time zone"
-description = ""
+description = "Last update timestamp"
 nullable = false
 
 [tables."finopsiq.reminder_alert_config"]
 kind = "table"
-description = ""
+description = "This table stores alert configuration settings for tenants, including whether alerts are enabled, recipient emails, delay minutes, and timestamps. It is linked to tenant_profiles via the tenant_id foreign key and is used to look up alert settings for specific tenants."
 
 [tables."finopsiq.reminder_alert_config".columns.config_id]
 type = "uuid"
-description = ""
+description = "Unique identifier for the alert configuration"
 nullable = false
 
 [tables."finopsiq.reminder_alert_config".columns.tenant_id]
 type = "uuid"
-description = ""
+description = "FK to tenant_profiles"
 nullable = false
 
 [tables."finopsiq.reminder_alert_config".columns.is_enabled]
 type = "boolean"
-description = ""
+description = "Boolean flag for alert activation"
 nullable = false
 
 [tables."finopsiq.reminder_alert_config".columns.recipient_emails]
 type = "jsonb"
-description = ""
+description = "JSONB list of email recipients"
 nullable = false
 
 [tables."finopsiq.reminder_alert_config".columns.delay_minutes]
 type = "integer"
-description = ""
+description = "Minutes before alert delivery"
 nullable = false
 
 [tables."finopsiq.reminder_alert_config".columns.created_by]
 type = "character varying"
-description = ""
+description = "User who created the configuration"
 nullable = true
 
 [tables."finopsiq.reminder_alert_config".columns.updated_by]
 type = "character varying"
-description = ""
+description = "User who last updated the configuration"
 nullable = true
 
 [tables."finopsiq.reminder_alert_config".columns.created_at]
 type = "timestamp with time zone"
-description = ""
+description = "Timestamp of creation"
 nullable = false
 
 [tables."finopsiq.reminder_alert_config".columns.updated_at]
 type = "timestamp with time zone"
-description = ""
+description = "Timestamp of last update"
 nullable = false
 
 [tables."finopsiq.reminder_configuration"]
 kind = "table"
-description = ""
+description = "This table stores reminder settings for tenants, including levels, day ranges, labels, tones, and activation status. It is linked to tenant_profiles via the tenant_id foreign key and is used to look up reminder parameters for specific tenants."
 
 [tables."finopsiq.reminder_configuration".columns.config_id]
 type = "uuid"
-description = ""
+description = "Unique identifier for the reminder configuration"
 nullable = false
 
 [tables."finopsiq.reminder_configuration".columns.tenant_id]
 type = "uuid"
-description = ""
+description = "FK to tenant_profiles"
 nullable = false
 
 [tables."finopsiq.reminder_configuration".columns.level]
 type = "smallint"
-description = ""
+description = "Priority level of the reminder"
 nullable = false
 
 [tables."finopsiq.reminder_configuration".columns.from_days]
 type = "integer"
-description = ""
+description = "Start day for the reminder window"
 nullable = false
 
 [tables."finopsiq.reminder_configuration".columns.to_days]
 type = "integer"
-description = ""
+description = "End day for the reminder window"
 nullable = true
 
 [tables."finopsiq.reminder_configuration".columns.display_label]
 type = "character varying"
-description = ""
+description = "Label for the reminder"
 nullable = false
 
 [tables."finopsiq.reminder_configuration".columns.reminder_label]
 type = "character varying"
-description = ""
+description = "User-facing reminder label"
 nullable = true
 
 [tables."finopsiq.reminder_configuration".columns.reminder_tone]
 type = "character varying"
-description = ""
+description = "Tone or style of the reminder"
 nullable = false
 
 [tables."finopsiq.reminder_configuration".columns.is_enabled]
 type = "boolean"
-description = ""
+description = "Boolean flag for reminder activation"
 nullable = false
 
 [tables."finopsiq.reminder_configuration".columns.created_at]
 type = "timestamp with time zone"
-description = ""
+description = "Timestamp of creation"
 nullable = false
 
 [tables."finopsiq.reminder_configuration".columns.updated_at]
 type = "timestamp with time zone"
-description = ""
+description = "Timestamp of last update"
 nullable = false
 
 [tables."finopsiq.reminder_configuration".columns.created_by]
@@ -4387,234 +4387,234 @@ nullable = true
 
 [tables."finopsiq.reminders"]
 kind = "table"
-description = ""
+description = "This table logs reminders sent for invoices, tracking status, recipient details, and timestamps. It includes foreign keys to the invoice_reminder_state table and details about reminder templates and attempts."
 
 [tables."finopsiq.reminders".columns.reminder_id]
 type = "uuid"
-description = ""
+description = "unique identifier"
 nullable = false
 
 [tables."finopsiq.reminders".columns.invoice_id]
 type = "uuid"
-description = ""
+description = "FK to invoice_reminder_state"
 nullable = false
 
 [tables."finopsiq.reminders".columns.tenant_id]
 type = "uuid"
-description = ""
+description = "links to tenant"
 nullable = false
 
 [tables."finopsiq.reminders".columns.level]
 type = "smallint"
-description = ""
+description = "reminder level"
 nullable = false
 
 [tables."finopsiq.reminders".columns.reminder_label]
 type = "character varying"
-description = ""
+description = "label for reminder"
 nullable = true
 
 [tables."finopsiq.reminders".columns.reminder_tone]
 type = "character varying"
-description = ""
+description = "tone of reminder"
 nullable = true
 
 [tables."finopsiq.reminders".columns.template_used]
 type = "character varying"
-description = ""
+description = "template used"
 nullable = true
 
 [tables."finopsiq.reminders".columns.recipient_email]
 type = "character varying"
-description = ""
+description = "recipient email"
 nullable = true
 
 [tables."finopsiq.reminders".columns.recipient_name]
 type = "character varying"
-description = ""
+description = "recipient name"
 nullable = true
 
 [tables."finopsiq.reminders".columns.status]
 type = "character varying"
-description = ""
+description = "status of reminder"
 nullable = false
 
 [tables."finopsiq.reminders".columns.skip_reason]
 type = "character varying"
-description = ""
+description = "reason for skipping"
 nullable = true
 
 [tables."finopsiq.reminders".columns.error_message]
 type = "text"
-description = ""
+description = "error message"
 nullable = true
 
 [tables."finopsiq.reminders".columns.email_html]
 type = "text"
-description = ""
+description = "HTML email"
 nullable = true
 
 [tables."finopsiq.reminders".columns.sent_at]
 type = "timestamp with time zone"
-description = ""
+description = "timestamp"
 nullable = true
 
 [tables."finopsiq.reminders".columns.next_reminder_at]
 type = "timestamp with time zone"
-description = ""
+description = "next reminder time"
 nullable = true
 
 [tables."finopsiq.reminders".columns.scheduler_request_id]
 type = "uuid"
-description = ""
+description = "request ID"
 nullable = true
 
 [tables."finopsiq.reminders".columns.attempt]
 type = "smallint"
-description = ""
+description = "number of attempt"
 nullable = false
 
 [tables."finopsiq.reminders".columns.created_at]
 type = "timestamp with time zone"
-description = ""
+description = "timestamp"
 nullable = false
 
 [tables."finopsiq.resolution_audit_log"]
 kind = "table"
-description = ""
+description = "This table tracks audit logs for resolution processes, recording actions taken, performers, and timestamps. It includes resolution_id, invoice_id, and details about actions performed by users. It links to resolution_communication and email_context via resolution_id and invoice_id."
 
 [tables."finopsiq.resolution_audit_log".columns.audit_id]
 type = "uuid"
-description = ""
+description = "Unique identifier for audit log entry"
 nullable = false
 
 [tables."finopsiq.resolution_audit_log".columns.resolution_id]
 type = "uuid"
-description = ""
+description = "FK to resolution entity"
 nullable = false
 
 [tables."finopsiq.resolution_audit_log".columns.action_type]
 type = "character varying"
-description = ""
+description = "Type of action performed"
 nullable = false
 
 [tables."finopsiq.resolution_audit_log".columns.performed_by]
 type = "character varying"
-description = ""
+description = "User who performed the action"
 nullable = false
 
 [tables."finopsiq.resolution_audit_log".columns.details]
 type = "jsonb"
-description = ""
+description = "JSONB containing detailed action information"
 nullable = true
 
 [tables."finopsiq.resolution_audit_log".columns.invoice_id]
 type = "uuid"
-description = ""
+description = "FK to invoice entity"
 nullable = true
 
 [tables."finopsiq.resolution_audit_log".columns.timestamp]
 type = "timestamp with time zone"
-description = ""
+description = "When the action was recorded"
 nullable = false
 
 [tables."finopsiq.resolution_audit_log".columns.created_at]
 type = "timestamp with time zone"
-description = ""
+description = "When the audit log was created"
 nullable = false
 
 [tables."finopsiq.resolution_communication"]
 kind = "table"
-description = ""
+description = "Records communication details for resolution processes, including vendor/customer contact info, message content, and status. It links to resolution_audit_log via resolution_id and email_context via invoice_id. Tracks communication metadata, retries, and validation status."
 
 [tables."finopsiq.resolution_communication".columns.communication_id]
 type = "uuid"
-description = ""
+description = "Unique identifier for communication"
 nullable = false
 
 [tables."finopsiq.resolution_communication".columns.resolution_id]
 type = "uuid"
-description = ""
+description = "FK to resolution entity"
 nullable = false
 
 [tables."finopsiq.resolution_communication".columns.tenant_id]
 type = "uuid"
-description = ""
+description = "FK to tenant entity"
 nullable = false
 
 [tables."finopsiq.resolution_communication".columns.vendor_name]
 type = "text"
-description = ""
+description = "Vendor contact name"
 nullable = true
 
 [tables."finopsiq.resolution_communication".columns.vendor_email]
 type = "text"
-description = ""
+description = "Vendor contact email"
 nullable = true
 
 [tables."finopsiq.resolution_communication".columns.vendor_address]
 type = "text"
-description = ""
+description = "Vendor contact address"
 nullable = true
 
 [tables."finopsiq.resolution_communication".columns.invoice_id]
 type = "uuid"
-description = ""
+description = "FK to invoice entity"
 nullable = true
 
 [tables."finopsiq.resolution_communication".columns.customer_name]
 type = "text"
-description = ""
+description = "Customer contact name"
 nullable = true
 
 [tables."finopsiq.resolution_communication".columns.customer_email]
 type = "text"
-description = ""
+description = "Customer contact email"
 nullable = true
 
 [tables."finopsiq.resolution_communication".columns.customer_address]
 type = "text"
-description = ""
+description = "Customer contact address"
 nullable = true
 
 [tables."finopsiq.resolution_communication".columns.direction]
 type = "character varying"
-description = ""
+description = "Communication direction (inbound/outbound)"
 nullable = false
 
 [tables."finopsiq.resolution_communication".columns.type]
 type = "character varying"
-description = ""
+description = "Communication type (email, call, etc.)"
 nullable = false
 
 [tables."finopsiq.resolution_communication".columns.timestamp]
 type = "timestamp with time zone"
-description = ""
+description = "When communication was sent"
 nullable = false
 
 [tables."finopsiq.resolution_communication".columns.subject]
 type = "character varying"
-description = ""
+description = "Communication subject line"
 nullable = false
 
 [tables."finopsiq.resolution_communication".columns.body_content]
 type = "jsonb"
-description = ""
+description = "JSONB containing message content"
 nullable = false
 
 [tables."finopsiq.resolution_communication".columns.attachments_gcs_paths]
 type = "text"
-description = ""
+description = "Paths to attached files"
 nullable = true
 
 [tables."finopsiq.resolution_communication".columns.is_valid_response]
 type = "boolean"
-description = ""
+description = "Flag for valid response status"
 nullable = true
 
 [tables."finopsiq.resolution_communication".columns.status]
 type = "character varying"
-description = ""
+description = "Communication status (sent, failed, etc.)"
 nullable = true
 
 [tables."finopsiq.resolution_communication".columns.communication_metadata]
@@ -4649,688 +4649,835 @@ nullable = true
 
 [tables."finopsiq.system_audit_log"]
 kind = "table"
-description = ""
+description = "This table logs system actions and events, capturing details like the actor, action, outcome, and entity affected. It includes timestamps, unique identifiers, and contextual data to track system behavior and changes."
 
 [tables."finopsiq.system_audit_log".columns.audit_id]
 type = "uuid"
-description = ""
+description = "Unique identifier for audit log entry"
 nullable = false
 
 [tables."finopsiq.system_audit_log".columns.tenant_id]
 type = "uuid"
-description = ""
+description = "UUID of the tenant associated with the log"
 nullable = false
 
 [tables."finopsiq.system_audit_log".columns.actor_id]
 type = "character varying"
-description = ""
+description = "UUID of the user or system that performed the action"
 nullable = false
 
 [tables."finopsiq.system_audit_log".columns.actor_name]
 type = "character varying"
-description = ""
+description = "Name of the user or system that performed the action"
 nullable = true
 
 [tables."finopsiq.system_audit_log".columns.action]
 type = "character varying"
-description = ""
+description = "Type of action performed (e.g., update, delete)"
 nullable = false
 
 [tables."finopsiq.system_audit_log".columns.outcome]
 type = "character varying"
-description = ""
+description = "Result of the action (e.g., success, failure)"
 nullable = false
 
 [tables."finopsiq.system_audit_log".columns.reason]
 type = "text"
-description = ""
+description = "Reason for the action or outcome"
 nullable = true
 
 [tables."finopsiq.system_audit_log".columns.entity_group]
 type = "character varying"
-description = ""
+description = "Group of entities affected by the action"
 nullable = false
 
 [tables."finopsiq.system_audit_log".columns.entity_type]
 type = "character varying"
-description = ""
+description = "Type of entity affected by the action"
 nullable = false
 
 [tables."finopsiq.system_audit_log".columns.entity_id]
 type = "uuid"
-description = ""
+description = "UUID of the entity affected by the action"
 nullable = true
 
 [tables."finopsiq.system_audit_log".columns.entity_label]
 type = "character varying"
-description = ""
+description = "Label of the entity affected by the action"
 nullable = true
 
 [tables."finopsiq.system_audit_log".columns.summary]
 type = "text"
-description = ""
+description = "Summary of the action and its outcome"
 nullable = true
 
 [tables."finopsiq.system_audit_log".columns.changes]
 type = "jsonb"
-description = ""
+description = "JSON data representing changes made"
 nullable = true
 
 [tables."finopsiq.system_audit_log".columns.context]
 type = "jsonb"
-description = ""
+description = "JSON data providing additional context for the action"
 nullable = true
 
 [tables."finopsiq.system_audit_log".columns.created_at]
 type = "timestamp with time zone"
-description = ""
+description = "Timestamp when the audit log entry was created"
 nullable = false
 
 [tables."finopsiq.tax_metadata"]
 kind = "table"
-description = ""
+description = "This table stores metadata for tax codes, including their rates, validity status, and timestamps for creation and last update. It serves as a reference for tax-related data and regulatory compliance."
 
 [tables."finopsiq.tax_metadata".columns.id]
 type = "uuid"
-description = ""
+description = "Unique identifier for the tax metadata entry"
 nullable = false
 
 [tables."finopsiq.tax_metadata".columns.tax_code]
 type = "character varying"
-description = ""
+description = "Tax code associated with the metadata"
 nullable = false
 
 [tables."finopsiq.tax_metadata".columns.tax_rates]
 type = "jsonb"
-description = ""
+description = "JSON data containing tax rate information"
 nullable = true
 
 [tables."finopsiq.tax_metadata".columns.is_rate_valid]
 type = "boolean"
-description = ""
+description = "Boolean indicating if the tax rates are valid"
 nullable = false
 
 [tables."finopsiq.tax_metadata".columns.created_at]
 type = "timestamp with time zone"
-description = ""
+description = "Timestamp when the metadata was created"
 nullable = false
 
 [tables."finopsiq.tax_metadata".columns.updated_at]
 type = "timestamp with time zone"
-description = ""
+description = "Timestamp when the metadata was last updated"
 nullable = false
 
 [tables."finopsiq.tenant_profiles"]
 kind = "table"
-description = ""
+description = "This table stores detailed information about each tenant, including organizational details, contact information, and settings. It contains columns for the tenant ID (FK to parser_headers, reminder_alert_config, reminder_configuration), organization name, domain, company website, tax numbers, timezone, language, country, state, currency, creation and update timestamps, and user identifiers. It is used to look up tenant-specific configurations and metadata."
 
 [tables."finopsiq.tenant_profiles".columns.tenant_id]
 type = "uuid"
-description = ""
+description = "FK to parser_headers, reminder_alert_config, reminder_configuration"
 nullable = false
 
 [tables."finopsiq.tenant_profiles".columns.organization_name]
 type = "character varying"
-description = ""
+description = "Name of the organization"
 nullable = false
 
 [tables."finopsiq.tenant_profiles".columns.domain]
 type = "character varying"
-description = ""
+description = "Domain name of the tenant"
 nullable = true
 
 [tables."finopsiq.tenant_profiles".columns.company_website]
 type = "character varying"
-description = ""
+description = "Website URL of the tenant"
 nullable = true
 
 [tables."finopsiq.tenant_profiles".columns.gst_number]
 type = "character varying"
-description = ""
+description = "GST registration number"
 nullable = true
 
 [tables."finopsiq.tenant_profiles".columns.tin_number]
 type = "character varying"
-description = ""
+description = "TIN registration number"
 nullable = true
 
 [tables."finopsiq.tenant_profiles".columns.pan_number]
 type = "character varying"
-description = ""
+description = "PAN card number"
 nullable = true
 
 [tables."finopsiq.tenant_profiles".columns.legal_org_name]
 type = "character varying"
-description = ""
+description = "Legal name of the organization"
 nullable = true
 
 [tables."finopsiq.tenant_profiles".columns.timezone]
 type = "character varying"
-description = ""
+description = "Time zone setting"
 nullable = true
 
 [tables."finopsiq.tenant_profiles".columns.language]
 type = "character varying"
-description = ""
+description = "Preferred language"
 nullable = true
 
 [tables."finopsiq.tenant_profiles".columns.country]
 type = "character varying"
-description = ""
+description = "Country of the tenant"
 nullable = true
 
 [tables."finopsiq.tenant_profiles".columns.state]
 type = "character varying"
-description = ""
+description = "State or region"
 nullable = true
 
 [tables."finopsiq.tenant_profiles".columns.currency]
 type = "character varying"
-description = ""
+description = "Currency code"
 nullable = true
 
 [tables."finopsiq.tenant_profiles".columns.created_at]
 type = "timestamp with time zone"
-description = ""
+description = "Timestamp of creation"
 nullable = false
 
 [tables."finopsiq.tenant_profiles".columns.updated_at]
 type = "timestamp with time zone"
-description = ""
+description = "Timestamp of last update"
 nullable = false
 
 [tables."finopsiq.tenant_profiles".columns.created_by]
 type = "character varying"
-description = ""
+description = "User who created the tenant"
 nullable = true
 
 [tables."finopsiq.tenant_profiles".columns.updated_by]
 type = "character varying"
-description = ""
+description = "User who last updated the tenant"
 nullable = true
 
 [tables."finopsiq.tenant_profiles".columns.industry]
 type = "character varying"
-description = ""
+description = "Industry classification"
 nullable = true
 
 [tables."finopsiq.tenant_profiles".columns.max_retries]
 type = "integer"
-description = ""
+description = "Maximum number of retries for operations"
 nullable = false
 
 [tables."finopsiq.tenant_profiles".columns.cooldown_seconds]
 type = "integer"
-description = ""
+description = "Seconds before retrying after failure"
 nullable = false
 
 [tables."finopsiq.thread_enrichment_queue"]
 kind = "table"
-description = ""
+description = "This table tracks the status and processing details of threads in an enrichment queue, including retry counts, errors, and timestamps for creation and last update. It manages system workflows for data enrichment tasks."
 
 [tables."finopsiq.thread_enrichment_queue".columns.id]
 type = "uuid"
-description = ""
+description = "Unique identifier for the queue entry"
 nullable = false
 
 [tables."finopsiq.thread_enrichment_queue".columns.tenant_id]
 type = "uuid"
-description = ""
+description = "UUID of the tenant associated with the queue"
 nullable = false
 
 [tables."finopsiq.thread_enrichment_queue".columns.conversation_id]
 type = "character varying"
-description = ""
+description = "ID of the conversation being enriched"
 nullable = false
 
 [tables."finopsiq.thread_enrichment_queue".columns.status]
 type = "character varying"
-description = ""
+description = "Current status of the enrichment process"
 nullable = false
 
 [tables."finopsiq.thread_enrichment_queue".columns.claimed_at]
 type = "timestamp with time zone"
-description = ""
+description = "Timestamp when the entry was claimed"
 nullable = true
 
 [tables."finopsiq.thread_enrichment_queue".columns.retry_count]
 type = "smallint"
-description = ""
+description = "Number of times the entry has been retried"
 nullable = false
 
 [tables."finopsiq.thread_enrichment_queue".columns.last_error]
 type = "text"
-description = ""
+description = "Last error encountered during processing"
 nullable = true
 
 [tables."finopsiq.thread_enrichment_queue".columns.created_at]
 type = "timestamp with time zone"
-description = ""
+description = "Timestamp when the entry was created"
 nullable = false
 
 [tables."finopsiq.thread_enrichment_queue".columns.updated_at]
 type = "timestamp with time zone"
-description = ""
+description = "Timestamp when the entry was last updated"
 nullable = false
 
 [tables."finopsiq.unmatched_inbound_email"]
 kind = "table"
-description = ""
+description = "This table logs unmatched inbound emails, capturing sender details, email content, resolution reasons, and timestamps for receipt and review. It helps track and resolve unprocessed email events."
 
 [tables."finopsiq.unmatched_inbound_email".columns.id]
 type = "uuid"
-description = ""
+description = "Unique identifier for the email entry"
 nullable = false
 
 [tables."finopsiq.unmatched_inbound_email".columns.tenant_id]
 type = "uuid"
-description = ""
+description = "UUID of the tenant associated with the email"
 nullable = false
 
 [tables."finopsiq.unmatched_inbound_email".columns.sender_email]
 type = "character varying"
-description = ""
+description = "Email address of the sender"
 nullable = true
 
 [tables."finopsiq.unmatched_inbound_email".columns.sender_name]
 type = "character varying"
-description = ""
+description = "Name of the sender"
 nullable = true
 
 [tables."finopsiq.unmatched_inbound_email".columns.subject]
 type = "text"
-description = ""
+description = "Subject line of the email"
 nullable = true
 
 [tables."finopsiq.unmatched_inbound_email".columns.body_text]
 type = "text"
-description = ""
+description = "Text content of the email"
 nullable = true
 
 [tables."finopsiq.unmatched_inbound_email".columns.internet_message_id]
 type = "character varying"
-description = ""
+description = "Unique identifier for the email message"
 nullable = true
 
 [tables."finopsiq.unmatched_inbound_email".columns.reason]
 type = "character varying"
-description = ""
+description = "Reason the email was unmatched"
 nullable = false
 
 [tables."finopsiq.unmatched_inbound_email".columns.resolution_id]
 type = "uuid"
-description = ""
+description = "ID of the resolution for the email"
 nullable = true
 
 [tables."finopsiq.unmatched_inbound_email".columns.received_at]
 type = "timestamp with time zone"
-description = ""
+description = "Timestamp when the email was received"
 nullable = true
 
 [tables."finopsiq.unmatched_inbound_email".columns.created_at]
 type = "timestamp with time zone"
-description = ""
+description = "Timestamp when the email was logged"
 nullable = false
 
 [tables."finopsiq.unmatched_inbound_email".columns.reviewed_at]
 type = "timestamp with time zone"
-description = ""
+description = "Timestamp when the email was reviewed"
 nullable = true
 
 [tables."finopsiq.unmatched_inbound_email".columns.reviewed_by]
 type = "character varying"
-description = ""
+description = "Name of the person who reviewed the email"
 nullable = true
 
 [tables."finopsiq.us_state_sourcing"]
 kind = "table"
-description = ""
+description = "This table records how states are sourced, including their codes, sourcing methods, and the last observed timestamp. It provides metadata for tracking data origins and updates."
 
 [tables."finopsiq.us_state_sourcing".columns.state_code]
 type = "character"
-description = ""
+description = "Code representing the state"
 nullable = false
 
 [tables."finopsiq.us_state_sourcing".columns.sourcing]
 type = "character varying"
-description = ""
+description = "Method or source used to gather data"
 nullable = false
 
 [tables."finopsiq.us_state_sourcing".columns.source]
 type = "character varying"
-description = ""
+description = "Origin of the data"
 nullable = false
 
 [tables."finopsiq.us_state_sourcing".columns.last_observed]
 type = "timestamp with time zone"
-description = ""
+description = "Timestamp of the last observation"
 nullable = false
 
 [tables."finopsiq.us_tax_rate_cache"]
 kind = "table"
-description = ""
+description = "The finopsiq.us_tax_rate_cache table stores tax rate data for locations and time periods. It includes postal code, city name, state code, county FIPS, and other rate details such as state, county, city, and district rates. The table also contains raw response data, cached timestamp, and the year and month of the rate data."
 
 [tables."finopsiq.us_tax_rate_cache".columns.postal_code]
 type = "character"
-description = ""
+description = "Postal code identifier"
 nullable = false
 
 [tables."finopsiq.us_tax_rate_cache".columns.city_name]
 type = "character varying"
-description = ""
+description = "City name"
 nullable = false
 
 [tables."finopsiq.us_tax_rate_cache".columns.tic_id]
 type = "integer"
-description = ""
+description = "TIC ID"
 nullable = false
 
 [tables."finopsiq.us_tax_rate_cache".columns.state_code]
 type = "character"
-description = ""
+description = "State code"
 nullable = false
 
 [tables."finopsiq.us_tax_rate_cache".columns.county_fips]
 type = "character"
-description = ""
+description = "County FIPS"
 nullable = true
 
 [tables."finopsiq.us_tax_rate_cache".columns.county_name]
 type = "character varying"
-description = ""
+description = "County name"
 nullable = true
 
 [tables."finopsiq.us_tax_rate_cache".columns.sourcing_flag]
 type = "character"
-description = ""
+description = "Sourcing flag"
 nullable = true
 
 [tables."finopsiq.us_tax_rate_cache".columns.state_rate]
 type = "numeric"
-description = ""
+description = "State rate"
 nullable = false
 
 [tables."finopsiq.us_tax_rate_cache".columns.county_rate]
 type = "numeric"
-description = ""
+description = "County rate"
 nullable = false
 
 [tables."finopsiq.us_tax_rate_cache".columns.city_rate]
 type = "numeric"
-description = ""
+description = "City rate"
 nullable = false
 
 [tables."finopsiq.us_tax_rate_cache".columns.district_rate]
 type = "numeric"
-description = ""
+description = "District rate"
 nullable = false
 
 [tables."finopsiq.us_tax_rate_cache".columns.combined_rate]
 type = "numeric"
-description = ""
+description = "Combined rate"
 nullable = false
 
 [tables."finopsiq.us_tax_rate_cache".columns.raw_response]
 type = "jsonb"
-description = ""
+description = "Raw response data"
 nullable = true
 
 [tables."finopsiq.us_tax_rate_cache".columns.cached_at]
 type = "timestamp with time zone"
-description = ""
+description = "Cached timestamp"
 nullable = false
 
 [tables."finopsiq.us_tax_rate_cache".columns.rate_year]
 type = "integer"
-description = ""
+description = "Rate year"
 nullable = true
 
 [tables."finopsiq.us_tax_rate_cache".columns.rate_month]
 type = "integer"
-description = ""
+description = "Rate month"
 nullable = true
 
 [tables."finopsiq.us_tic_cache"]
 kind = "table"
-description = ""
+description = "The finopsiq.us_tic_cache table stores cached information about TICs (Tax Identification Codes), including their descriptions, labels, and expiration details. It includes the TIC ID, label, normalized label, and description, along with the cached timestamp and expiration time."
 
 [tables."finopsiq.us_tic_cache".columns.id]
 type = "uuid"
-description = ""
+description = "UUID ID"
 nullable = false
 
 [tables."finopsiq.us_tic_cache".columns.description]
 type = "text"
-description = ""
+description = "Description"
 nullable = false
 
 [tables."finopsiq.us_tic_cache".columns.tic_id]
 type = "integer"
-description = ""
+description = "TIC ID"
 nullable = false
 
 [tables."finopsiq.us_tic_cache".columns.label]
 type = "character varying"
-description = ""
+description = "Label"
 nullable = false
 
 [tables."finopsiq.us_tic_cache".columns.label_normalized]
 type = "character varying"
-description = ""
+description = "Normalized label"
 nullable = false
 
 [tables."finopsiq.us_tic_cache".columns.tic_description]
 type = "text"
-description = ""
+description = "TIC description"
 nullable = false
 
 [tables."finopsiq.us_tic_cache".columns.cached_at]
 type = "timestamp with time zone"
-description = ""
+description = "Cached timestamp"
 nullable = false
 
 [tables."finopsiq.us_tic_cache".columns.expires_at]
 type = "timestamp with time zone"
-description = ""
+description = "Expiration timestamp"
 nullable = false
 
 [tables."finopsiq.vendor_instructions"]
 kind = "table"
-description = ""
+description = "The finopsiq.vendor_instructions table stores instructions for vendors, including rule names, prompts, action types, severity levels, and status flags. It tracks creation and update timestamps, along with the user who created or updated the instruction."
 
 [tables."finopsiq.vendor_instructions".columns.id]
 type = "uuid"
-description = ""
+description = "UUID ID"
 nullable = false
 
 [tables."finopsiq.vendor_instructions".columns.tenant_id]
 type = "uuid"
-description = ""
+description = "Tenant ID"
 nullable = false
 
 [tables."finopsiq.vendor_instructions".columns.rule_name]
 type = "character varying"
-description = ""
+description = "Rule name"
 nullable = false
 
 [tables."finopsiq.vendor_instructions".columns.instruction_prompt]
 type = "text"
-description = ""
+description = "Instruction prompt"
 nullable = false
 
 [tables."finopsiq.vendor_instructions".columns.action_type]
 type = "character varying"
-description = ""
+description = "Action type"
 nullable = true
 
 [tables."finopsiq.vendor_instructions".columns.severity]
 type = "character varying"
-description = ""
+description = "Severity level"
 nullable = true
 
 [tables."finopsiq.vendor_instructions".columns.is_global]
 type = "boolean"
-description = ""
+description = "Global flag"
 nullable = false
 
 [tables."finopsiq.vendor_instructions".columns.is_active]
 type = "boolean"
-description = ""
+description = "Active status"
 nullable = false
 
 [tables."finopsiq.vendor_instructions".columns.created_by]
 type = "character varying"
-description = ""
+description = "Creator"
 nullable = false
 
 [tables."finopsiq.vendor_instructions".columns.created_at]
 type = "timestamp with time zone"
-description = ""
+description = "Creation timestamp"
 nullable = false
 
 [tables."finopsiq.vendor_instructions".columns.updated_at]
 type = "timestamp with time zone"
-description = ""
+description = "Update timestamp"
 nullable = false
 
 [tables."finopsiq.vendor_instructions".columns.updated_by]
 type = "character varying"
-description = ""
+description = "Updater"
 nullable = true
 
 [tables."finopsiq.vendors"]
 kind = "table"
-description = ""
+description = "This table stores vendor information, including contact details, tax status, and addresses. It links to invoices and purchase orders via vendor_id, and contains fields like balance, is_active, and tax-related data for vendor management."
 
 [tables."finopsiq.vendors".columns.vendor_id]
 type = "uuid"
-description = ""
+description = "FK to invoices"
 nullable = false
 
 [tables."finopsiq.vendors".columns.tenant_id]
 type = "uuid"
-description = ""
+description = "FK to tenants"
 nullable = false
 
 [tables."finopsiq.vendors".columns.connector_id]
 type = "integer"
-description = ""
+description = "FK to connectors"
 nullable = true
 
 [tables."finopsiq.vendors".columns.external_realm_id]
 type = "bigint"
-description = ""
+description = "FK to realms"
 nullable = true
 
 [tables."finopsiq.vendors".columns.external_vendor_id]
 type = "bigint"
-description = ""
+description = "External vendor ID from a system"
 nullable = true
 
 [tables."finopsiq.vendors".columns.source]
 type = "character varying"
-description = ""
+description = "Source of vendor data"
 nullable = true
 
 [tables."finopsiq.vendors".columns.title]
 type = "character varying"
-description = ""
+description = "Vendor title or designation"
 nullable = true
 
 [tables."finopsiq.vendors".columns.given_name]
 type = "character varying"
-description = ""
+description = "First name"
 nullable = true
 
 [tables."finopsiq.vendors".columns.middle_name]
 type = "character varying"
-description = ""
+description = "Middle name"
 nullable = true
 
 [tables."finopsiq.vendors".columns.family_name]
 type = "character varying"
-description = ""
+description = "Last name"
 nullable = true
 
 [tables."finopsiq.vendors".columns.company_name]
 type = "character varying"
-description = ""
+description = "Company name"
 nullable = true
 
 [tables."finopsiq.vendors".columns.display_name]
 type = "character varying"
-description = ""
+description = "Display name for vendor"
 nullable = true
 
 [tables."finopsiq.vendors".columns.phone]
 type = "character varying"
-description = ""
+description = "Phone number"
 nullable = true
 
 [tables."finopsiq.vendors".columns.email]
 type = "character varying"
-description = ""
+description = "Vendor email address"
 nullable = true
 
 [tables."finopsiq.vendors".columns.tin]
 type = "character varying"
-description = ""
+description = "Tax identification number"
 nullable = true
 
 [tables."finopsiq.vendors".columns.balance]
 type = "numeric"
-description = ""
+description = "Vendor balance amount"
 nullable = true
 
 [tables."finopsiq.vendors".columns.is_active]
 type = "boolean"
-description = ""
+description = "Active status flag"
 nullable = false
 
 [tables."finopsiq.vendors".columns.is_taxable]
 type = "boolean"
-description = ""
+description = "Taxable status flag"
 nullable = false
 
 [tables."finopsiq.vendors".columns.vendor_address]
 type = "jsonb"
-description = ""
+description = "JSONB field for vendor address"
 nullable = true
 
 [tables."finopsiq.vendors".columns.remittance_address]
 type = "text"
-description = ""
+description = "Remittance address"
 nullable = true
 
 [tables."finopsiq.vendors".columns.assigned_instruction_ids]
 type = "jsonb"
-description = ""
+description = "JSONB field for instructions"
 nullable = true
 
 [tables."finopsiq.vendors".columns.sync_hash]
 type = "character varying"
-description = ""
+description = "Sync hash for data consistency"
 nullable = true
 
 [tables."finopsiq.vendors".columns.created_at]
 type = "timestamp with time zone"
-description = ""
+description = "Creation timestamp"
 nullable = false
 
 [tables."finopsiq.vendors".columns.updated_at]
 type = "timestamp with time zone"
-description = ""
+description = "Last update timestamp"
 nullable = false
 
 [tables."finopsiq.vendors".columns.updated_by]
 type = "character varying"
-description = ""
+description = "Last updater user ID"
 nullable = true
 
 [tables."finopsiq.vendors".columns.created_by]
 type = "character varying"
-description = ""
+description = "Creator user ID"
 nullable = true
+
+[[relationships]]
+from_table = "auth.org_custom_role_privileges"
+from_column = "privilege_id"
+to_table = "auth.product_privileges"
+to_column = "id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "auth.org_custom_role_privileges"
+from_column = "role_id"
+to_table = "auth.org_custom_roles"
+to_column = "id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "auth.org_custom_roles"
+from_column = "organisation_id"
+to_table = "auth.organisations"
+to_column = "id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "auth.org_domains"
+from_column = "organisation_id"
+to_table = "auth.organisations"
+to_column = "id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "auth.org_group_members"
+from_column = "group_id"
+to_table = "auth.org_groups"
+to_column = "id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "auth.org_group_members"
+from_column = "user_id"
+to_table = "auth.users"
+to_column = "id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "auth.org_groups"
+from_column = "organisation_id"
+to_table = "auth.organisations"
+to_column = "id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "auth.org_idp_config"
+from_column = "organisation_id"
+to_table = "auth.organisations"
+to_column = "id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "auth.org_token_version"
+from_column = "org_id"
+to_table = "auth.organisations"
+to_column = "id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "auth.otp_codes"
+from_column = "user_id"
+to_table = "auth.users"
+to_column = "id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "auth.refresh_tokens"
+from_column = "user_id"
+to_table = "auth.users"
+to_column = "id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "auth.user_custom_roles"
+from_column = "organisation_id"
+to_table = "auth.organisations"
+to_column = "id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "auth.user_custom_roles"
+from_column = "role_id"
+to_table = "auth.org_custom_roles"
+to_column = "id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "auth.user_custom_roles"
+from_column = "user_id"
+to_table = "auth.users"
+to_column = "id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "auth.user_roles"
+from_column = "role_id"
+to_table = "auth.roles"
+to_column = "id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "auth.user_roles"
+from_column = "user_id"
+to_table = "auth.users"
+to_column = "id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "auth.users"
+from_column = "organisation_id"
+to_table = "auth.organisations"
+to_column = "id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "connector_service.oauth_state"
+from_column = "connector_id"
+to_table = "connector_service.connectors"
+to_column = "id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "connector_service.outlook_subscriptions"
+from_column = "connector_id"
+to_table = "connector_service.connectors"
+to_column = "id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "connector_service.sync_jobs"
+from_column = "connector_id"
+to_table = "connector_service.connectors"
+to_column = "id"
+type = "many_to_one"
+
+[[relationships]]
+from_table = "connector_service.tenant_connector_auth"
+from_column = "connector_id"
+to_table = "connector_service.connectors"
+to_column = "id"
+type = "many_to_one"
 
 [[relationships]]
 from_table = "finopsiq.contracts"
@@ -5508,90 +5655,6 @@ to_column = "vendor_id"
 type = "many_to_one"
 
 [[relationships]]
-from_table = "connector_service.oauth_state"
-from_column = "connector_id"
-to_table = "connector_service.connectors"
-to_column = "id"
-type = "many_to_one"
-
-[[relationships]]
-from_table = "auth.org_custom_role_privileges"
-from_column = "privilege_id"
-to_table = "auth.product_privileges"
-to_column = "id"
-type = "many_to_one"
-
-[[relationships]]
-from_table = "auth.org_custom_role_privileges"
-from_column = "role_id"
-to_table = "auth.org_custom_roles"
-to_column = "id"
-type = "many_to_one"
-
-[[relationships]]
-from_table = "auth.org_custom_roles"
-from_column = "organisation_id"
-to_table = "auth.organisations"
-to_column = "id"
-type = "many_to_one"
-
-[[relationships]]
-from_table = "auth.org_domains"
-from_column = "organisation_id"
-to_table = "auth.organisations"
-to_column = "id"
-type = "many_to_one"
-
-[[relationships]]
-from_table = "auth.org_group_members"
-from_column = "group_id"
-to_table = "auth.org_groups"
-to_column = "id"
-type = "many_to_one"
-
-[[relationships]]
-from_table = "auth.org_group_members"
-from_column = "user_id"
-to_table = "auth.users"
-to_column = "id"
-type = "many_to_one"
-
-[[relationships]]
-from_table = "auth.org_groups"
-from_column = "organisation_id"
-to_table = "auth.organisations"
-to_column = "id"
-type = "many_to_one"
-
-[[relationships]]
-from_table = "auth.org_idp_config"
-from_column = "organisation_id"
-to_table = "auth.organisations"
-to_column = "id"
-type = "many_to_one"
-
-[[relationships]]
-from_table = "auth.org_token_version"
-from_column = "org_id"
-to_table = "auth.organisations"
-to_column = "id"
-type = "many_to_one"
-
-[[relationships]]
-from_table = "auth.otp_codes"
-from_column = "user_id"
-to_table = "auth.users"
-to_column = "id"
-type = "many_to_one"
-
-[[relationships]]
-from_table = "connector_service.outlook_subscriptions"
-from_column = "connector_id"
-to_table = "connector_service.connectors"
-to_column = "id"
-type = "many_to_one"
-
-[[relationships]]
 from_table = "finopsiq.parser_headers"
 from_column = "tenant_id"
 to_table = "finopsiq.tenant_profiles"
@@ -5648,13 +5711,6 @@ to_column = "vendor_id"
 type = "many_to_one"
 
 [[relationships]]
-from_table = "auth.refresh_tokens"
-from_column = "user_id"
-to_table = "auth.users"
-to_column = "id"
-type = "many_to_one"
-
-[[relationships]]
 from_table = "finopsiq.reminder_alert_config"
 from_column = "tenant_id"
 to_table = "finopsiq.tenant_profiles"
@@ -5687,60 +5743,4 @@ from_table = "finopsiq.resolution_communication"
 from_column = "resolution_id"
 to_table = "finopsiq.discrepancy_resolution"
 to_column = "resolution_id"
-type = "many_to_one"
-
-[[relationships]]
-from_table = "connector_service.sync_jobs"
-from_column = "connector_id"
-to_table = "connector_service.connectors"
-to_column = "id"
-type = "many_to_one"
-
-[[relationships]]
-from_table = "connector_service.tenant_connector_auth"
-from_column = "connector_id"
-to_table = "connector_service.connectors"
-to_column = "id"
-type = "many_to_one"
-
-[[relationships]]
-from_table = "auth.user_custom_roles"
-from_column = "organisation_id"
-to_table = "auth.organisations"
-to_column = "id"
-type = "many_to_one"
-
-[[relationships]]
-from_table = "auth.user_custom_roles"
-from_column = "role_id"
-to_table = "auth.org_custom_roles"
-to_column = "id"
-type = "many_to_one"
-
-[[relationships]]
-from_table = "auth.user_custom_roles"
-from_column = "user_id"
-to_table = "auth.users"
-to_column = "id"
-type = "many_to_one"
-
-[[relationships]]
-from_table = "auth.user_roles"
-from_column = "role_id"
-to_table = "auth.roles"
-to_column = "id"
-type = "many_to_one"
-
-[[relationships]]
-from_table = "auth.user_roles"
-from_column = "user_id"
-to_table = "auth.users"
-to_column = "id"
-type = "many_to_one"
-
-[[relationships]]
-from_table = "auth.users"
-from_column = "organisation_id"
-to_table = "auth.organisations"
-to_column = "id"
 type = "many_to_one"

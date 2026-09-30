@@ -1,0 +1,1355 @@
+[database]
+type = "postgresql"
+name = "finopsiq_be"
+generated_at = "2026-09-29T10:58:27.911603+00:00"
+
+[tables."auth.alembic_version"]
+description = "Stores the current version of the database schema. Contains a single column, version_num, which represents the version number of the schema."
+
+[tables."auth.alembic_version".columns]
+version_num = "Stores the current database schema version number"
+
+[tables."auth.default_idp_config"]
+description = "Stores configuration details for the default identity provider. Includes provider, tenant ID, client ID, redirect URI, and other metadata for identity provider setup."
+
+[tables."auth.default_idp_config".columns]
+id = "Unique identifier for the identity provider configuration"
+provider = "Identity provider name or type"
+tenant_id = "Identifier for the tenant or organization"
+client_id = "Client identifier for the identity provider"
+redirect_uri = "URL for redirecting after authentication"
+is_enabled = "Boolean indicating if the identity provider is active"
+created_at = "Timestamp when the configuration was created"
+updated_at = "Timestamp when the configuration was last updated"
+created_by = "Name of the user who created the configuration"
+updated_by = "Name of the user who last updated the configuration"
+client_secret = "Secret key for the identity provider"
+
+[tables."auth.org_custom_role_privileges"]
+description = "Junction table linking custom roles to privileges. Each role is associated with one or more privileges, and records the timestamps and creator for these associations."
+
+[tables."auth.org_custom_role_privileges".columns]
+id = "Unique identifier for the role privilege relationship"
+role_id = "FK to org_custom_roles"
+privilege_id = "FK to product_privileges"
+created_at = "Timestamp when the privilege was added to the role"
+created_by = "User who created the role privilege relationship"
+
+[tables."auth.org_custom_roles"]
+description = "Stores definitions for custom roles within an organization. Includes product-specific details, role name, description, and timestamps for creation and updates."
+
+[tables."auth.org_custom_roles".columns]
+id = "Unique identifier for the custom role"
+organisation_id = "Identifier for the organization"
+product = "Product associated with the role"
+name = "Name of the custom role"
+description = "Description of the custom role"
+is_default = "Boolean indicating if the role is default"
+created_at = "Timestamp when the role was created"
+created_by = "User who created the role"
+updated_at = "Timestamp when the role was last updated"
+updated_by = "User who last updated the role"
+
+[tables."auth.product_privileges"]
+description = "Stores product-specific privileges, including keys, labels, risk levels, and order. Used to define permissions for different products and track their status and timestamps."
+
+[tables."auth.product_privileges".columns]
+id = "Unique identifier for the product privilege"
+product = "Product associated with the privilege"
+key = "Key or identifier for the privilege"
+label = "Human-readable label for the privilege"
+group_name = "Group name for the privilege"
+risk = "Risk level associated with the privilege"
+order = "Order or priority of the privilege"
+is_deprecated = "Boolean indicating if the privilege is deprecated"
+created_at = "Timestamp when the privilege was created"
+updated_at = "Timestamp when the privilege was last updated"
+
+[tables."auth.organisations"]
+description = "This table represents organizations, storing their unique identifiers, names, statuses, and metadata. It contains columns for ID, name, slug, status, timestamps, creators, plans, and billing details. It connects to other tables like org_domains, org_groups, and org_idp_config via foreign keys to organisation_id."
+
+[tables."auth.organisations".columns]
+id = "Primary key of the organization"
+name = "Name of the organization"
+slug = "URL-friendly identifier for the organization"
+status = "Current status of the organization"
+created_at = "Timestamp when the organization was created"
+updated_at = "Timestamp of the last update to the organization"
+created_by = "User who created the organization"
+updated_by = "User who last updated the organization"
+plan = "Subscription plan for the organization"
+plan_status = "Status of the organization's subscription plan"
+trial_ends_at = "Timestamp when the organization's trial period ends"
+seat_limit = "Maximum number of seats allowed for the organization"
+billing_customer_id = "ID of the billing customer associated with the organization"
+billing_email = "Email address for billing purposes"
+stripe_subscription_id = "Stripe subscription ID for the organization"
+metadata = "Additional structured data for the organization"
+custom_domain = "Custom domain name associated with the organization"
+
+[tables."auth.org_domains"]
+description = "This table stores domains associated with organizations, including their creation and update timestamps, and the users responsible. It links to the organisations table via organisation_id to track which organization owns the domain."
+
+[tables."auth.org_domains".columns]
+id = "Primary key of the domain"
+organisation_id = "FK to organisations"
+domain = "Domain name associated with the organization"
+created_at = "Timestamp when the domain was created"
+updated_at = "Timestamp of the last update to the domain"
+created_by = "User who created the domain"
+updated_by = "User who last updated the domain"
+
+[tables."auth.org_groups"]
+description = "This table represents groups within organizations, storing their names, descriptions, and metadata. It connects to the organisations table via organisation_id to track which organization the group belongs to."
+
+[tables."auth.org_groups".columns]
+id = "Primary key of the group"
+organisation_id = "FK to organisations"
+name = "Name of the group"
+description = "Description of the group"
+metadata = "Additional structured data for the group"
+created_at = "Timestamp when the group was created"
+created_by = "User who created the group"
+updated_at = "Timestamp of the last update to the group"
+updated_by = "User who last updated the group"
+
+[tables."auth.org_idp_config"]
+description = "This table stores identity provider (IDP) configurations for organizations, including provider details, client credentials, and enablement status. It links to the organisations table via organisation_id to track which organization the IDP is associated with."
+
+[tables."auth.org_idp_config".columns]
+id = "Primary key of the IDP configuration"
+organisation_id = "FK to organisations"
+provider = "Name of the identity provider"
+tenant_id = "Tenant ID for the identity provider"
+client_id = "Client ID for the identity provider"
+redirect_uri = "Redirect URI for the identity provider"
+is_enabled = "Boolean indicating if the IDP is enabled"
+created_at = "Timestamp when the IDP configuration was created"
+updated_at = "Timestamp of the last update to the IDP configuration"
+created_by = "User who created the IDP configuration"
+updated_by = "User who last updated the IDP configuration"
+client_secret = "Secret key for the identity provider"
+
+[tables."auth.org_token_version"]
+description = "This table tracks versions of tokens associated with organizations, including the version number and timestamp of the last update. It links to the organisations table via org_id to track which organization the token version belongs to."
+
+[tables."auth.org_token_version".columns]
+org_id = "FK to organisations"
+version = "Version number of the token"
+updated_at = "Timestamp of the last update to the token version"
+
+[tables."auth.user_custom_roles"]
+description = "auth.user_custom_roles tracks custom roles assigned to users within specific organizations. It includes the user's ID, the role ID, the organization ID, and the product context in which the role is applied. The table also records the timestamp of when the role was created and the user who created it. This table is used to manage and look up user roles in different products and organizations."
+
+[tables."auth.user_custom_roles".columns]
+id = "primary key"
+user_id = "FK to users"
+role_id = "role_id"
+organisation_id = "organisation_id"
+product = "product"
+created_at = "timestamp"
+created_by = "character varying"
+
+[tables."auth.org_group_members"]
+description = "auth.org_group_members tracks users who are members of specific groups. It includes the group ID, the user ID, and the timestamps for when the group membership was created and by whom. This table is used to manage and look up group memberships for users."
+
+[tables."auth.org_group_members".columns]
+id = "primary key"
+group_id = "group_id"
+user_id = "FK to users"
+created_at = "timestamp"
+created_by = "character varying"
+
+[tables."auth.users"]
+description = "auth.users stores comprehensive information about users, including their email, full name, organization, authentication details, and status. It tracks login attempts, account lock status, and timestamps for creation and updates. This table is used to manage and look up user profiles and authentication status."
+
+[tables."auth.users".columns]
+id = "primary key"
+email = "email address"
+full_name = "user full name"
+organisation_id = "organisation_id"
+password_hash = "hashed password"
+external_id = "external identifier"
+auth_provider = "authentication provider"
+status = "user status"
+failed_login_attempts = "number of failed attempts"
+locked_until = "lockout until timestamp"
+invite_token_hash = "invite token hash"
+invite_expires_at = "invite expiration timestamp"
+created_at = "creation timestamp"
+updated_at = "last update timestamp"
+created_by = "creator user"
+updated_by = "last updater user"
+
+[tables."auth.otp_codes"]
+description = "auth.otp_codes stores one-time passwords (OTPs) for users, including the purpose, code hash, expiration, and usage details. This table is used to manage and look up OTPs for authentication purposes."
+
+[tables."auth.otp_codes".columns]
+id = "primary key"
+user_id = "FK to users"
+purpose = "purpose of OTP"
+code_hash = "OTP code hash"
+expires_at = "expiration timestamp"
+consumed_at = "consumption timestamp"
+attempts = "number of attempts"
+last_resend_at = "last resend timestamp"
+created_at = "creation timestamp"
+updated_at = "last update timestamp"
+created_by = "creator user"
+updated_by = "last updater user"
+
+[tables."auth.refresh_tokens"]
+description = "auth.refresh_tokens stores refresh tokens for users, including the token hash, expiration, revocation details, and usage information. This table is used to manage and look up refresh tokens for authentication."
+
+[tables."auth.refresh_tokens".columns]
+id = "primary key"
+user_id = "FK to users"
+token_hash = "token hash"
+expires_at = "expiration timestamp"
+revoked_at = "revocation timestamp"
+rotated_from = "token rotation source"
+created_at = "creation timestamp"
+updated_at = "last update timestamp"
+created_by = "creator user"
+revoked_by = "revocation user"
+last_used_at = "last usage timestamp"
+
+[tables."auth.user_roles"]
+description = "This table tracks user roles and their creation details. It links users to roles via user_id and role_id, storing timestamps for when roles were assigned and by whom. Columns include unique identifiers, role references, and creation metadata."
+
+[tables."auth.user_roles".columns]
+id = "Unique identifier for the role assignment"
+user_id = "FK to users"
+role_id = "FK to roles"
+created_at = "Timestamp of role assignment"
+created_by = "User who created the role assignment"
+
+[tables."auth.roles"]
+description = "This table defines role metadata, including names, descriptions, and timestamps for creation and updates. It is referenced by user roles to associate roles with users, with fields tracking when roles were last modified."
+
+[tables."auth.roles".columns]
+id = "Unique identifier for the role"
+name = "Role name"
+description = "Role description"
+created_at = "Timestamp of role creation"
+updated_at = "Timestamp of last role update"
+created_by = "User who created the role"
+updated_by = "User who last modified the role"
+
+[tables."auth.plans"]
+description = "This table stores plan configurations, including names, seat limits, product details, and metadata. It tracks creation and update timestamps, and is used to manage platform-wide plan settings and their associated data."
+
+[tables."auth.plans".columns]
+id = "Unique identifier for the plan"
+name = "Plan name"
+seat_limit = "Maximum number of seats allowed"
+products = "JSONB storage for plan products"
+is_platform_default = "Boolean indicating default platform plan status"
+metadata = "JSONB storage for additional plan data"
+created_at = "Timestamp of plan creation"
+created_by = "User who created the plan"
+updated_at = "Timestamp of last plan update"
+updated_by = "User who last modified the plan"
+
+[tables."auth.service_clients"]
+description = "This table manages service client configurations, including client IDs, secret hashes, activation status, and usage tracking. It stores metadata about service clients and tracks when they were last used and modified."
+
+[tables."auth.service_clients".columns]
+id = "Unique identifier for the service client"
+client_id = "Service client identifier"
+description = "Client description"
+secret_hash = "Hashed client secret"
+is_active = "Boolean indicating client activation status"
+last_used_at = "Timestamp of last client usage"
+created_at = "Timestamp of client creation"
+updated_at = "Timestamp of last client update"
+created_by = "User who created the client"
+updated_by = "User who last modified the client"
+
+[tables."connector_service.connector_alembic_version"]
+description = "This table stores the current version number of the Alembic migration schema, used to track database versioning and ensure consistency across deployments."
+
+[tables."connector_service.connector_alembic_version".columns]
+version_num = "Current Alembic migration version"
+
+[tables."connector_service.connectors"]
+description = "The connectors table stores integration configurations for external services. It contains details like name, API key, client credentials, and authentication scope. The table links to other tables via connector_id, representing active integrations that manage single-login capabilities, webhooks, and timestamps for creation and updates."
+
+[tables."connector_service.connectors".columns]
+id = "Primary key identifier for the connector"
+name = "Display name of the external service integration"
+key = "API key for authenticating with the external service"
+client_id = "OAuth client ID for the external service"
+client_secret = "OAuth client secret for the external service"
+scope = "Permissions granted to the connector for the external service"
+enables_single_login = "Boolean flag for single-login capability"
+webhook_secret_id = "Secret used for webhook authentication"
+is_active = "Status indicating if the connector is currently active"
+created_at = "Timestamp when the connector was first created"
+updated_at = "Timestamp when the connector was last modified"
+created_by = "User who initiated the connector creation"
+updated_by = "User who last modified the connector"
+
+[tables."connector_service.oauth_state"]
+description = "The oauth_state table tracks OAuth session states for connectors. It stores the OAuth state, tenant ID, and expiration details, linking to the connectors table via connector_id. This table manages authentication sessions and their validity periods for external services."
+
+[tables."connector_service.oauth_state".columns]
+state = "OAuth session state value for the connector"
+tenant_id = "Identifier for the tenant using the connector"
+connector_id = "FK to connectors.id"
+expires_at = "Timestamp when the OAuth session expires"
+created_at = "Timestamp when the OAuth state was created"
+updated_at = "Timestamp when the OAuth state was last modified"
+created_by = "User who initiated the OAuth state creation"
+updated_by = "User who last modified the OAuth state"
+
+[tables."connector_service.outlook_subscriptions"]
+description = "The outlook_subscriptions table tracks folder subscriptions for Microsoft Outlook integrations. It links to the connectors table via connector_id and stores details like folder ID, sync status, and expiration. This table manages real-time changes for email folders and webhooks."
+
+[tables."connector_service.outlook_subscriptions".columns]
+id = "Primary key identifier for the subscription"
+tenant_id = "Identifier for the tenant using the subscription"
+connector_id = "FK to connectors.id"
+subscription_id = "Microsoft Outlook subscription ID"
+ms_tenant_id = "Microsoft tenant ID for the subscription"
+user_id = "User ID associated with the subscription"
+user_email = "Email address of the user"
+folder_id = "Outlook folder ID"
+folder_name = "Name of the Outlook folder"
+folder_type = "Type of Outlook folder (e.g., inbox, calendar)"
+last_synced_at = "Timestamp of the last sync operation"
+resource = "Resource type for the subscription"
+change_type = "Type of change (e.g., add, update, delete)"
+notification_url = "Webhook URL for notifications"
+expires_at = "Timestamp when the subscription expires"
+is_active = "Status indicating if the subscription is active"
+last_webhook_at = "Timestamp of the last webhook event"
+last_webhook_status = "Status of the last webhook event"
+created_at = "Timestamp when the subscription was created"
+updated_at = "Timestamp when the subscription was last modified"
+created_by = "User who initiated the subscription creation"
+updated_by = "User who last modified the subscription"
+
+[tables."connector_service.sync_jobs"]
+description = "The sync_jobs table tracks synchronization tasks for connectors. It stores job details like entity type, status, and record counts, linking to the connectors table via connector_id. This table manages data sync operations between systems, tracking success, failure, and error logs."
+
+[tables."connector_service.sync_jobs".columns]
+id = "Primary key identifier for the sync job"
+tenant_id = "Identifier for the tenant using the job"
+connector_id = "FK to connectors.id"
+external_realm_id = "External realm ID for the sync job"
+user_email = "Email address of the user associated with the job"
+entity_type = "Type of entity being synced"
+sync_type = "Type of synchronization operation"
+status = "Current status of the sync job"
+total_records = "Total number of records to sync"
+processed_records = "Number of records processed"
+new_records = "Number of new records created"
+updated_records = "Number of records updated"
+failed_records = "Number of failed records"
+error_message = "Error message from the sync job"
+triggered_by = "User or system that initiated the job"
+started_at = "Timestamp when the job started"
+completed_at = "Timestamp when the job completed"
+created_at = "Timestamp when the job was created"
+updated_at = "Timestamp when the job was last modified"
+created_by = "User who initiated the job creation"
+updated_by = "User who last modified the job"
+
+[tables."connector_service.tenant_connector_auth"]
+description = "The tenant_connector_auth table stores authentication tokens for connectors. It links to the connectors table via connector_id and tracks access tokens, refresh tokens, and expiration dates. This table manages OAuth credentials for tenant-level integrations."
+
+[tables."connector_service.tenant_connector_auth".columns]
+id = "Primary key identifier for the authentication record"
+tenant_id = "Identifier for the tenant using the authentication"
+connector_id = "FK to connectors.id"
+external_realm_id = "External realm ID for the authentication"
+access_token = "OAuth access token for the connector"
+refresh_token = "OAuth refresh token for the connector"
+token_type = "Type of token (e.g., Bearer)"
+access_expires_at = "Timestamp when the access token expires"
+refresh_expires_at = "Timestamp when the refresh token expires"
+is_active = "Status indicating if the authentication is active"
+disconnected_at = "Timestamp when the authentication was disconnected"
+organization_name = "Name of the organization associated with the token"
+last_token_refreshed_at = "Timestamp of the last token refresh"
+created_at = "Timestamp when the authentication was created"
+updated_at = "Timestamp when the authentication was last modified"
+created_by = "User who initiated the authentication creation"
+updated_by = "User who last modified the authentication"
+
+[tables."connector_service.email_context"]
+description = "This table stores email contexts related to connectors, including sender email, content, category, status, and timestamps. It contains columns for unique identifiers, email details, and metadata about the email's receipt and creation. The tenant_id column links to tenant information, and the table is used to track email interactions for connectors."
+
+[tables."connector_service.email_context".columns]
+id = "unique identifier"
+sender_email = "sender's email"
+tenant_id = "tenant ID"
+content = "email content"
+category = "email category"
+status = "email status"
+received_time = "received time"
+created_at = "created timestamp"
+updated_at = "updated timestamp"
+created_by = "creator"
+updated_by = "last updater"
+
+[tables."finopsiq.alembic_version_finopsiq"]
+description = "This table tracks the version of the database schema for Alembic migrations. It contains a single column, version_num, which stores the version number of the database schema."
+
+[tables."finopsiq.alembic_version_finopsiq".columns]
+version_num = "Alembic version number"
+
+[tables."finopsiq.contracts"]
+description = "This table stores detailed information about contracts, including contract details, dates, amounts, and relationships with customers and files. It includes columns for contract identifiers, document metadata, financial terms, and links to customer and file records. The customer_id and file_id columns connect to the customers and genbooks_file_metadata tables, respectively."
+
+[tables."finopsiq.contracts".columns]
+contract_id = "contract ID"
+request_for_proposal_number = "RFP number"
+original_file_name = "original file name"
+purchasing_contact_name_or_department = "purchasing contact"
+official_document_title = "official title"
+assigned_contract_number = "contract number"
+agreement_signed_date = "signed date"
+start_date = "start date"
+start_date_description_text = "start date description"
+expiry_date = "expiry date"
+term_in_months = "term in months"
+overall_contract_term_description = "term description"
+renewal_term_description = "renewal term"
+termination_notice_period_description = "notice period"
+total_contract_amount_value = "total amount"
+total_contract_amount_derivation_info = "derivation info"
+renewal_contract_amount_value = "renewal amount"
+initial_annual_fee_value = "annual fee"
+price_escalation_terms_description = "escalation terms"
+payment_terms_description = "payment terms"
+tenant_id = "tenant ID"
+vendor_id = "vendor ID"
+customer_id = "FK to customers"
+invoice_id = "invoice ID"
+source = "source"
+internet_message_id = "message ID"
+file_id = "FK to genbooks_file_metadata"
+contract_intelligence = ""
+sync_hash = ""
+contract_type = ""
+is_deleted = "deleted flag"
+deleted_at = "deletion time"
+created_at = "created timestamp"
+updated_at = "updated timestamp"
+created_by = "creator"
+updated_by = "last updater"
+
+[tables."finopsiq.customers"]
+description = "This table stores customer information, including contact details, addresses, balance, and status. It includes columns for customer identifiers, tenant information, and links to contracts. The customer_id column connects to the contracts table, and the table is used to manage customer records across tenants and systems."
+
+[tables."finopsiq.customers".columns]
+customer_id = "FK to contracts"
+tenant_id = "tenant ID"
+connector_id = "connector ID"
+external_realm_id = "external realm ID"
+external_customer_id = "external customer ID"
+source = "source"
+title = "title"
+given_name = "given name"
+middle_name = "middle name"
+family_name = "family name"
+company_name = "company name"
+display_name = "display name"
+name = "name"
+phone = "phone"
+email = "email"
+tin = "tax ID"
+balance = "balance"
+is_active = "active status"
+is_taxable = "taxable status"
+shipping_address = "shipping address"
+billing_address = "billing address"
+sync_hash = "sync hash"
+created_at = "created timestamp"
+updated_at = "updated timestamp"
+updated_by = "last updater"
+created_by = "creator"
+
+[tables."finopsiq.genbooks_file_metadata"]
+description = "This table stores metadata for files, including original filename, MD5 hash, file size, source, and links to contracts and POs. It includes columns for file identifiers, document metadata, and relationships to other tables. The id column connects to the contracts table, and the table is used to track file processing and storage details."
+
+[tables."finopsiq.genbooks_file_metadata".columns]
+id = "FK to contracts"
+session_id = ""
+tenant_id = ""
+original_filename = ""
+md5_hash = ""
+file_size = ""
+source = ""
+stage = ""
+conversation_id = ""
+dams_file_id = ""
+invoice_id = ""
+contract_id = "contract ID"
+po_id = "PO ID"
+general_document_id = "document ID"
+document_type = "document type"
+error_message = "error message"
+extraction_json = "extraction JSON"
+file_name = ""
+file_url = ""
+file_type = ""
+content_type = ""
+is_parsed = ""
+parsed_file_url = ""
+storage_path = "storage path"
+storage_provider = ""
+cache_name = "cache name"
+internet_message_id = ""
+attachment_id = "attachment ID"
+attachment_kind = "attachment type"
+attempts = "attempts"
+max_attempts = "max attempts"
+next_retry_at = "next retry time"
+locked_by = "locked by"
+locked_at = "locked time"
+is_deleted = "deleted flag"
+deleted_at = "deletion time"
+created_at = "created timestamp"
+updated_at = "updated timestamp"
+reprocess_attempts = ""
+last_reprocess_at = ""
+content_id = ""
+upload_context_invoice_id = ""
+
+[tables."finopsiq.invoices"]
+description = "This table tracks invoice records, containing details like invoice_id, tenant_id, purchase_order_number, and vendor/customer relationships. It includes financial data such as total_amount, currency, and tax information, and links to related documents via foreign keys to vendors, customers, and purchase orders."
+
+[tables."finopsiq.invoices".columns]
+invoice_id = "Unique identifier for the invoice"
+tenant_id = "FK to tenants"
+purchase_order_number = "Purchase order number linked to the invoice"
+original_file_name = "Name of the original invoice file"
+contract_number = "Contract number associated with the invoice"
+vendor_id = "FK to vendors"
+customer_id = "FK to customers"
+connector_id = "FK to connectors"
+external_invoice_id = "External invoice ID from a system"
+external_realm_id = "External realm ID from a system"
+source = "Source of the invoice data"
+internet_message_id = "Message ID for email tracking"
+show_status = "Status flag for invoice visibility"
+invoice_type = "Type of invoice (e.g., pro forma)"
+status = "Current status of the invoice"
+email_status = "Status of email notifications"
+invoice_number = "Unique invoice number"
+invoice_received_date = "Date the invoice was received"
+invoice_date = "Date the invoice was issued"
+shipping_date = "Date the invoice was shipped"
+due_date = "Date the invoice is due"
+currency = "Currency code for the invoice"
+exchange_rate = "Exchange rate for currency conversion"
+total_quantity = "Total quantity of items"
+subtotal = "Subtotal amount before discounts/taxes"
+discount_type = "Type of discount (e.g., percentage)"
+discount_amount = "Amount of discount"
+discount_percentage = "Discount percentage"
+discount_account_id = "Account ID for discount"
+discount_account_name = "Name of discount account"
+is_discount_before_tax = "Flag for discount application order"
+shipping_charges = "Shipping charges amount"
+apply_tax_after_discount = "Flag for tax application after discount"
+tax_calculation_level = "Tax calculation level (e.g., per item)"
+taxes = "JSONB field for tax details"
+total_amount = "Total amount after discounts/taxes"
+balance_due = "Amount still due"
+deposit = "Deposit amount"
+is_reverse_charge_applied = "Flag for reverse charge application"
+reverse_charge_total = "Total amount for reverse charge"
+tax_identity_info = "JSONB field for tax identity details"
+deductions_total = "Total deductions"
+deductions_details = "JSONB field for deductions"
+additional_charges = "JSONB field for additional charges"
+round_off = "Rounded-off amount"
+vendor_email = "Vendor's email address"
+customer_email = "Customer's email address"
+memo = "Memo or notes for the invoice"
+private_note = "Private notes for the invoice"
+description = "Detailed description of the invoice"
+billing_address = "JSONB field for billing address"
+shipping_address = "JSONB field for shipping address"
+vendor_address = "JSONB field for vendor address"
+linked_transactions = "JSONB field for linked transactions"
+file_id = "FK to files"
+sync_hash = "Sync hash for data consistency"
+invoice_json = "JSONB field for invoice data"
+rejected_references = "JSONB field for rejected references"
+created_at = "Creation timestamp"
+updated_at = "Last update timestamp"
+is_deleted = "Deletion flag"
+deleted_at = "Timestamp of deletion"
+created_by = "Creator user ID"
+updated_by = "Last updater user ID"
+fx_rate_used = "Foreign exchange rate used"
+amount_usd = "Amount in USD"
+fx_rate_date = "Date of foreign exchange rate"
+fx_is_provisional = "Flag for provisional rate"
+fx_source = "Source of foreign exchange rate"
+
+[tables."finopsiq.vendors"]
+description = "This table stores vendor information, including contact details, tax status, and addresses. It links to invoices and purchase orders via vendor_id, and contains fields like balance, is_active, and tax-related data for vendor management."
+
+[tables."finopsiq.vendors".columns]
+vendor_id = "FK to invoices"
+tenant_id = "FK to tenants"
+connector_id = "FK to connectors"
+external_realm_id = "FK to realms"
+external_vendor_id = "External vendor ID from a system"
+source = "Source of vendor data"
+title = "Vendor title or designation"
+given_name = "First name"
+middle_name = "Middle name"
+family_name = "Last name"
+company_name = "Company name"
+display_name = "Display name for vendor"
+phone = "Phone number"
+email = "Vendor email address"
+tin = "Tax identification number"
+balance = "Vendor balance amount"
+is_active = "Active status flag"
+is_taxable = "Taxable status flag"
+vendor_address = "JSONB field for vendor address"
+remittance_address = "Remittance address"
+assigned_instruction_ids = "JSONB field for instructions"
+sync_hash = "Sync hash for data consistency"
+created_at = "Creation timestamp"
+updated_at = "Last update timestamp"
+updated_by = "Last updater user ID"
+created_by = "Creator user ID"
+
+[tables."finopsiq.general_documents"]
+description = "This table stores general documents, including invoices and purchase orders, with metadata like file names, source, and classification. It links to vendors and customers via foreign keys and contains extracted data and document type information."
+
+[tables."finopsiq.general_documents".columns]
+general_document_id = "Unique identifier for the document"
+tenant_id = "FK to tenants"
+file_id = "FK to files"
+original_file_name = "Name of the original document file"
+source = "Source of the document"
+internet_message_id = "Message ID for email tracking"
+document_subtype = "Document subtype (e.g., invoice)"
+classification_confidence = "Confidence level in classification"
+extracted_data = "JSONB field for extracted data"
+invoice_number_refs = "Array of invoice numbers"
+sync_hash = "Sync hash for data consistency"
+document_type = "Type of document"
+vendor_id = "FK to vendors"
+customer_id = "FK to customers"
+is_deleted = "Deletion flag"
+deleted_at = "Timestamp of deletion"
+created_at = "Creation timestamp"
+updated_at = "Last update timestamp"
+created_by = "Creator user ID"
+updated_by = "Last updater user ID"
+
+[tables."finopsiq.purchase_orders"]
+description = "This table tracks purchase orders, including vendor and customer details, order status, and financial data. It links to invoices and general documents via foreign keys and contains fields like currency, exchange rate, and tax information for order management."
+
+[tables."finopsiq.purchase_orders".columns]
+po_id = "Unique identifier for the purchase order"
+tenant_id = "FK to tenants"
+connector_id = "FK to connectors"
+external_po_id = "External PO ID from a system"
+external_realm_id = "FK to realms"
+source = "Source of the purchase order"
+internet_message_id = "Message ID for email tracking"
+invoice_id = "FK to invoices"
+vendor_id = "FK to vendors"
+customer_id = "FK to customers"
+show_status = "Status flag for visibility"
+is_deleted = "Deletion flag"
+deleted_at = "Timestamp of deletion"
+order_status = "Order status (e.g., pending)"
+billed_status = "Billing status"
+received_status = "Received status"
+email_status = "Email notification status"
+po_number = "Purchase order number"
+original_file_name = "Name of the original PO file"
+po_received_date = "Date the PO was received"
+po_date = "Date the PO was issued"
+expected_delivery_date = "Expected delivery date"
+delivery_date = "Actual delivery date"
+po_expiry_date = "Expiry date"
+currency = "Currency code"
+exchange_rate = "Exchange rate for currency conversion"
+total_quantity = "Total quantity of items"
+subtotal = "Subtotal amount"
+discount_type = "Type of discount"
+discount_amount = "Discount amount"
+discount_percentage = "Discount percentage"
+discount_account_id = "Account ID for discount"
+discount_account_name = "Name of discount account"
+is_discount_before_tax = "Flag for discount application order"
+shipping_charges = "Shipping charges amount"
+apply_tax_after_discount = "Flag for tax application after discount"
+tax_calculation_level = "Tax calculation level"
+taxes = "JSONB field for tax details"
+total_amount = "Total amount after discounts/taxes"
+is_reverse_charge_applied = "Flag for reverse charge application"
+reverse_charge_total = "Total amount for reverse charge"
+gst_number = "GST number"
+gst_treatment = "GST treatment details"
+vendor_name = "Vendor name"
+email = "Vendor email address"
+notes = "Notes for the PO"
+terms_and_conditions = "Terms and conditions"
+message_to_vendor = "Message to vendor"
+memo = "Memo or notes"
+billing_address = "JSONB field for billing address"
+vendor_address = "JSONB field for vendor address"
+delivery_customer_id = "FK to customers"
+delivery_customer_address = "JSONB field for delivery address"
+delivery_customer_name = "Delivery customer name"
+contact_persons_associated = "JSONB field for contact persons"
+linked_transactions = "JSONB field for linked transactions"
+file_id = "FK to files"
+sync_hash = "Sync hash for data consistency"
+po_type = "Type of purchase order"
+billing_type = "Billing type"
+po_json = "JSONB field for PO data"
+created_at = "Creation timestamp"
+updated_at = "Last update timestamp"
+created_by = "Creator user ID"
+updated_by = "Last updater user ID"
+
+[tables."finopsiq.invoice_document_links"]
+description = "This table links invoices to other documents like purchase orders or general documents via foreign keys. It tracks relationships between documents, including the source and target document IDs, and provides metadata for document linking."
+
+[tables."finopsiq.invoice_document_links".columns]
+link_id = "Unique identifier for the link"
+tenant_id = "FK to tenants"
+source_document_type = "Type of source document"
+source_document_id = "FK to invoices"
+target_document_type = "Type of target document"
+target_po_id = "FK to purchase orders"
+target_contract_id = "FK to contracts"
+target_general_document_id = "FK to general documents"
+linked_by = "User who created the link"
+relationship_role = "Role in the relationship"
+created_at = "Creation timestamp"
+updated_at = "Last update timestamp"
+
+[tables."finopsiq.invoice_line_items"]
+description = "This table tracks individual line items of invoices, capturing details like product information, quantity, unit price, and tax data. It includes columns for invoice_id, product_id, customer_id, and timestamps for creation and updates. The product_id references the products table, and customer_id links to a customer table not in this batch. It is used to look up invoice line item details and manage billable status and discounts."
+
+[tables."finopsiq.invoice_line_items".columns]
+invoice_line_item_id = "Primary key for invoice line items"
+invoice_id = "FK to invoices"
+tenant_id = "FK to tenants"
+po_line_item_id = "FK to po_line_items"
+external_line_item_id = "External line item ID"
+line_number = "Line number"
+line_item_type = "Line item type"
+product_id = "FK to products"
+billable_status = "Billable status"
+description = "Description"
+item_name = "Item name"
+quantity_text = "Quantity text"
+quantity = "Quantity"
+quantity_unit = "Quantity unit"
+unit_price_text = "Unit price text"
+unit_price = "Unit price"
+unit_price_unit = "Unit price unit"
+line_total = "Line total"
+discount_type = "Discount type"
+discount_amount = "Discount amount"
+discount_percentage = "Discount percentage"
+apply_tax_after_discount = "Tax applied after discount"
+taxes = "Taxes data"
+customer_id = "FK to customers"
+customer_name = "Customer name"
+created_at = "Creation time"
+updated_at = "Last updated time"
+
+[tables."finopsiq.invoice_revisions"]
+description = "This table tracks revisions of invoices, storing metadata like revision numbers, file IDs, and edit sources. It links to the invoices table via invoice_id and includes timestamps for creation and updates. Used to manage historical changes to invoice data."
+
+[tables."finopsiq.invoice_revisions".columns]
+revision_id = "Primary key for invoice revisions"
+invoice_id = "FK to invoices"
+revision_number = "Revision number"
+file_id = "File ID"
+snapshot = "Snapshot data"
+edit_source = "Edit source"
+edited_by = "Edited by"
+user_acknowledged_risk = "Risk acknowledged"
+created_at = "Creation time"
+
+[tables."finopsiq.po_line_items"]
+description = "This table tracks line items of purchase orders, capturing product details, quantity, unit price, and tax data. It links to the products table via product_id and includes timestamps for creation and updates. Used to manage purchase order line item details."
+
+[tables."finopsiq.po_line_items".columns]
+po_line_item_id = "Primary key for po line items"
+po_id = "FK to purchase orders"
+tenant_id = "FK to tenants"
+external_line_item_id = "External line item ID"
+line_number = "Line number"
+line_item_type = "Line item type"
+product_id = "FK to products"
+billable_status = "Billable status"
+item_name = "Item name"
+description = "Description"
+quantity_text = "Quantity text"
+quantity = "Quantity"
+quantity_unit = "Quantity unit"
+unit_price_text = "Unit price text"
+unit_price = "Unit price"
+unit_price_unit = "Unit price unit"
+line_total = "Line total"
+discount_type = "Discount type"
+discount_amount = "Discount amount"
+discount_percentage = "Discount percentage"
+apply_tax_after_discount = "Tax applied after discount"
+taxes = "Taxes data"
+customer_id = "FK to customers"
+customer_name = "Customer name"
+created_at = "Creation time"
+updated_at = "Last updated time"
+processed_quantity = "Processed quantity"
+
+[tables."finopsiq.po_revisions"]
+description = "This table tracks revisions of purchase orders, storing metadata like revision numbers, file IDs, and edit sources. It links to the purchase orders table via po_id and includes timestamps for creation and updates. Used to manage historical changes to purchase order data."
+
+[tables."finopsiq.po_revisions".columns]
+revision_id = "Primary key for po revisions"
+po_id = "FK to purchase orders"
+revision_number = "Revision number"
+file_id = "File ID"
+snapshot = "Snapshot data"
+edit_source = "Edit source"
+context_id = "Context ID"
+edited_by = "Edited by"
+user_acknowledged_risk = "Risk acknowledged"
+created_at = "Creation time"
+
+[tables."finopsiq.products"]
+description = "This table stores product information, including product codes, default descriptions, and timestamps for creation and updates. It is referenced by invoice_line_items and po_line_items tables via product_id. Used to look up product details and manage product data."
+
+[tables."finopsiq.products".columns]
+product_id = "Primary key for products"
+product_code = "Product code"
+default_description = "Default description"
+created_at = "Creation time"
+updated_at = "Last updated time"
+
+[tables."finopsiq.currency_rates"]
+description = "This table stores currency exchange rates, including USD rates, sources, and timestamps for updates and creation. It is used to look up currency values for financial calculations and tracking rate changes."
+
+[tables."finopsiq.currency_rates".columns]
+currency = "Currency code"
+usd_rate = "USD exchange rate"
+source = "Data source"
+updated_at = "Last update timestamp"
+created_at = "Creation timestamp"
+rate_date = "Rate validity date"
+
+[tables."finopsiq.discrepancies_details"]
+description = "This table tracks discrepancies in financial data, linking to relevant documents and storing validation details. It is used to identify and resolve discrepancies in invoice processing."
+
+[tables."finopsiq.discrepancies_details".columns]
+discrepancies_id = "Unique discrepancy identifier"
+tenant_id = "Tenant ID"
+match_id = "FK to relevant_document_details"
+match_type = "Discrepancy type"
+has_discrepancy = "Discrepancy presence flag"
+confidence_score = "Confidence level in discrepancy"
+confidence_breakdown = "Detailed confidence analysis"
+comparison_discrepancies_details = "Discrepancy comparison data"
+basic_validation_details = "Validation results"
+missing_relevant_documents = "Document absence flag"
+missing_relevant_documents_info = "Document info"
+matched_details = "Matched data"
+discrepancy_summary = "Discrepancy summary"
+processing_metadata = "Processing logs"
+enriched_findings = "Enhanced findings"
+pre_revalidation_details = "Pre-validation data"
+created_by_user_id = "Creator user ID"
+resolved_by_user_id = "Resolver user ID"
+created_at = "Creation timestamp"
+updated_at = "Last update timestamp"
+dra_trigger_status = "DRA status"
+dra_claimed_at = "DRA claim timestamp"
+dra_completed_at = "DRA completion timestamp"
+dra_attempts = "DRA attempt count"
+
+[tables."finopsiq.genbooks_requests"]
+description = "This table tracks GenBooks invoice requests, linking to documents and storing status and error details. It is used to manage invoice processing and track discrepancies."
+
+[tables."finopsiq.genbooks_requests".columns]
+request_id = "Request identifier"
+invoice_id = "Invoice identifier"
+tenant_id = "Tenant ID"
+file_urls = "Document URLs"
+status = "Request status"
+match_id = "FK to relevant_document_details"
+discrepancies_id = "FK to discrepancies_details"
+channel = "Request channel"
+agent_updated = "Agent update status"
+error_message = "Error details"
+invoice_type = "Invoice type"
+ar_status = "Accounts receivable status"
+status_reason = "Status explanation"
+is_deleted = "Deletion flag"
+deleted_at = "Deletion timestamp"
+created_at = "Creation timestamp"
+updated_at = "Last update timestamp"
+
+[tables."finopsiq.relevant_document_details"]
+description = "This table stores metadata for documents linked to invoices, including match status and processing details. It is used to track document validation and synchronization."
+
+[tables."finopsiq.relevant_document_details".columns]
+match_id = "FK to discrepancies_details"
+tenant_id = "Tenant ID"
+invoice_id = "Invoice identifier"
+match_status = "Document status"
+source_type = "Document source type"
+match_type = "Match category"
+match_confidence = "Match confidence score"
+po_details = "Purchase order data"
+contracts_details = "Contract data"
+invoice_details = "Invoice data"
+general_document_details = "Document metadata"
+internet_message_id = "Message ID"
+processing_metadata = "Processing logs"
+source_sync_hash = "Sync hash"
+processed_at = "Processing timestamp"
+created_at = "Creation timestamp"
+updated_at = "Last update timestamp"
+
+[tables."finopsiq.discrepancy_resolution"]
+description = "This table tracks resolution of discrepancies, including status, vendor contact details, and resolution notes. It is used to manage and document discrepancy resolution processes."
+
+[tables."finopsiq.discrepancy_resolution".columns]
+discrepancy_id = "Discrepancy identifier"
+resolution_id = "Resolution identifier"
+match_id = "FK to relevant_document_details"
+invoice_type = "Invoice type"
+discrepancy_type = "Discrepancy category"
+vendor_email = "Vendor contact email"
+finance_admin_id = "Admin ID"
+status = "Resolution status"
+retry_count = "Retry attempts"
+trigger_time = "Trigger timestamp"
+resolution_time = "Resolution timestamp"
+resolution_notes = "Notes"
+created_at = "Creation timestamp"
+updated_at = "Last update timestamp"
+
+[tables."finopsiq.resolution_audit_log"]
+description = "This table tracks audit logs for resolution processes, recording actions taken, performers, and timestamps. It includes resolution_id, invoice_id, and details about actions performed by users. It links to resolution_communication and email_context via resolution_id and invoice_id."
+
+[tables."finopsiq.resolution_audit_log".columns]
+audit_id = "Unique identifier for audit log entry"
+resolution_id = "FK to resolution entity"
+action_type = "Type of action performed"
+performed_by = "User who performed the action"
+details = "JSONB containing detailed action information"
+invoice_id = "FK to invoice entity"
+timestamp = "When the action was recorded"
+created_at = "When the audit log was created"
+
+[tables."finopsiq.resolution_communication"]
+description = "Records communication details for resolution processes, including vendor/customer contact info, message content, and status. It links to resolution_audit_log via resolution_id and email_context via invoice_id. Tracks communication metadata, retries, and validation status."
+
+[tables."finopsiq.resolution_communication".columns]
+communication_id = "Unique identifier for communication"
+resolution_id = "FK to resolution entity"
+tenant_id = "FK to tenant entity"
+vendor_name = "Vendor contact name"
+vendor_email = "Vendor contact email"
+vendor_address = "Vendor contact address"
+invoice_id = "FK to invoice entity"
+customer_name = "Customer contact name"
+customer_email = "Customer contact email"
+customer_address = "Customer contact address"
+direction = "Communication direction (inbound/outbound)"
+type = "Communication type (email, call, etc.)"
+timestamp = "When communication was sent"
+subject = "Communication subject line"
+body_content = "JSONB containing message content"
+attachments_gcs_paths = "Paths to attached files"
+is_valid_response = "Flag for valid response status"
+status = "Communication status (sent, failed, etc.)"
+communication_metadata = ""
+performed_by = ""
+retry_count = ""
+created_at = ""
+updated_at = ""
+internet_message_id = ""
+
+[tables."finopsiq.dra_mailbox_config"]
+description = "Stores configuration details for email mailboxes, including address, validation status, and subscription settings. It links to tenants via tenant_id and tracks mailbox validation errors and subscription expiration dates."
+
+[tables."finopsiq.dra_mailbox_config".columns]
+tenant_id = "FK to tenant entity"
+mailbox_address = "Email address for the mailbox"
+status = "Validation or subscription status"
+validated_at = "When mailbox was validated"
+validation_error = "Error message from validation"
+graph_subscription_id = "Graph subscription identifier"
+graph_subscription_expires_at = "When subscription expires"
+created_at = "When configuration was created"
+updated_at = "Last update timestamp"
+created_by = "User who created the config"
+updated_by = "User who last updated the config"
+
+[tables."finopsiq.email_context"]
+description = "Captures email context details, including subject, sender, recipients, intent, and extracted references. It links to email_context_link via conversation_id and tracks email processing metadata and timestamps."
+
+[tables."finopsiq.email_context".columns]
+id = "Unique identifier for email context"
+internet_message_id = "Email message ID"
+tenant_id = "FK to tenant entity"
+conversation_id = "FK to email_context_link"
+subject = "Email subject line"
+sender = "Email sender address"
+recipients = "Array of recipient addresses"
+intent_category = "Intent category (e.g., request, inquiry)"
+intent_type = "Specific intent type"
+context_summary = "Summary of email content"
+extracted_references = "Array of extracted references"
+pending_link = "Flag for pending link status"
+received_at = "When email was received"
+body_text = "Plain text email body"
+body_html = "HTML email body"
+body_tables = "JSONB containing tables"
+body_cid_refs = "JSONB containing CID references"
+processed_at = "When email was processed"
+created_at = "When context was created"
+updated_at = "Last update timestamp"
+
+[tables."finopsiq.email_context_link"]
+description = "Links email contexts to external entities, tracking link type, entity type, and timestamps. It connects email_context to other entities via context_id and links to tenant entities via tenant_id."
+
+[tables."finopsiq.email_context_link".columns]
+id = "Unique identifier for link"
+tenant_id = "FK to tenant entity"
+context_id = "FK to email_context"
+entity_type = "Type of linked entity"
+entity_id = "ID of linked entity"
+linked_by = "User who created the link"
+linked_at = "When link was created"
+link_type = "Type of relationship"
+created_at = "When link was created"
+updated_at = "Last update timestamp"
+
+[tables."finopsiq.entity_audit_log"]
+description = "This table tracks changes to entities, logging audit entries with unique identifiers, invoice references, and action details. It includes timestamps, user-performed actions, and JSONB fields for changes and metadata, used to monitor entity modifications across tenants."
+
+[tables."finopsiq.entity_audit_log".columns]
+audit_id = "unique identifier for audit entry"
+invoice_id = "links to invoice"
+tenant_id = "links to tenant"
+action_type = "type of action"
+performed_by = "user who performed action"
+performed_by_name = "name of user"
+summary = "summary of action"
+changes = "JSONB of changes"
+metadata = "JSONB of metadata"
+revision_number = "version number"
+created_at = "timestamp"
+
+[tables."finopsiq.genbooks_entity_aliases"]
+description = "This table stores aliases for entities in GenBooks, linking entities to tenants, raw names, and types. It tracks creation and update timestamps, used to manage entity name variations across tenants."
+
+[tables."finopsiq.genbooks_entity_aliases".columns]
+id = "unique identifier"
+tenant_id = "links to tenant"
+raw_name = "name of entity"
+entity_type = "type of entity"
+entity_id = "identifier for entity"
+created_at = "timestamp"
+updated_at = "timestamp"
+
+[tables."finopsiq.ignored_discrepancies"]
+description = "This table records discrepancies that are ignored, storing details like vendor, invoice, discrepancy ID, and severity. It tracks timestamps, user IDs, and reasons for ignoring discrepancies across tenants."
+
+[tables."finopsiq.ignored_discrepancies".columns]
+ignored_discrepancy_id = "unique identifier"
+tenant_id = "links to tenant"
+vendor_id = "links to vendor"
+invoice_id = "links to invoice"
+discrepancy_id = "ID of discrepancy"
+discrepancy_uid = "unique identifier for discrepancy"
+item_key = "key for item"
+discrepancy_type = "type of discrepancy"
+check_name = "name of check"
+severity = "severity level"
+message = "message text"
+group_id = "identifier for group"
+group_reason = "reason for group"
+is_future_rule = "boolean flag"
+effective_from = "timestamp"
+restored_invoice_ids = "JSONB of restored invoices"
+ignored_by_user_id = "user ID"
+is_active = "boolean flag"
+created_at = "timestamp"
+
+[tables."finopsiq.invoice_reminder_state"]
+description = "This table tracks the state of invoice reminders, including status, next reminder times, customer details, and financial information. It logs timestamps for creation, updates, and alerts, used to manage reminder workflows."
+
+[tables."finopsiq.invoice_reminder_state".columns]
+invoice_id = "links to invoice"
+tenant_id = "links to tenant"
+status = "current status"
+next_reminder_at = "next reminder time"
+next_level = "level of reminder"
+customer_email = "customer email"
+customer_name = "customer name"
+invoice_number = "invoice number"
+total_amount = "total amount"
+amount_paid = "amount paid"
+amount_due = "amount due"
+due_date = "due date"
+currency = "currency type"
+last_payment_at = "last payment time"
+invoice_json = "JSONB of invoice"
+created_at = "timestamp"
+updated_at = "timestamp"
+max_reached_at = "timestamp"
+admin_alert_sent_at = "timestamp"
+
+[tables."finopsiq.reminders"]
+description = "This table logs reminders sent for invoices, tracking status, recipient details, and timestamps. It includes foreign keys to the invoice_reminder_state table and details about reminder templates and attempts."
+
+[tables."finopsiq.reminders".columns]
+reminder_id = "unique identifier"
+invoice_id = "FK to invoice_reminder_state"
+tenant_id = "links to tenant"
+level = "reminder level"
+reminder_label = "label for reminder"
+reminder_tone = "tone of reminder"
+template_used = "template used"
+recipient_email = "recipient email"
+recipient_name = "recipient name"
+status = "status of reminder"
+skip_reason = "reason for skipping"
+error_message = "error message"
+email_html = "HTML email"
+sent_at = "timestamp"
+next_reminder_at = "next reminder time"
+scheduler_request_id = "request ID"
+attempt = "number of attempt"
+created_at = "timestamp"
+
+[tables."finopsiq.parser_headers"]
+description = "This table stores metadata about parsed document headers, including unique identifiers, tenant associations, and configuration details. It contains columns for the header ID, tenant ID (FK to tenant_profiles), document fingerprint, type, vendor ID, field rules, table configuration, orphan configuration, match count, status, template schema version, learned by, and timestamps for creation and update. It is used to look up parsed document headers and their associated configurations."
+
+[tables."finopsiq.parser_headers".columns]
+parser_header_id = "Unique identifier for the header"
+tenant_id = "FK to tenant_profiles"
+fingerprint = "Hash of the document's content"
+doc_type = "Type of document processed"
+vendor_id = "Identifier for the document vendor"
+field_rules = "JSONB rules for field parsing"
+table_config = "JSONB configuration for table structure"
+orphan_config = "JSONB configuration for orphan fields"
+match_count = "Number of matched fields"
+status = "Current processing status"
+template_schema_version = "Version of the schema template"
+learned_by = "Model or system that learned the configuration"
+created_at = "Timestamp of creation"
+updated_at = "Timestamp of last update"
+
+[tables."finopsiq.tenant_profiles"]
+description = "This table stores detailed information about each tenant, including organizational details, contact information, and settings. It contains columns for the tenant ID (FK to parser_headers, reminder_alert_config, reminder_configuration), organization name, domain, company website, tax numbers, timezone, language, country, state, currency, creation and update timestamps, and user identifiers. It is used to look up tenant-specific configurations and metadata."
+
+[tables."finopsiq.tenant_profiles".columns]
+tenant_id = "FK to parser_headers, reminder_alert_config, reminder_configuration"
+organization_name = "Name of the organization"
+domain = "Domain name of the tenant"
+company_website = "Website URL of the tenant"
+gst_number = "GST registration number"
+tin_number = "TIN registration number"
+pan_number = "PAN card number"
+legal_org_name = "Legal name of the organization"
+timezone = "Time zone setting"
+language = "Preferred language"
+country = "Country of the tenant"
+state = "State or region"
+currency = "Currency code"
+created_at = "Timestamp of creation"
+updated_at = "Timestamp of last update"
+created_by = "User who created the tenant"
+updated_by = "User who last updated the tenant"
+industry = "Industry classification"
+max_retries = "Maximum number of retries for operations"
+cooldown_seconds = "Seconds before retrying after failure"
+
+[tables."finopsiq.reminder_alert_config"]
+description = "This table stores alert configuration settings for tenants, including whether alerts are enabled, recipient emails, delay minutes, and timestamps. It is linked to tenant_profiles via the tenant_id foreign key and is used to look up alert settings for specific tenants."
+
+[tables."finopsiq.reminder_alert_config".columns]
+config_id = "Unique identifier for the alert configuration"
+tenant_id = "FK to tenant_profiles"
+is_enabled = "Boolean flag for alert activation"
+recipient_emails = "JSONB list of email recipients"
+delay_minutes = "Minutes before alert delivery"
+created_by = "User who created the configuration"
+updated_by = "User who last updated the configuration"
+created_at = "Timestamp of creation"
+updated_at = "Timestamp of last update"
+
+[tables."finopsiq.reminder_configuration"]
+description = "This table stores reminder settings for tenants, including levels, day ranges, labels, tones, and activation status. It is linked to tenant_profiles via the tenant_id foreign key and is used to look up reminder parameters for specific tenants."
+
+[tables."finopsiq.reminder_configuration".columns]
+config_id = "Unique identifier for the reminder configuration"
+tenant_id = "FK to tenant_profiles"
+level = "Priority level of the reminder"
+from_days = "Start day for the reminder window"
+to_days = "End day for the reminder window"
+display_label = "Label for the reminder"
+reminder_label = "User-facing reminder label"
+reminder_tone = "Tone or style of the reminder"
+is_enabled = "Boolean flag for reminder activation"
+created_at = "Timestamp of creation"
+updated_at = "Timestamp of last update"
+created_by = ""
+updated_by = ""
+
+[tables."finopsiq.payment_history"]
+description = "This table records payment transactions for invoices, including payment amounts, dates, actions, and currency. It is linked to tenant_profiles via the tenant_id foreign key and is used to look up payment history for specific tenants."
+
+[tables."finopsiq.payment_history".columns]
+payment_id = "Unique identifier for the payment"
+tenant_id = "FK to tenant_profiles"
+invoice_id = "Identifier for the associated invoice"
+amount = "Payment amount in currency"
+payment_date = "Date of the payment"
+action = "Type of payment action"
+currency = "Currency code"
+balance_after = "Remaining balance after payment"
+recorded_by = "User who recorded the payment"
+created_at = "Timestamp of creation"
+updated_at = "Timestamp of last update"
+
+[tables."finopsiq.system_audit_log"]
+description = "This table logs system actions and events, capturing details like the actor, action, outcome, and entity affected. It includes timestamps, unique identifiers, and contextual data to track system behavior and changes."
+
+[tables."finopsiq.system_audit_log".columns]
+audit_id = "Unique identifier for audit log entry"
+tenant_id = "UUID of the tenant associated with the log"
+actor_id = "UUID of the user or system that performed the action"
+actor_name = "Name of the user or system that performed the action"
+action = "Type of action performed (e.g., update, delete)"
+outcome = "Result of the action (e.g., success, failure)"
+reason = "Reason for the action or outcome"
+entity_group = "Group of entities affected by the action"
+entity_type = "Type of entity affected by the action"
+entity_id = "UUID of the entity affected by the action"
+entity_label = "Label of the entity affected by the action"
+summary = "Summary of the action and its outcome"
+changes = "JSON data representing changes made"
+context = "JSON data providing additional context for the action"
+created_at = "Timestamp when the audit log entry was created"
+
+[tables."finopsiq.tax_metadata"]
+description = "This table stores metadata for tax codes, including their rates, validity status, and timestamps for creation and last update. It serves as a reference for tax-related data and regulatory compliance."
+
+[tables."finopsiq.tax_metadata".columns]
+id = "Unique identifier for the tax metadata entry"
+tax_code = "Tax code associated with the metadata"
+tax_rates = "JSON data containing tax rate information"
+is_rate_valid = "Boolean indicating if the tax rates are valid"
+created_at = "Timestamp when the metadata was created"
+updated_at = "Timestamp when the metadata was last updated"
+
+[tables."finopsiq.thread_enrichment_queue"]
+description = "This table tracks the status and processing details of threads in an enrichment queue, including retry counts, errors, and timestamps for creation and last update. It manages system workflows for data enrichment tasks."
+
+[tables."finopsiq.thread_enrichment_queue".columns]
+id = "Unique identifier for the queue entry"
+tenant_id = "UUID of the tenant associated with the queue"
+conversation_id = "ID of the conversation being enriched"
+status = "Current status of the enrichment process"
+claimed_at = "Timestamp when the entry was claimed"
+retry_count = "Number of times the entry has been retried"
+last_error = "Last error encountered during processing"
+created_at = "Timestamp when the entry was created"
+updated_at = "Timestamp when the entry was last updated"
+
+[tables."finopsiq.unmatched_inbound_email"]
+description = "This table logs unmatched inbound emails, capturing sender details, email content, resolution reasons, and timestamps for receipt and review. It helps track and resolve unprocessed email events."
+
+[tables."finopsiq.unmatched_inbound_email".columns]
+id = "Unique identifier for the email entry"
+tenant_id = "UUID of the tenant associated with the email"
+sender_email = "Email address of the sender"
+sender_name = "Name of the sender"
+subject = "Subject line of the email"
+body_text = "Text content of the email"
+internet_message_id = "Unique identifier for the email message"
+reason = "Reason the email was unmatched"
+resolution_id = "ID of the resolution for the email"
+received_at = "Timestamp when the email was received"
+created_at = "Timestamp when the email was logged"
+reviewed_at = "Timestamp when the email was reviewed"
+reviewed_by = "Name of the person who reviewed the email"
+
+[tables."finopsiq.us_state_sourcing"]
+description = "This table records how states are sourced, including their codes, sourcing methods, and the last observed timestamp. It provides metadata for tracking data origins and updates."
+
+[tables."finopsiq.us_state_sourcing".columns]
+state_code = "Code representing the state"
+sourcing = "Method or source used to gather data"
+source = "Origin of the data"
+last_observed = "Timestamp of the last observation"
+
+[tables."finopsiq.us_tax_rate_cache"]
+description = "The finopsiq.us_tax_rate_cache table stores tax rate data for locations and time periods. It includes postal code, city name, state code, county FIPS, and other rate details such as state, county, city, and district rates. The table also contains raw response data, cached timestamp, and the year and month of the rate data."
+
+[tables."finopsiq.us_tax_rate_cache".columns]
+postal_code = "Postal code identifier"
+city_name = "City name"
+tic_id = "TIC ID"
+state_code = "State code"
+county_fips = "County FIPS"
+county_name = "County name"
+sourcing_flag = "Sourcing flag"
+state_rate = "State rate"
+county_rate = "County rate"
+city_rate = "City rate"
+district_rate = "District rate"
+combined_rate = "Combined rate"
+raw_response = "Raw response data"
+cached_at = "Cached timestamp"
+rate_year = "Rate year"
+rate_month = "Rate month"
+
+[tables."finopsiq.us_tic_cache"]
+description = "The finopsiq.us_tic_cache table stores cached information about TICs (Tax Identification Codes), including their descriptions, labels, and expiration details. It includes the TIC ID, label, normalized label, and description, along with the cached timestamp and expiration time."
+
+[tables."finopsiq.us_tic_cache".columns]
+id = "UUID ID"
+description = "Description"
+tic_id = "TIC ID"
+label = "Label"
+label_normalized = "Normalized label"
+tic_description = "TIC description"
+cached_at = "Cached timestamp"
+expires_at = "Expiration timestamp"
+
+[tables."finopsiq.vendor_instructions"]
+description = "The finopsiq.vendor_instructions table stores instructions for vendors, including rule names, prompts, action types, severity levels, and status flags. It tracks creation and update timestamps, along with the user who created or updated the instruction."
+
+[tables."finopsiq.vendor_instructions".columns]
+id = "UUID ID"
+tenant_id = "Tenant ID"
+rule_name = "Rule name"
+instruction_prompt = "Instruction prompt"
+action_type = "Action type"
+severity = "Severity level"
+is_global = "Global flag"
+is_active = "Active status"
+created_by = "Creator"
+created_at = "Creation timestamp"
+updated_at = "Update timestamp"
+updated_by = "Updater"

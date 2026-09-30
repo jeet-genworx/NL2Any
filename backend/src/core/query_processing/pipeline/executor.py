@@ -30,14 +30,22 @@ class QueryExecutor:
         self,
         query: GeneratedQuery,
         connection: str | None = None,
+        database: str | None = None,
     ) -> tuple[list[str], list[dict[str, Any]]]:
-        """Execute query safely and return (columns, rows)."""
+        """Execute query safely and return (columns, rows).
+
+        `connection` and `database` come from the target being queried, so a
+        database added at runtime is executed against its own server rather
+        than the one named in settings. Both fall back to settings when absent,
+        which is what the built-in targets rely on. `database` applies to
+        MongoDB only; PostgreSQL's is inside the DSN.
+        """
         if query.database_type == DatabaseType.POSTGRESQL:
             return self._execute_postgres(str(query.raw_query), dsn=connection)
         elif query.database_type == DatabaseType.MONGODB:
             if not isinstance(query.raw_query, MongoQuery):
                 raise ValueError("MongoDB query must be a MongoQuery model instance.")
-            return self._execute_mongo(query.raw_query, uri=connection)
+            return self._execute_mongo(query.raw_query, uri=connection, database=database)
         raise ValueError(f"Unsupported database type: {query.database_type}")
 
     def _execute_postgres(
@@ -68,17 +76,22 @@ class QueryExecutor:
         self,
         query: MongoQuery,
         uri: str | None = None,
+        database: str | None = None,
     ) -> tuple[list[str], list[dict[str, Any]]]:
         conn_uri = uri or self.mongo_uri
         if not conn_uri:
             raise ValueError("MongoDB connection URI (MONGODB_URI) is not configured.")
 
+        db_name = database or self.mongo_database
+        if not db_name:
+            raise ValueError("MongoDB database name is not configured.")
+
         client: MongoClient[dict[str, Any]] = MongoClient(
-            self.mongo_uri,
+            conn_uri,
             serverSelectionTimeoutMS=int(self.timeout_seconds * 1000),
         )
         try:
-            db = client[self.mongo_database]
+            db = client[db_name]
             collection = db[query.collection]
 
             limit = min(query.limit or self.max_rows, self.max_rows)
