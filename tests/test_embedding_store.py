@@ -10,18 +10,18 @@ from backend.src.core.query_processing.retrieval.store import EmbeddingStore
 def test_embedding_store_valid_json(tmp_path: Path):
     file_path = tmp_path / "postgres_embeddings.json"
     data = {
-        "customers": [0.1] * 384,
-        "orders": [0.2] * 384,
+        "customers": [0.1] * 768,
+        "orders": [0.2] * 768,
     }
     file_path.write_text(json.dumps(data), encoding="utf-8")
 
-    store = EmbeddingStore(file_path=file_path, expected_dim=384)
+    store = EmbeddingStore(file_path=file_path, expected_dim=768)
     embeddings = store.load()
 
     assert len(embeddings) == 2
     assert "customers" in embeddings
     assert "orders" in embeddings
-    assert len(store.get("customers")) == 384
+    assert len(store.get("customers")) == 768
     assert store.get("non_existent") is None
     assert len(store.all_embeddings()) == 2
 
@@ -62,18 +62,18 @@ def test_embedding_store_empty_file(tmp_path: Path):
 def test_embedding_store_wrong_dimension(tmp_path: Path):
     file_path = tmp_path / "wrong_dim.json"
     data = {
-        "customers": [0.1] * 128,  # only 128 instead of 384
+        "customers": [0.1] * 128,  # only 128 instead of 768
     }
     file_path.write_text(json.dumps(data), encoding="utf-8")
 
-    store = EmbeddingStore(file_path=file_path, expected_dim=384)
-    with pytest.raises(ValueError, match="has dimension 128, expected 384"):
+    store = EmbeddingStore(file_path=file_path, expected_dim=768)
+    with pytest.raises(ValueError, match="has dimension 128, expected 768"):
         store.load()
 
 
 def test_embedding_store_non_numeric_values(tmp_path: Path):
     file_path = tmp_path / "non_numeric.json"
-    vec = [0.1] * 383 + ["string_value"]
+    vec = [0.1] * 767 + ["string_value"]
     file_path.write_text(json.dumps({"customers": vec}), encoding="utf-8")
 
     store = EmbeddingStore(file_path=file_path)
@@ -84,7 +84,7 @@ def test_embedding_store_non_numeric_values(tmp_path: Path):
 def test_embedding_store_invalid_table_name(tmp_path: Path):
     file_path = tmp_path / "invalid_key.json"
     # Empty string table name
-    file_path.write_text(json.dumps({"": [0.1] * 384}), encoding="utf-8")
+    file_path.write_text(json.dumps({"": [0.1] * 768}), encoding="utf-8")
 
     store = EmbeddingStore(file_path=file_path)
     with pytest.raises(ValueError, match="Invalid table name"):

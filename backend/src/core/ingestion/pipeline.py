@@ -18,6 +18,7 @@ from typing import Any, NamedTuple
 
 from backend.src.core.ingestion.schema.describe import (
     DEFAULT_BATCH_SIZE,
+    DEFAULT_MAX_BATCH_COLUMNS,
     apply_descriptions,
     describe_tables,
     table_descriptions,
@@ -139,6 +140,7 @@ async def run_ingestion_pipeline(
     database: DatabaseTarget | DatabaseType,
     use_mst: bool = True,
     batch_size: int = DEFAULT_BATCH_SIZE,
+    max_batch_columns: int = DEFAULT_MAX_BATCH_COLUMNS,
     force: bool = False,
 ) -> dict[str, Any]:
     """Run the full ingestion flow for a database and return a summary.
@@ -178,7 +180,11 @@ async def run_ingestion_pipeline(
     used_mst = use_mst and artifacts.mst_path is not None
     source_path = artifacts.mst_path if used_mst else artifacts.graph_path
 
-    descriptions = await describe_tables(source_path, batch_size=batch_size)
+    descriptions = await describe_tables(
+        source_path,
+        batch_size=batch_size,
+        max_batch_columns=max_batch_columns,
+    )
 
     # Stage 1 wrote the schema TOML before any description existed, so this is
     # what actually populates its `description` fields.

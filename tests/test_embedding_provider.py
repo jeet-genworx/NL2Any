@@ -9,7 +9,7 @@ from backend.src.control.providers.embedding.koboldcpp import KoboldCppEmbedding
 
 @pytest.mark.asyncio
 async def test_embedding_provider_success():
-    mock_vec = [0.1] * 384
+    mock_vec = [0.1] * 768
     mock_response = MagicMock(spec=httpx.Response)
     mock_response.status_code = 200
     mock_response.json.return_value = {
@@ -23,7 +23,7 @@ async def test_embedding_provider_success():
     provider = KoboldCppEmbeddingProvider(client=mock_client)
     result = await provider.embed("Show customers")
 
-    assert len(result) == 384
+    assert len(result) == 768
     assert result == mock_vec
     mock_client.post.assert_called_once()
 
@@ -54,7 +54,7 @@ async def test_embedding_provider_invalid_response_format():
 
 @pytest.mark.asyncio
 async def test_embedding_provider_wrong_dimension():
-    # Only 128 dimensions instead of 384
+    # Only 128 dimensions instead of 768
     mock_vec = [0.1] * 128
     mock_response = MagicMock(spec=httpx.Response)
     mock_response.status_code = 200
@@ -65,8 +65,8 @@ async def test_embedding_provider_wrong_dimension():
     mock_client = AsyncMock(spec=httpx.AsyncClient)
     mock_client.post.return_value = mock_response
 
-    provider = KoboldCppEmbeddingProvider(client=mock_client, expected_dim=384)
-    with pytest.raises(ValueError, match="Unexpected embedding dimension: got 128, expected 384"):
+    provider = KoboldCppEmbeddingProvider(client=mock_client, expected_dim=768)
+    with pytest.raises(ValueError, match="Unexpected embedding dimension: got 128, expected 768"):
         await provider.embed("Show customers")
 
 

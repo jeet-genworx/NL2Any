@@ -14,6 +14,7 @@ from backend.src.data.models.schema import (
     SchemaObjectKind,
 )
 from backend.src.core.ingestion.schema.describe import (
+    _chunk_nodes,
     apply_descriptions,
     describe_tables,
     table_descriptions,
@@ -363,3 +364,64 @@ def test_descriptions_path():
     assert paths.descriptions_path(DatabaseType.POSTGRESQL) == Path(
         "backend/src/data/schemas/postgres_descriptions.toml"
     )
+
+
+def _node(name: str, column_count: int) -> dict:
+    return {
+        "id": name,
+        "kind": "table",
+        "columns": [
+            {"name": f"c{i}", "type": "text", "nullable": True} for i in range(column_count)
+        ],
+    }
+
+
+def test_chunk_nodes_closes_batch_on_column_budget():
+    """A batch stops short of batch_size once its column budget is spent.
+
+    This is the FinOps failure in miniature: left to a fixed table count, the
+    two widest tables land in one request and the reply runs long enough to be
+    cut off mid-JSON.
+    """
+    nodes = [_node("wide_a", 60), _node("wide_b", 50), _node("narrow", 5)]
+
+    batches = _chunk_nodes(nodes, size=5, max_columns=90)
+
+    assert [[n["id"] for n in batch] for batch in batches] == [
+        ["wide_a"],
+        ["wide_b", "narrow"],
+    ]
+
+
+def test_chunk_nodes_still_honors_table_count_limit():
+    """The table count remains a ceiling even when columns are plentiful."""
+    nodes = [_node(f"t{i}", 1) for i in range(1, 8)]
+
+    batches = _chunk_nodes(nodes, size=5, max_columns=90)
+
+    assert [[n["id"] for n in batch] for batch in batches] == [
+        ["t1", "t2", "t3", "t4", "t5"],
+        ["t6", "t7"],
+    ]
+
+
+def test_chunk_nodes_keeps_oversized_table_in_its_own_batch():
+    """A table wider than the whole budget is described alone, never dropped."""
+    nodes = [_node("narrow", 3), _node("enormous", 200), _node("also_narrow", 4)]
+
+    batches = _chunk_nodes(nodes, size=5, max_columns=90)
+
+    assert [[n["id"] for n in batch] for batch in batches] == [
+        ["narrow"],
+        ["enormous"],
+        ["also_narrow"],
+    ]
+
+
+def test_chunk_nodes_preserves_every_node_in_order():
+    """Batching only groups nodes -- it never reorders, drops, or duplicates them."""
+    nodes = [_node(f"t{i}", i % 40) for i in range(1, 60)]
+
+    batches = _chunk_nodes(nodes, size=5, max_columns=90)
+
+    assert [n["id"] for batch in batches for n in batch] == [n["id"] for n in nodes]

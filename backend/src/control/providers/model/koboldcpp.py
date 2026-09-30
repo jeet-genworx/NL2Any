@@ -5,6 +5,17 @@ import httpx
 
 from backend.src.config import settings
 
+# Qwen3's soft switch for turning its reasoning pass off. Qwen3-4B is a hybrid
+# reasoning model that decides per request whether to open a <think> block, and
+# nothing bounds how long that block runs. The reasoning is charged to the same
+# completion budget as the answer, so when it does fire on a long structured
+# task it starves the JSON: measured on one ingestion batch, two identical
+# requests came back at 3772 tokens with no reasoning (parsed fine) and at the
+# full 8000-token limit with an unterminated <think> (no usable JSON). That
+# coin flip is the whole failure. With the switch on, the same batch lands at
+# ~3500 tokens every time. A model without a thinking mode ignores the token.
+NO_THINK_DIRECTIVE = "/no_think"
+
 
 class KoboldCppProvider:
     """Model provider communicating with a local KoboldCpp OpenAI-compatible HTTP API."""
@@ -17,6 +28,7 @@ class KoboldCppProvider:
         max_tokens: int | None = None,
         timeout: float | None = None,
         http_client: httpx.AsyncClient | None = None,
+        disable_thinking: bool | None = None,
     ) -> None:
         self.base_url = (base_url or settings.koboldcpp_base_url).rstrip("/")
         self.model = model or settings.koboldcpp_model
@@ -26,14 +38,18 @@ class KoboldCppProvider:
         self.default_max_tokens = (
             max_tokens if max_tokens is not None else settings.model_max_tokens
         )
-        # Local SLM generation is slow, and long-form stages (ingestion's per-table
-        # plus per-column descriptions) can run for minutes on one batch.
         if timeout is not None:
             self.timeout = float(timeout) if timeout > 0 else None
         elif settings.model_timeout_seconds is not None and settings.model_timeout_seconds > 0:
             self.timeout = float(settings.model_timeout_seconds)
         else:
             self.timeout = None
+
+        self.disable_thinking = (
+            disable_thinking
+            if disable_thinking is not None
+            else settings.model_disable_thinking
+        )
         self._external_client = http_client
 
     async def _get_client(self) -> httpx.AsyncClient:
@@ -56,10 +72,14 @@ class KoboldCppProvider:
         temp = temperature if temperature is not None else self.default_temperature
         max_toks = max_tokens if max_tokens is not None else self.default_max_tokens
 
+        user_content = prompt
+        if self.disable_thinking:
+            user_content = f"{prompt}\n\n{NO_THINK_DIRECTIVE}"
+
         messages: list[dict[str, str]] = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
-        messages.append({"role": "user", "content": prompt})
+        messages.append({"role": "user", "content": user_content})
 
         payload: dict[str, Any] = {
             "model": self.model,

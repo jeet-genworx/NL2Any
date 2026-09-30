@@ -92,6 +92,15 @@ class Settings(BaseSettings):
         alias="EMBEDDING_MODEL",
         description="Embedding model name",
     )
+    embedding_dimension: int = Field(
+        default=768,
+        alias="EMBEDDING_DIMENSION",
+        description=(
+            "Length of the vectors the embedding model produces. Stored embeddings "
+            "and query embeddings are both checked against it, so changing the "
+            "model to one with a different size means changing this and re-ingesting."
+        ),
+    )
     postgres_embeddings_path: str = Field(
         default="backend/src/data/embeddings/postgres_embeddings.json",
         alias="POSTGRES_EMBEDDINGS_PATH",
@@ -106,6 +115,26 @@ class Settings(BaseSettings):
         default="backend/src/data/embeddings/finops_embeddings.json",
         alias="FINOPS_EMBEDDINGS_PATH",
         description="Path to precomputed table description embeddings for the FinOps database",
+    )
+    embeddings_dir: str = Field(
+        default="backend/src/data/embeddings",
+        alias="EMBEDDINGS_DIR",
+        description=(
+            "Directory holding the embeddings of databases added at runtime from a "
+            "connection string. The three built-in targets keep their own explicit "
+            "path settings above; a database supplied through the frontend has no "
+            "settings field of its own, so its vectors are named after its "
+            "generated key inside this directory."
+        ),
+    )
+    connections_path: str = Field(
+        default="backend/src/data/schemas/connections.json",
+        alias="CONNECTIONS_PATH",
+        description=(
+            "Where connection strings supplied through the frontend are stored so "
+            "they survive a restart. Holds credentials in plain text -- it is "
+            "gitignored, and should be treated like the .env file."
+        ),
     )
     similarity_threshold: float = Field(
         default=0.25,
@@ -133,6 +162,20 @@ class Settings(BaseSettings):
         default=3,
         alias="MAX_RETRIES",
         description="Maximum retry attempts for table selection and query generation",
+    )
+    model_disable_thinking: bool = Field(
+        default=True,
+        alias="MODEL_DISABLE_THINKING",
+        description=(
+            "Append Qwen3's '/no_think' soft switch to each prompt. Qwen3-4B is a "
+            "hybrid reasoning model: left to itself it opens a <think> block whose "
+            "length is unbounded, and the reasoning is charged to the same "
+            "completion budget as the answer. On ingestion's describe stage, which "
+            "asks for one line per column across a batch of tables, the reasoning "
+            "leaves too little budget for the JSON and the object is cut off "
+            "mid-string. Turning thinking off reclaims the whole budget for the "
+            "answer. Set false for a model with no thinking mode to suppress."
+        ),
     )
     model_temperature: float = Field(
         default=0.1,

@@ -1,7 +1,7 @@
 [graph]
 database_type = "postgresql"
 database_name = "finopsiq_be"
-generated_at = "2026-09-25T10:10:19.410774+00:00"
+generated_at = "2026-09-30T06:15:17.507109+00:00"
 node_count = 68
 edge_count = 59
 
@@ -1425,6 +1425,153 @@ columns = [
 ]
 
 [[edges]]
+from = "auth.org_custom_role_privileges"
+from_column = "privilege_id"
+to = "auth.product_privileges"
+to_column = "id"
+type = "many_to_one"
+
+[[edges]]
+from = "auth.org_custom_role_privileges"
+from_column = "role_id"
+to = "auth.org_custom_roles"
+to_column = "id"
+type = "many_to_one"
+
+[[edges]]
+from = "auth.org_custom_roles"
+from_column = "organisation_id"
+to = "auth.organisations"
+to_column = "id"
+type = "many_to_one"
+
+[[edges]]
+from = "auth.org_domains"
+from_column = "organisation_id"
+to = "auth.organisations"
+to_column = "id"
+type = "many_to_one"
+
+[[edges]]
+from = "auth.org_group_members"
+from_column = "group_id"
+to = "auth.org_groups"
+to_column = "id"
+type = "many_to_one"
+
+[[edges]]
+from = "auth.org_group_members"
+from_column = "user_id"
+to = "auth.users"
+to_column = "id"
+type = "many_to_one"
+
+[[edges]]
+from = "auth.org_groups"
+from_column = "organisation_id"
+to = "auth.organisations"
+to_column = "id"
+type = "many_to_one"
+
+[[edges]]
+from = "auth.org_idp_config"
+from_column = "organisation_id"
+to = "auth.organisations"
+to_column = "id"
+type = "many_to_one"
+
+[[edges]]
+from = "auth.org_token_version"
+from_column = "org_id"
+to = "auth.organisations"
+to_column = "id"
+type = "many_to_one"
+
+[[edges]]
+from = "auth.otp_codes"
+from_column = "user_id"
+to = "auth.users"
+to_column = "id"
+type = "many_to_one"
+
+[[edges]]
+from = "auth.refresh_tokens"
+from_column = "user_id"
+to = "auth.users"
+to_column = "id"
+type = "many_to_one"
+
+[[edges]]
+from = "auth.user_custom_roles"
+from_column = "organisation_id"
+to = "auth.organisations"
+to_column = "id"
+type = "many_to_one"
+
+[[edges]]
+from = "auth.user_custom_roles"
+from_column = "role_id"
+to = "auth.org_custom_roles"
+to_column = "id"
+type = "many_to_one"
+
+[[edges]]
+from = "auth.user_custom_roles"
+from_column = "user_id"
+to = "auth.users"
+to_column = "id"
+type = "many_to_one"
+
+[[edges]]
+from = "auth.user_roles"
+from_column = "role_id"
+to = "auth.roles"
+to_column = "id"
+type = "many_to_one"
+
+[[edges]]
+from = "auth.user_roles"
+from_column = "user_id"
+to = "auth.users"
+to_column = "id"
+type = "many_to_one"
+
+[[edges]]
+from = "auth.users"
+from_column = "organisation_id"
+to = "auth.organisations"
+to_column = "id"
+type = "many_to_one"
+
+[[edges]]
+from = "connector_service.oauth_state"
+from_column = "connector_id"
+to = "connector_service.connectors"
+to_column = "id"
+type = "many_to_one"
+
+[[edges]]
+from = "connector_service.outlook_subscriptions"
+from_column = "connector_id"
+to = "connector_service.connectors"
+to_column = "id"
+type = "many_to_one"
+
+[[edges]]
+from = "connector_service.sync_jobs"
+from_column = "connector_id"
+to = "connector_service.connectors"
+to_column = "id"
+type = "many_to_one"
+
+[[edges]]
+from = "connector_service.tenant_connector_auth"
+from_column = "connector_id"
+to = "connector_service.connectors"
+to_column = "id"
+type = "many_to_one"
+
+[[edges]]
 from = "finopsiq.contracts"
 from_column = "customer_id"
 to = "finopsiq.customers"
@@ -1600,90 +1747,6 @@ to_column = "vendor_id"
 type = "many_to_one"
 
 [[edges]]
-from = "connector_service.oauth_state"
-from_column = "connector_id"
-to = "connector_service.connectors"
-to_column = "id"
-type = "many_to_one"
-
-[[edges]]
-from = "auth.org_custom_role_privileges"
-from_column = "privilege_id"
-to = "auth.product_privileges"
-to_column = "id"
-type = "many_to_one"
-
-[[edges]]
-from = "auth.org_custom_role_privileges"
-from_column = "role_id"
-to = "auth.org_custom_roles"
-to_column = "id"
-type = "many_to_one"
-
-[[edges]]
-from = "auth.org_custom_roles"
-from_column = "organisation_id"
-to = "auth.organisations"
-to_column = "id"
-type = "many_to_one"
-
-[[edges]]
-from = "auth.org_domains"
-from_column = "organisation_id"
-to = "auth.organisations"
-to_column = "id"
-type = "many_to_one"
-
-[[edges]]
-from = "auth.org_group_members"
-from_column = "group_id"
-to = "auth.org_groups"
-to_column = "id"
-type = "many_to_one"
-
-[[edges]]
-from = "auth.org_group_members"
-from_column = "user_id"
-to = "auth.users"
-to_column = "id"
-type = "many_to_one"
-
-[[edges]]
-from = "auth.org_groups"
-from_column = "organisation_id"
-to = "auth.organisations"
-to_column = "id"
-type = "many_to_one"
-
-[[edges]]
-from = "auth.org_idp_config"
-from_column = "organisation_id"
-to = "auth.organisations"
-to_column = "id"
-type = "many_to_one"
-
-[[edges]]
-from = "auth.org_token_version"
-from_column = "org_id"
-to = "auth.organisations"
-to_column = "id"
-type = "many_to_one"
-
-[[edges]]
-from = "auth.otp_codes"
-from_column = "user_id"
-to = "auth.users"
-to_column = "id"
-type = "many_to_one"
-
-[[edges]]
-from = "connector_service.outlook_subscriptions"
-from_column = "connector_id"
-to = "connector_service.connectors"
-to_column = "id"
-type = "many_to_one"
-
-[[edges]]
 from = "finopsiq.parser_headers"
 from_column = "tenant_id"
 to = "finopsiq.tenant_profiles"
@@ -1740,13 +1803,6 @@ to_column = "vendor_id"
 type = "many_to_one"
 
 [[edges]]
-from = "auth.refresh_tokens"
-from_column = "user_id"
-to = "auth.users"
-to_column = "id"
-type = "many_to_one"
-
-[[edges]]
 from = "finopsiq.reminder_alert_config"
 from_column = "tenant_id"
 to = "finopsiq.tenant_profiles"
@@ -1779,60 +1835,4 @@ from = "finopsiq.resolution_communication"
 from_column = "resolution_id"
 to = "finopsiq.discrepancy_resolution"
 to_column = "resolution_id"
-type = "many_to_one"
-
-[[edges]]
-from = "connector_service.sync_jobs"
-from_column = "connector_id"
-to = "connector_service.connectors"
-to_column = "id"
-type = "many_to_one"
-
-[[edges]]
-from = "connector_service.tenant_connector_auth"
-from_column = "connector_id"
-to = "connector_service.connectors"
-to_column = "id"
-type = "many_to_one"
-
-[[edges]]
-from = "auth.user_custom_roles"
-from_column = "organisation_id"
-to = "auth.organisations"
-to_column = "id"
-type = "many_to_one"
-
-[[edges]]
-from = "auth.user_custom_roles"
-from_column = "role_id"
-to = "auth.org_custom_roles"
-to_column = "id"
-type = "many_to_one"
-
-[[edges]]
-from = "auth.user_custom_roles"
-from_column = "user_id"
-to = "auth.users"
-to_column = "id"
-type = "many_to_one"
-
-[[edges]]
-from = "auth.user_roles"
-from_column = "role_id"
-to = "auth.roles"
-to_column = "id"
-type = "many_to_one"
-
-[[edges]]
-from = "auth.user_roles"
-from_column = "user_id"
-to = "auth.users"
-to_column = "id"
-type = "many_to_one"
-
-[[edges]]
-from = "auth.users"
-from_column = "organisation_id"
-to = "auth.organisations"
-to_column = "id"
 type = "many_to_one"

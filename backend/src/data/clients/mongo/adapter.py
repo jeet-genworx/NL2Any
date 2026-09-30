@@ -37,6 +37,14 @@ class MongoDBAdapter(DatabaseAdapter):
         extractor = MongoDBMetadataExtractor(db, sample_limit=settings.mongo_sample_limit)
         return extractor.extract_schema()
 
+    def ping(self) -> None:
+        """Round-trip the server, raising if the URI does not reach one.
+
+        MongoClient construction is lazy and never fails on a bad host, so a
+        command has to be issued for the URI to be proven at all.
+        """
+        self._get_client().admin.command("ping")
+
     def close(self) -> None:
         """Close MongoDB connection client."""
         if self._client is not None:

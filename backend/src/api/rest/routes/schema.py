@@ -10,10 +10,9 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException
 
-from backend.src.api.rest.dependencies import resolve_db_target
-from backend.src.core.ingestion.pipeline import existing_ingestion
+from backend.src.api.rest.dependencies import is_ingested, resolve_db_target
 from backend.src.data.models.schema import DatabaseSchema
-from backend.src.data.models.targets import TARGETS, DatabaseTarget
+from backend.src.data.models.targets import DatabaseTarget, all_targets
 from backend.src.data.repositories import (
     description_repository,
     paths,
@@ -26,12 +25,18 @@ router = APIRouter(tags=["Schema"])
 
 @router.get("/databases")
 def list_databases_endpoint() -> dict[str, Any]:
-    """List the selectable databases.
+    """List the selectable databases: the configured built-ins, then the ones a
+    user saved from a connection string.
 
     Drives the frontend picker, so it stays in step with the target registry
     rather than hardcoding a list. `configured` is false when a target has no
     connection string set, which lets the picker say why a database is unusable
-    instead of failing only once someone selects it.
+    instead of failing only once someone selects it. `source` separates the two
+    kinds, since only a saved connection can be removed.
+
+    Connection strings are never included: the picker works entirely in keys and
+    labels, so a credential that was supplied once does not travel back out on
+    every page load.
     """
     return {
         "databases": [
@@ -40,12 +45,13 @@ def list_databases_endpoint() -> dict[str, Any]:
                 "label": target.label,
                 "database_type": target.db_type.value,
                 "configured": target.configured,
+                "source": target.source,
                 # Same test the pipeline uses to decide whether to skip, so the
                 # picker never claims a database is ready when a re-run would
                 # still ingest it (an empty embeddings file does not count).
-                "ingested": existing_ingestion(target) is not None,
+                "ingested": is_ingested(target),
             }
-            for target in TARGETS.values()
+            for target in all_targets().values()
         ]
     }
 

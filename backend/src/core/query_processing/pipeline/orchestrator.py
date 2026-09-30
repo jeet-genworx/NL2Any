@@ -713,7 +713,11 @@ class NL2AnyQueryOrchestrator:
 
         # 10. Stages 12 & 13: Execution and Result Processing
         try:
-            columns, raw_rows = self.executor.execute(last_query, connection=target.connection)
+            columns, raw_rows = self.executor.execute(
+                last_query,
+                connection=target.connection,
+                database=target.mongo_database,
+            )
         except Exception as exec_err:
             logger.error("Execution error: %s", exec_err)
             return self._build_response(

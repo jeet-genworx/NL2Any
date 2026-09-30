@@ -133,3 +133,57 @@ def test_koboldcpp_provider_timeout_disabled(monkeypatch):
     embed_provider = KoboldCppEmbeddingProvider()
     assert embed_provider.timeout is None
 
+
+
+@pytest.mark.asyncio
+async def test_generate_appends_no_think_directive_by_default():
+    """The reasoning switch rides on the user turn so the model answers directly.
+
+    Qwen3-4B decides per request whether to open a <think> block, and the
+    reasoning is charged to the same completion budget as the answer; when it
+    fires on a long structured task the JSON is cut off mid-string.
+    """
+    captured: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured.update(json.loads(request.content))
+        return httpx.Response(200, json={"choices": [{"message": {"content": "ok"}}]})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        provider = KoboldCppProvider(model="m", http_client=client)
+        await provider.generate("Describe the invoices table.")
+
+    assert captured["messages"][-1]["content"] == "Describe the invoices table.\n\n/no_think"
+
+
+@pytest.mark.asyncio
+async def test_generate_leaves_prompt_untouched_when_thinking_allowed():
+    """Opting out restores the bare prompt, for a model with no thinking mode."""
+    captured: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured.update(json.loads(request.content))
+        return httpx.Response(200, json={"choices": [{"message": {"content": "ok"}}]})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        provider = KoboldCppProvider(model="m", http_client=client, disable_thinking=False)
+        await provider.generate("Describe the invoices table.")
+
+    assert captured["messages"][-1]["content"] == "Describe the invoices table."
+
+
+@pytest.mark.asyncio
+async def test_no_think_directive_does_not_displace_the_system_prompt():
+    """The directive attaches to the user turn, leaving any system turn intact."""
+    captured: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured.update(json.loads(request.content))
+        return httpx.Response(200, json={"choices": [{"message": {"content": "ok"}}]})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        provider = KoboldCppProvider(model="m", http_client=client)
+        await provider.generate("Question?", system_prompt="You are terse.")
+
+    assert captured["messages"][0] == {"role": "system", "content": "You are terse."}
+    assert captured["messages"][1]["content"] == "Question?\n\n/no_think"

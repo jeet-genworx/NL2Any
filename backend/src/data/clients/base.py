@@ -15,6 +15,15 @@ class DatabaseAdapter(Protocol):
         """Extract authoritative database metadata and return a normalized DatabaseSchema."""
         ...
 
+    def ping(self) -> None:
+        """Prove the connection works, raising if it does not.
+
+        Cheaper than `get_metadata` and used to validate a connection string the
+        moment a user supplies one, rather than letting a bad host surface
+        minutes later as an ingestion failure.
+        """
+        ...
+
     def close(self) -> None:
         """Close database connections and release resources."""
         ...

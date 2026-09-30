@@ -8,8 +8,6 @@ from backend.src.config import settings
 
 logger = logging.getLogger(__name__)
 
-EXPECTED_DIMENSION = 384  # for all-MiniLM-L6-v2
-
 
 class EmbeddingStore:
     """Safely loads and validates precomputed table description embeddings from JSON."""
@@ -17,7 +15,7 @@ class EmbeddingStore:
     def __init__(
         self,
         file_path: str | Path | None = None,
-        expected_dim: int = EXPECTED_DIMENSION,
+        expected_dim: int | None = None,
     ) -> None:
         path = Path(file_path or settings.postgres_embeddings_path)
         if not path.exists():
@@ -25,7 +23,9 @@ class EmbeddingStore:
             if alt.exists():
                 path = alt
         self.file_path = path
-        self.expected_dim = expected_dim
+        self.expected_dim = (
+            expected_dim if expected_dim is not None else settings.embedding_dimension
+        )
         self._embeddings: dict[str, list[float]] = {}
         self._loaded: bool = False
 
