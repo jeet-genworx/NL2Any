@@ -89,6 +89,53 @@ def test_retrieval_ranking_and_top_15_enforcement():
     assert results[0].table_name == "table_20"
 
 
+def test_retrieval_ranking_default_top_10_enforcement(monkeypatch):
+    from backend.src.config import settings
+    monkeypatch.setattr(settings, "similarity_top_k", 10)
+    monkeypatch.setattr(settings, "max_candidate_tables", 10)
+
+    query_vec = [1.0, 0.0]
+    table_embeddings = {}
+    for i in range(1, 21):
+        sim = 0.80 + (i * 0.009)
+        theta = math.acos(sim)
+        table_embeddings[f"table_{i:02d}"] = [sim, math.sin(theta)]
+
+    mock_store = MagicMock(spec=EmbeddingStore)
+    mock_store.all_embeddings.return_value = table_embeddings
+
+    # Without max_candidates specified, must default to top 10 (from settings.effective_similarity_top_k)
+    retriever = VectorRetriever(store=mock_store, similarity_threshold=0.80)
+    results = retriever.retrieve(query_vec)
+
+    assert len(results) == 10
+    assert [r.rank for r in results] == list(range(1, 11))
+    assert results[0].table_name == "table_20"
+
+
+def test_retrieval_dynamic_settings_top_k(monkeypatch):
+    from backend.src.config import settings
+    monkeypatch.setattr(settings, "similarity_top_k", 5)
+
+    query_vec = [1.0, 0.0]
+    table_embeddings = {}
+    for i in range(1, 21):
+        sim = 0.80 + (i * 0.009)
+        theta = math.acos(sim)
+        table_embeddings[f"table_{i:02d}"] = [sim, math.sin(theta)]
+
+    mock_store = MagicMock(spec=EmbeddingStore)
+    mock_store.all_embeddings.return_value = table_embeddings
+
+    # Dynamically reads settings.effective_similarity_top_k (configured to 5 via monkeypatch)
+    retriever = VectorRetriever(store=mock_store, similarity_threshold=0.80)
+    results = retriever.retrieve(query_vec)
+
+    assert len(results) == 5
+    assert [r.rank for r in results] == list(range(1, 6))
+    assert results[0].table_name == "table_20"
+
+
 def test_retrieval_zero_candidates():
     query_vec = [1.0, 0.0, 0.0]
     mock_store = MagicMock(spec=EmbeddingStore)

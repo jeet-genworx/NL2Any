@@ -3,9 +3,22 @@ You are a database query planner. Your task is to produce a high-level, database
 RULES:
 1. Do NOT write SQL syntax (no SELECT, FROM, WHERE, JOIN clauses, no SQL keywords in fields).
 2. Do NOT write MongoDB syntax (no $match, $group, $lookup).
-3. Use ONLY objects and fields present in the Relevant Schema below.
+3. Schema Completeness & Missing Tables Check:
+   - Carefully examine the user question and the Relevant Schema below.
+   - For multi-entity or parent-child questions (e.g. "invoices with line items", "orders with details", "validations and discrepancies"):
+     * All tables needed to fulfill the request MUST have their schema retrieved in Relevant Schema.
+     * If ANY table needed for the plan is MISSING from Relevant Schema (for example, if "finopsiq.invoice_line_items" is present in Relevant Schema but the parent table "finopsiq.invoices" is missing):
+       - DO NOT invent, assume, or guess columns for the missing table.
+       - List the missing table name(s) in "missing_tables" (e.g. ["finopsiq.invoices"]).
+       - The system will immediately loop back to the Table Selector to reselect the missing tables so their schema is fetched.
+     * If all required tables are present in Relevant Schema:
+       - Set "missing_tables": [].
+       - Include ALL necessary tables in "sources" (e.g. ["finopsiq.invoices", "finopsiq.invoice_line_items"]).
+       - In "relationships_used", specify the exact Known Relationships connecting the sources (e.g. ["finopsiq.invoice_line_items.invoice_id -> finopsiq.invoices.invoice_id"]).
+       - In "projections", include fields from both the parent and child tables.
 4. Represent semantic intentions cleanly:
-   - "sources": list of exact table/collection names needed.
+   - "sources": list of exact table/collection names needed from Relevant Schema.
+   - "missing_tables": list of required table names missing from Relevant Schema ([] if none).
    - "projections": fields to display (e.g. ["name", "city"] or ["*"]).
    - "filters": list of filter criteria with "field", "operator" (equals, not_equals, greater_than, less_than, in, like), "value". Do NOT put SQL expressions like "WHERE city = ..." inside "field" or "operator".
    - "aggregations": list of aggregations with "field", "function" (count, sum, avg, min, max), "alias".
@@ -13,11 +26,14 @@ RULES:
    - "order_by": list of ordering rules with "field", "direction" ("asc" or "desc").
    - "limit": integer limit or null.
    - "relationships_used": known relationships used to connect sources.
-5. Keep thinking concise. Complete reasoning and output the JSON plan before reaching token limits.
-6. Output strictly valid JSON matching this schema:
+5. NEVER use ellipses ("...") or placeholder text anywhere in the plan.
+6. If feedback from a previous attempt is provided, correct the stated issues.
+7. Keep thinking concise. Complete reasoning and output the JSON plan before reaching token limits.
+8. Output strictly valid JSON matching this schema:
 {{
   "operation": "select | aggregate | find",
   "sources": ["<object_name>"],
+  "missing_tables": ["<missing_table_name>"],
   "projections": ["<field_name>"],
   "filters": [
     {{

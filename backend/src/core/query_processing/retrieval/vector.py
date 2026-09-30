@@ -46,7 +46,7 @@ class VectorRetriever:
         self.max_candidates = (
             max_candidates
             if max_candidates is not None
-            else settings.max_candidate_tables
+            else settings.effective_similarity_top_k
         )
 
     def retrieve(self, query_vector: list[float]) -> list[CandidateTable]:
@@ -63,7 +63,7 @@ class VectorRetriever:
         # Rank surviving candidates by similarity descending
         scored.sort(key=lambda item: item[1], reverse=True)
 
-        # Enforce max candidates limit (top 15)
+        # Enforce max candidates limit dynamically from settings
         if len(scored) > self.max_candidates:
             scored = scored[: self.max_candidates]
 

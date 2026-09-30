@@ -117,3 +117,19 @@ async def test_koboldcpp_embedding_provider_connection_error():
         )
         with pytest.raises(ConnectionError, match="Failed to connect to KoboldCpp"):
             await provider.embed(["a"])
+
+
+def test_koboldcpp_provider_timeout_disabled(monkeypatch):
+    from backend.src.config import settings
+    monkeypatch.setattr(settings, "model_timeout_seconds", 0)
+
+    provider = KoboldCppProvider()
+    assert provider.timeout is None
+
+    monkeypatch.setattr(settings, "model_timeout_seconds", None)
+    provider_none = KoboldCppProvider()
+    assert provider_none.timeout is None
+
+    embed_provider = KoboldCppEmbeddingProvider()
+    assert embed_provider.timeout is None
+

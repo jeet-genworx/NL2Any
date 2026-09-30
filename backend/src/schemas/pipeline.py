@@ -23,6 +23,22 @@ class GuardrailResult(BaseModel):
     reason: str = ""
 
 
+class SpellingCorrectionItem(BaseModel):
+    """Single token spelling correction entry."""
+
+    original: str
+    corrected: str
+
+
+class SpellingCorrectionResult(BaseModel):
+    """Result of SymSpell spelling checking stage."""
+
+    original_question: str
+    corrected_question: str
+    corrections: list[SpellingCorrectionItem] = PydanticField(default_factory=list)
+    jargons_applied: list[str] = PydanticField(default_factory=list)
+
+
 class SemanticAnalysisResult(BaseModel):
     """Subjective and objective concepts extracted from user question."""
 
@@ -120,6 +136,7 @@ class QueryPlan(BaseModel):
     order_by: list[SemanticOrdering] = PydanticField(default_factory=list)
     limit: int | None = None
     relationships_used: list[str] = PydanticField(default_factory=list)
+    missing_tables: list[str] = PydanticField(default_factory=list)
 
 
 class MongoQuery(BaseModel):
@@ -183,7 +200,9 @@ class PipelineResponse(BaseModel):
 
     database: str
     question: str
+    provider: str | None = None
     guardrail: GuardrailResult
+    spelling_correction: SpellingCorrectionResult | None = None
     basic_answer: str | None = None
     semantic_analysis: SemanticAnalysisResult | None = None
     linguistic_analysis: dict[str, Any] | None = None

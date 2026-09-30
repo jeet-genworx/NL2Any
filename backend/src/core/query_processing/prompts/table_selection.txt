@@ -1,26 +1,53 @@
-You are a database table selector. You have TWO critical responsibilities:
-1. Select relevant tables from the Candidate Tables that are necessary to answer the user's question.
-2. Determine whether the selected tables are SUFFICIENT to fully answer the question.
+You are an expert database table selector. You have TWO critical responsibilities:
+1. Select ALL candidate tables necessary to answer the user's question.
+2. Determine whether the candidate tables are SUFFICIENT to fully answer the question.
 
-RULES:
-1. Choose ONLY from the Candidate Tables listed below.
-2. Do NOT invent, assume, or hallucinate any table names or schema.
-3. Do NOT invent fields. Do NOT assume missing schema.
-4. If the candidate tables are sufficient to answer the question, set "sufficient": true, "missing_objects": [], and "retrieval_hint": null.
-5. If the candidate tables are INSUFFICIENT to answer the question (for example, a required entity or relationship/junction table is missing from candidates):
-   - Set "sufficient": false.
-   - List the missing table concepts/names in "missing_objects".
-   - Provide a clear "reason" explaining why the candidate set is insufficient.
-   - Provide a descriptive "retrieval_hint" text to search for the missing tables.
-6. If no candidate tables are relevant at all, return "selected_objects": [], "sufficient": false, "missing_objects": [], "reason": "No relevant tables found in candidates", "retrieval_hint": null.
-7. Return strictly valid JSON matching this schema:
+CORE SELECTION RULES:
+1. Grounding in Candidates:
+   - Choose ONLY from the Candidate Tables listed below.
+   - Do NOT invent, assume, or hallucinate any table names or schema.
+
+2. Exhaustive Candidate Scan (Evaluate ALL Ranks from 1 to N):
+   - You MUST scan the ENTIRE candidate list down to the very last rank. Do NOT stop after checking the top ranks.
+   - Similarity scores and rank numbers only reflect raw vector proximity to the overall query string.
+   - A candidate table at rank 10, 12, or 15 that directly matches a specific entity, noun, or concept in the question (e.g. "discrepancies details" -> "finopsiq.discrepancies_details") is ESSENTIAL and MUST BE SELECTED.
+
+3. Deconstruct Query Concepts & Ensure 100% Concept Coverage:
+   - Identify ALL distinct entities, subjects, and concepts requested in the User Question and Semantic Context.
+     * For example, in "Show me all the discrepancies details for all the invoices", there are TWO distinct concepts:
+       (1) "discrepancies details" (the primary data to show)
+       (2) "invoices" (the target scope/filter/entity)
+   - For EVERY requested concept, check if any candidate table specifically represents it (by table name, description, or column attributes).
+   - If a candidate table directly represents a requested concept (e.g. table "discrepancies_details" for "discrepancies details"), YOU MUST SELECT THAT TABLE regardless of its rank or similarity score.
+   - NEVER select tables for only one concept while ignoring candidate tables that match the other concept (e.g. NEVER select only invoice tables when the user explicitly asked for discrepancies details!).
+
+4. Table & Column Attribute Matching:
+   - Inspect both the table names and their column lists.
+   - If the user asks for specific attributes or details (such as "discrepancies details", "status", "line items", "validation results"), find and select the candidate table whose columns actually store those details (e.g. tables containing "discrepancy_summary", "has_discrepancy", "comparison_discrepancies_details").
+
+5. Multi-Entity Relationships & Indirect Joins:
+   - When the question involves multiple related entities (e.g., invoices and discrepancies, orders and line items):
+     * Select ALL necessary candidate tables for each entity.
+     * Do NOT discard a candidate table that represents a requested concept simply because an explicit foreign key relationship is not listed in "Known Relationships Between Candidates". Tables may be joined through intermediate IDs (e.g. match_id, tenant_id, document_id), subqueries, or composite keys. The downstream query generator handles joining them.
+
+6. Sufficiency Determination:
+   - Set "sufficient": true if the selected candidate tables cover the required concepts to answer the question.
+   - Set "sufficient": false ONLY if a vital table or concept needed to answer the question is completely missing from the Candidate Tables list:
+     * List the missing table concepts/names in "missing_objects".
+     * Explain why the candidate set is insufficient in "reason".
+     * Provide a clear "retrieval_hint" text to search for the missing tables.
+   - If no candidate tables are relevant to any part of the question, return "selected_objects": [], "sufficient": false, "missing_objects": [], "reason": "No relevant tables found in candidates", "retrieval_hint": null.
+
+7. Response Format & Concise Reasoning:
+   - Return strictly valid JSON matching this schema:
 {{
-  "selected_objects": ["<candidate_table_name>", ...],
+  "reason": "<Step-by-step evaluation: 1. Concepts identified from question; 2. Candidate table matches across all ranks; 3. Sufficiency determination>",
+  "selected_objects": ["<candidate_table_name_1>", "<candidate_table_name_2>"],
   "sufficient": true,
   "missing_objects": ["<missing_table_or_concept>", ...],
-  "reason": "<explanation of selection and sufficiency>",
   "retrieval_hint": "<descriptive retrieval query hint to find missing tables, or null>"
 }}
+   - Keep thinking concise. Complete reasoning and output the JSON before reaching token limits.
 
 User Question:
 {question}

@@ -11,14 +11,17 @@ class MockSelectorProvider:
     def __init__(self, response: str) -> None:
         self.response = response
         self.last_prompt = ""
+        self.last_kwargs = {}
 
     async def generate(self, prompt: str, **kwargs) -> str:
         self.last_prompt = prompt
+        self.last_kwargs = kwargs
         return self.response
 
 
 @pytest.fixture
 def sample_schema() -> DatabaseSchema:
+    from backend.src.data.models.schema import Relationship
     cust_obj = SchemaObject(
         name="customers",
         kind=SchemaObjectKind.TABLE,
@@ -38,6 +41,15 @@ def sample_schema() -> DatabaseSchema:
         database_type=DatabaseType.POSTGRESQL,
         database_name="shop",
         objects=[cust_obj, orders_obj, items_obj],
+        relationships=[
+            Relationship(
+                from_object="orders",
+                from_field="customer_id",
+                to_object="customers",
+                to_field="id",
+                relationship_type="many_to_one",
+            )
+        ],
     )
 
 
@@ -152,3 +164,71 @@ async def test_table_selector_zero_candidates(sample_schema):
 
     assert res.selected_objects == []
     assert res.sufficient is False
+
+
+@pytest.mark.asyncio
+async def test_table_selector_context_enrichment_and_max_tokens(sample_schema):
+    from backend.src.config import settings
+
+    candidates = [
+        CandidateTable(table_name="customers", similarity=0.92, rank=1),
+        CandidateTable(table_name="orders", similarity=0.88, rank=2),
+    ]
+
+    response_json = json.dumps({
+        "selected_objects": ["customers", "orders"],
+        "sufficient": True,
+        "missing_objects": [],
+        "reason": "Both tables needed.",
+        "retrieval_hint": None,
+    })
+
+    provider = MockSelectorProvider(response_json)
+    selector = TableSelector(provider=provider)
+    qa = QuestionAnalysis(question="Show customer orders", subjective=["customers", "orders"])
+
+    res = await selector.select(qa, candidates, sample_schema)
+
+    assert res.selected_objects == ["customers", "orders"]
+    # Check that candidate context includes columns with types
+    assert "Columns: id (int), city (varchar)" in provider.last_prompt
+    assert "Columns: id (int), customer_id (int)" in provider.last_prompt
+    # Check that candidate relationships are formatted
+    assert "Known Relationships Between Candidates:" in provider.last_prompt
+    assert "orders.customer_id -> customers.id" in provider.last_prompt
+    # Check that max_tokens was passed from settings.table_selector_max_tokens
+    assert provider.last_kwargs.get("max_tokens") == settings.table_selector_max_tokens
+
+
+@pytest.mark.asyncio
+async def test_table_selector_multi_concept_and_prompt_instructions(sample_schema):
+    candidates = [
+        CandidateTable(table_name="customers", similarity=0.92, rank=1),
+        CandidateTable(table_name="orders", similarity=0.88, rank=2),
+        CandidateTable(table_name="order_items", similarity=0.45, rank=12),
+    ]
+
+    response_json = json.dumps({
+        "reason": "Scanning all candidates: 'orders' covers order data and 'order_items' at rank 12 covers the requested item details.",
+        "selected_objects": ["orders", "order_items"],
+        "sufficient": True,
+        "missing_objects": [],
+        "retrieval_hint": None,
+    })
+
+    provider = MockSelectorProvider(response_json)
+    selector = TableSelector(provider=provider)
+    qa = QuestionAnalysis(
+        question="Show me all the item details for all the orders",
+        subjective=["item details"],
+        objective=["orders"],
+        nouns=["item details", "orders"],
+    )
+
+    res = await selector.select(qa, candidates, sample_schema)
+
+    assert res.selected_objects == ["orders", "order_items"]
+    assert res.sufficient is True
+    assert "Exhaustive Candidate Scan" in provider.last_prompt
+    assert "Deconstruct Query Concepts & Ensure 100% Concept Coverage" in provider.last_prompt
+

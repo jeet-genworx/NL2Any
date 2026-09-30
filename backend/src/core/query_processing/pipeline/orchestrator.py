@@ -21,9 +21,11 @@ from backend.src.schemas.pipeline import (
     QuestionAnalysis,
     RelevantSchema,
     SemanticAnalysisResult,
+    SpellingCorrectionResult,
     ValidationErrorType,
     ValidationResult,
 )
+from backend.src.schemas.pipeline import QueryPlan
 from backend.src.data.models.schema import DatabaseSchema, DatabaseType
 from backend.src.core.query_processing.nlp.linguistic import LinguisticAnalyzer
 from backend.src.core.query_processing.pipeline.executor import QueryExecutor
@@ -36,14 +38,17 @@ from backend.src.core.query_processing.pipeline.policy import SafetyPolicyValida
 from backend.src.core.query_processing.pipeline.results import ResultProcessor
 from backend.src.core.query_processing.pipeline.selector import TableSelector
 from backend.src.core.query_processing.pipeline.semantic import SemanticAnalyzer
+from backend.src.core.query_processing.pipeline.spelling import SpellingChecker
 from backend.src.core.query_processing.pipeline.validator import QueryValidator
 from backend.src.control.providers.embedding.base import EmbeddingProvider
 from backend.src.control.providers.embedding.koboldcpp import KoboldCppEmbeddingProvider
 from backend.src.control.providers.model.base import ModelProvider
+from backend.src.control.providers.model.factory import resolve_model_provider
 from backend.src.control.providers.model.koboldcpp import KoboldCppProvider
 from backend.src.core.query_processing.retrieval.store import EmbeddingStore
 from backend.src.core.query_processing.retrieval.vector import VectorRetriever
 from backend.src.core.query_processing.pipeline.descriptions_client import DescriptionsClient
+from backend.src.utils.text_utils import clean_unreadable_characters, strip_ansi_escapes
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +63,7 @@ class NL2AnyQueryOrchestrator:
         embedding_store: EmbeddingStore | None = None,
         vector_retriever: VectorRetriever | None = None,
         guardrail: GuardrailClassifier | None = None,
+        spelling_checker: SpellingChecker | None = None,
         semantic: SemanticAnalyzer | None = None,
         linguistic: LinguisticAnalyzer | None = None,
         selector: TableSelector | None = None,
@@ -77,6 +83,7 @@ class NL2AnyQueryOrchestrator:
         self.embedding_store = embedding_store
         self.vector_retriever = vector_retriever
         self.guardrail = guardrail or GuardrailClassifier(provider=self.provider)
+        self.spelling_checker = spelling_checker or SpellingChecker()
         self.semantic = semantic or SemanticAnalyzer(provider=self.provider)
         self.linguistic = linguistic or LinguisticAnalyzer()
         self.selector = selector or TableSelector(provider=self.provider)
@@ -91,8 +98,65 @@ class NL2AnyQueryOrchestrator:
         self.results = results or ResultProcessor()
         self.max_retries = max_retries if max_retries is not None else settings.max_retries
 
+        self._custom_guardrail = guardrail is not None
+        self._custom_semantic = semantic is not None
+        self._custom_selector = selector is not None
+        self._custom_planner = planner is not None
+        self._custom_postgres_gen = postgres_gen is not None
+        self._custom_mongo_gen = mongo_gen is not None
+        self._custom_validator = validator is not None
+
         self._schemas: dict[Any, DatabaseSchema] = {}
         self._vector_retrievers: dict[Any, VectorRetriever] = {}
+
+    def _get_stages_for_provider(self, active_provider: ModelProvider):
+        """Return stage instances bound to the active provider for this execution."""
+        if active_provider is self.provider:
+            return (
+                self.guardrail,
+                self.semantic,
+                self.selector,
+                self.planner,
+                self.postgres_gen,
+                self.mongo_gen,
+                self.validator,
+            )
+        guardrail = (
+            self.guardrail
+            if self._custom_guardrail
+            else GuardrailClassifier(provider=active_provider)
+        )
+        semantic = (
+            self.semantic
+            if self._custom_semantic
+            else SemanticAnalyzer(provider=active_provider)
+        )
+        selector = (
+            self.selector
+            if self._custom_selector
+            else TableSelector(provider=active_provider)
+        )
+        planner = (
+            self.planner
+            if self._custom_planner
+            else QueryPlanner(provider=active_provider)
+        )
+        postgres_gen = (
+            self.postgres_gen
+            if self._custom_postgres_gen
+            else PostgresQueryGenerator(provider=active_provider)
+        )
+        mongo_gen = (
+            self.mongo_gen
+            if self._custom_mongo_gen
+            else MongoQueryGenerator(provider=active_provider)
+        )
+        validator = (
+            self.validator
+            if self._custom_validator
+            else QueryValidator(provider=active_provider)
+        )
+        return guardrail, semantic, selector, planner, postgres_gen, mongo_gen, validator
 
     def get_or_load_schema(self, database: DatabaseTarget | DatabaseType | str) -> DatabaseSchema:
         """Load and cache canonical schema from TOML file."""
@@ -167,17 +231,33 @@ class NL2AnyQueryOrchestrator:
         basic_answer: str | None = None,
         error: str | None = None,
         target_name: str | None = None,
+        provider: str | None = None,
+        spelling_correction: SpellingCorrectionResult | None = None,
     ) -> PipelineResponse:
         cand_list = candidates or []
+        if validation is not None:
+            if validation.issues:
+                validation.issues = [
+                    clean_unreadable_characters(strip_ansi_escapes(str(i)))
+                    for i in validation.issues
+                    if i
+                ]
+            if validation.suggestion:
+                validation.suggestion = clean_unreadable_characters(
+                    strip_ansi_escapes(str(validation.suggestion))
+                )
         query_repr = (
             query.formatted_query
             if query
             else ("No query generated" if (attempts > 1 and not basic_answer and not error) else None)
         )
+        db_label = target_name if (target_name and target_name not in ("postgres", "postgresql", "mongo", "mongodb")) else db_type.value
         return PipelineResponse(
-            database=target_name or db_type.value,
+            database=db_label,
             question=question,
+            provider=provider,
             guardrail=guardrail,
+            spelling_correction=spelling_correction,
             basic_answer=basic_answer,
             semantic_analysis=semantic,
             linguistic_analysis=linguistic,
@@ -203,8 +283,10 @@ class NL2AnyQueryOrchestrator:
         query_vector: list[float],
         schema: DatabaseSchema,
         database: Any,
+        selector: TableSelector | None = None,
     ) -> tuple[list[str], list[CandidateTable], int, str | None]:
         """Embedding-based table candidate retrieval + Table Selector SLM bounded retry."""
+        active_selector = selector or self.selector
         try:
             retriever = self._get_or_load_vector_retriever(database)
             initial_candidates = retriever.retrieve(query_vector)
@@ -227,7 +309,7 @@ class NL2AnyQueryOrchestrator:
         feedback: str | None = None
 
         while True:
-            selection = await self.selector.select(
+            selection = await active_selector.select(
                 question_analysis=analysis,
                 candidates=current_candidates,
                 schema=schema,
@@ -256,7 +338,7 @@ class NL2AnyQueryOrchestrator:
                 if nc.table_name not in merged or nc.similarity > merged[nc.table_name]:
                     merged[nc.table_name] = nc.similarity
 
-            sorted_merged = sorted(merged.items(), key=lambda x: x[1], reverse=True)[: settings.max_candidate_tables]
+            sorted_merged = sorted(merged.items(), key=lambda x: x[1], reverse=True)[: settings.effective_similarity_top_k]
             current_candidates = [
                 CandidateTable(table_name=tbl, similarity=sim, rank=r)
                 for r, (tbl, sim) in enumerate(sorted_merged, start=1)
@@ -296,7 +378,7 @@ class NL2AnyQueryOrchestrator:
             except Exception as err:
                 logger.warning(
                     "Failed to enrich descriptions for %s.%s: %s",
-                    db_type.value,
+                    target_slug,
                     obj.name,
                     err,
                 )
@@ -307,14 +389,25 @@ class NL2AnyQueryOrchestrator:
         analysis: QuestionAnalysis,
         relevant_schema: RelevantSchema,
         db_type: DatabaseType,
+        initial_plan: QueryPlan | None = None,
+        planner: QueryPlanner | None = None,
+        generator: Any = None,
+        validator: QueryValidator | None = None,
     ) -> tuple[Any, GeneratedQuery | None, ValidationResult | None, int, str | None]:
         """Query Planner -> Generator -> Validator bounded targeted retry loop."""
-        generator = self.postgres_gen if db_type == DatabaseType.POSTGRESQL else self.mongo_gen
-        query_plan = await self.planner.plan(
-            question_analysis=analysis,
-            relevant_schema=relevant_schema,
-            database_type=db_type,
+        active_generator = generator or (
+            self.postgres_gen if db_type == DatabaseType.POSTGRESQL else self.mongo_gen
         )
+        active_planner = planner or self.planner
+        active_validator = validator or self.validator
+
+        query_plan = initial_plan
+        if query_plan is None:
+            query_plan = await active_planner.plan(
+                question_analysis=analysis,
+                relevant_schema=relevant_schema,
+                database_type=db_type,
+            )
 
         last_query: GeneratedQuery | None = None
         last_val: ValidationResult | None = None
@@ -324,7 +417,7 @@ class NL2AnyQueryOrchestrator:
 
         while retries <= self.max_retries:
             if query_plan is None:
-                query_plan = await self.planner.plan(
+                query_plan = await active_planner.plan(
                     question_analysis=analysis,
                     relevant_schema=relevant_schema,
                     database_type=db_type,
@@ -333,7 +426,7 @@ class NL2AnyQueryOrchestrator:
                 planner_feedback = None
 
             try:
-                last_query = await generator.generate_query(
+                last_query = await active_generator.generate_query(
                     question=question,
                     plan=query_plan,
                     schema=relevant_schema,
@@ -347,7 +440,7 @@ class NL2AnyQueryOrchestrator:
                 gen_feedback = f"Generation error: {gen_err}"
                 continue
 
-            last_val = await self.validator.validate(
+            last_val = await active_validator.validate(
                 question=question,
                 plan=query_plan,
                 generated_query=last_query,
@@ -366,9 +459,16 @@ class NL2AnyQueryOrchestrator:
                 )
 
             retries += 1
-            feedback_msg = "; ".join(last_val.issues)
+            clean_issues = [
+                clean_unreadable_characters(strip_ansi_escapes(str(i)))
+                for i in last_val.issues
+                if i
+            ]
+            feedback_msg = "; ".join(clean_issues)
             if last_val.suggestion:
-                feedback_msg += f". Suggestion: {last_val.suggestion}"
+                clean_sugg = clean_unreadable_characters(strip_ansi_escapes(str(last_val.suggestion)))
+                feedback_msg += f". Suggestion: {clean_sugg}"
+            feedback_msg = clean_unreadable_characters(strip_ansi_escapes(feedback_msg))
 
             if last_val.error_type == ValidationErrorType.PLANNER_ERROR:
                 planner_feedback = feedback_msg
@@ -382,8 +482,24 @@ class NL2AnyQueryOrchestrator:
         self,
         question: str,
         database: str | DatabaseType | DatabaseTarget = "postgres",
+        provider: str | ModelProvider | None = None,
+        jargons: list[str] | None = None,
     ) -> PipelineResponse:
         """Run complete NL-to-query pipeline with clean stages and bounded retries."""
+        provider_name = (
+            provider.strip().lower()
+            if isinstance(provider, str)
+            else (getattr(provider, "model", "custom") if provider is not None else "koboldcpp")
+        )
+        active_provider = (
+            resolve_model_provider(provider)
+            if isinstance(provider, str)
+            else (provider or self.provider)
+        )
+        guardrail, semantic, selector, planner, postgres_gen, mongo_gen, validator = (
+            self._get_stages_for_provider(active_provider)
+        )
+
         # 1. Resolve database target & type
         if isinstance(database, DatabaseTarget):
             target = database
@@ -402,6 +518,8 @@ class NL2AnyQueryOrchestrator:
             target = as_target(DatabaseType.POSTGRESQL)
             db_type = DatabaseType.POSTGRESQL
 
+        active_generator = postgres_gen if db_type == DatabaseType.POSTGRESQL else mongo_gen
+
         try:
             schema = self.get_or_load_schema(target)
         except Exception as err:
@@ -409,23 +527,25 @@ class NL2AnyQueryOrchestrator:
                 db_type=db_type,
                 target_name=target.key,
                 question=question,
+                provider=provider_name,
                 guardrail=GuardrailResult(decision=GuardrailDecision.REJECT, reason=str(err)),
                 error=str(err),
             )
 
         # 2. Stage 1: Guardrail
-        guardrail_result = await self.guardrail.classify(question)
+        guardrail_result = await guardrail.classify(question)
         if guardrail_result.decision == GuardrailDecision.REJECT:
             return self._build_response(
                 db_type=db_type,
                 target_name=target.key,
                 question=question,
+                provider=provider_name,
                 guardrail=guardrail_result,
                 error="Sorry, I can't help with this.",
             )
 
         if guardrail_result.decision == GuardrailDecision.BASIC:
-            basic_ans = self.guardrail.handle_basic_question(
+            basic_ans = guardrail.handle_basic_question(
                 question=question,
                 database_type=target.key,
                 database_name=schema.database_name,
@@ -434,28 +554,35 @@ class NL2AnyQueryOrchestrator:
                 db_type=db_type,
                 target_name=target.key,
                 question=question,
+                provider=provider_name,
                 guardrail=guardrail_result,
                 basic_answer=basic_ans,
             )
 
-        # 3. Stages 2 & 3: Concurrent Embedding, Semantic SLM & spaCy Linguistic Analysis
+        # 3. Stage 1.5: SymSpell Spelling Checker (immediately after Guardrail, before Semantic Analysis)
+        spelling_res = self.spelling_checker.check(question=question, jargons=jargons)
+        processed_question = spelling_res.corrected_question
+
+        # 4. Stages 2 & 3: Concurrent Embedding, Semantic SLM & spaCy Linguistic Analysis
         try:
             query_vector, semantic_res, linguistic_res = await asyncio.gather(
-                self.embedding_provider.embed(question),
-                self.semantic.analyze(question),
-                asyncio.to_thread(self.linguistic.analyze, question),
+                self.embedding_provider.embed(processed_question),
+                semantic.analyze(processed_question),
+                asyncio.to_thread(self.linguistic.analyze, processed_question),
             )
         except Exception as err:
             return self._build_response(
                 db_type=db_type,
                 target_name=target.key,
                 question=question,
+                provider=provider_name,
                 guardrail=guardrail_result,
+                spelling_correction=spelling_res,
                 error=f"Failed to analyze query: {err}",
             )
 
         analysis = QuestionAnalysis(
-            question=question,
+            question=processed_question,
             subjective=semantic_res.subjective,
             objective=semantic_res.objective,
             nouns=linguistic_res.nouns,
@@ -463,13 +590,14 @@ class NL2AnyQueryOrchestrator:
             entities=linguistic_res.entities,
         )
 
-        # 4. Stages 5 & 6: Candidate Table Retrieval & Selection
+        # 5. Stages 5 & 6: Candidate Table Retrieval & Selection
         selected_objs, candidates, sel_retries, sel_err = await self._select_tables_vector(
-            question=question,
+            question=processed_question,
             analysis=analysis,
             query_vector=query_vector,
             schema=schema,
             database=target,
+            selector=selector,
         )
 
         if sel_err or not selected_objs:
@@ -477,7 +605,9 @@ class NL2AnyQueryOrchestrator:
                 db_type=db_type,
                 target_name=target.key,
                 question=question,
+                provider=provider_name,
                 guardrail=guardrail_result,
+                spelling_correction=spelling_res,
                 semantic=semantic_res,
                 linguistic=linguistic_res.model_dump(),
                 candidates=candidates,
@@ -486,18 +616,66 @@ class NL2AnyQueryOrchestrator:
                 error=sel_err or "I could not find any relevant tables or collections in the database schema matching your question.",
             )
 
-        # 5. Stage 7: Deterministic Schema Expansion
+        # 6. Stage 7: Deterministic Schema Expansion
         relevant_schema = self.expander.expand(selected_object_names=selected_objs, schema=schema)
 
         # Stage 7b: Enrich RelevantSchema with table & column descriptions via Descriptions API
         await self._enrich_schema_descriptions(relevant_schema, target)
 
-        # 6. Stages 8, 9, 10: Query Planning, Generation & Validation Loop
+        # 7. Stage 8: Query Planning (with feedback loop to Table Selector if required tables are missing)
+        planner_retries = 0
+        query_plan = None
+        total_sel_retries = sel_retries
+        while planner_retries <= self.max_retries:
+            query_plan = await planner.plan(
+                question_analysis=analysis,
+                relevant_schema=relevant_schema,
+                database_type=db_type,
+            )
+            if not query_plan.missing_tables:
+                break
+
+            if planner_retries >= self.max_retries:
+                logger.warning(
+                    "Planner identified missing tables %s, but reached max retries.",
+                    query_plan.missing_tables,
+                )
+                break
+
+            planner_retries += 1
+            total_sel_retries += 1
+            missing_names = ", ".join(query_plan.missing_tables)
+            selector_feedback = (
+                f"The query plan identified that table(s) [{missing_names}] are required to answer "
+                f"the question '{processed_question}', but their schema is not in the retrieved schema. "
+                f"Please select ALL required tables (including {missing_names}) from the candidate tables."
+            )
+            re_selection = await selector.select(
+                question_analysis=analysis,
+                candidates=candidates,
+                schema=schema,
+                feedback=selector_feedback,
+            )
+            if re_selection.selected_objects:
+                new_selected = list(dict.fromkeys(selected_objs + re_selection.selected_objects))
+                if set(new_selected) == set(selected_objs):
+                    break
+                selected_objs = new_selected
+                relevant_schema = self.expander.expand(selected_object_names=selected_objs, schema=schema)
+                await self._enrich_schema_descriptions(relevant_schema, target)
+            else:
+                break
+
+        # 8. Stages 9 & 10: Query Generation & Validation Loop
         query_plan, last_query, last_val, val_retries, val_err = await self._plan_generate_validate(
-            question=question,
+            question=processed_question,
             analysis=analysis,
             relevant_schema=relevant_schema,
             db_type=db_type,
+            initial_plan=query_plan,
+            planner=planner,
+            generator=active_generator,
+            validator=validator,
         )
 
         attempts = val_retries + 1
@@ -505,12 +683,14 @@ class NL2AnyQueryOrchestrator:
             "db_type": db_type,
             "target_name": target.key,
             "question": question,
+            "provider": provider_name,
             "guardrail": guardrail_result,
+            "spelling_correction": spelling_res,
             "semantic": semantic_res,
             "linguistic": linguistic_res.model_dump(),
             "candidates": candidates,
             "selected": selected_objs,
-            "selection_retries": sel_retries,
+            "selection_retries": total_sel_retries,
             "schema": relevant_schema,
             "plan": query_plan,
             "query": last_query,
@@ -522,7 +702,7 @@ class NL2AnyQueryOrchestrator:
         if val_err or not last_query or not last_val or not last_val.valid:
             return self._build_response(**ctx, error=val_err)
 
-        # 7. Stage 11: Deterministic Safety Policy Check
+        # 9. Stage 11: Deterministic Safety Policy Check
         policy_result = self.policy.check(last_query, schema=relevant_schema)
         if not policy_result.allowed:
             return self._build_response(
@@ -531,7 +711,7 @@ class NL2AnyQueryOrchestrator:
                 error=f"Policy rejected query: {policy_result.reason}",
             )
 
-        # 8. Stages 12 & 13: Execution and Result Processing
+        # 10. Stages 12 & 13: Execution and Result Processing
         try:
             columns, raw_rows = self.executor.execute(last_query, connection=target.connection)
         except Exception as exec_err:
@@ -548,3 +728,4 @@ class NL2AnyQueryOrchestrator:
             policy=policy_result,
             results=execution_results,
         )
+

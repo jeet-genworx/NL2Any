@@ -49,7 +49,11 @@ async def query_endpoint(
         response = await orchestrator.execute_pipeline(
             question=request.question,
             database=request.database,
+            provider=request.provider,
+            jargons=request.jargons,
         )
         return response
+    except ValueError as err:
+        raise HTTPException(status_code=400, detail=str(err))
     except Exception as err:
         raise HTTPException(status_code=500, detail=str(err))

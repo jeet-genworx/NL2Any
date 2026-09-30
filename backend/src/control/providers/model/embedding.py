@@ -24,9 +24,12 @@ class KoboldCppEmbeddingProvider:
     ) -> None:
         self.base_url = (base_url or settings.koboldcpp_base_url).rstrip("/")
         self.model = model or settings.koboldcpp_embedding_model
-        self.timeout = (
-            timeout if timeout is not None else float(settings.model_timeout_seconds)
-        )
+        if timeout is not None:
+            self.timeout = float(timeout) if timeout > 0 else None
+        elif settings.model_timeout_seconds is not None and settings.model_timeout_seconds > 0:
+            self.timeout = float(settings.model_timeout_seconds)
+        else:
+            self.timeout = None
         self._external_client = http_client
 
     async def _get_client(self) -> httpx.AsyncClient:

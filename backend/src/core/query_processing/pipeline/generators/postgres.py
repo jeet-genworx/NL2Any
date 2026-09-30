@@ -4,7 +4,11 @@ import logging
 from pathlib import Path
 import re
 from backend.src.config import settings
-from backend.src.utils.text_utils import strip_think_tags
+from backend.src.utils.text_utils import (
+    clean_unreadable_characters,
+    strip_ansi_escapes,
+    strip_think_tags,
+)
 from backend.src.schemas.pipeline import GeneratedQuery, QueryPlan, RelevantSchema
 from backend.src.data.models.schema import DatabaseType
 from backend.src.core.query_processing.pipeline.generators.base import QueryGenerator
@@ -29,7 +33,7 @@ DEFAULT_POSTGRES_PROMPT = _get_postgres_prompt_path()
 
 
 def _extract_sql(text: str) -> str:
-    cleaned = strip_think_tags(text).strip()
+    cleaned = clean_unreadable_characters(strip_ansi_escapes(strip_think_tags(text))).strip()
 
     # 1. Match ```sql ... ```
     fence_match = re.search(r"```(?:sql)?\s*(.*?)\s*```", cleaned, re.DOTALL | re.IGNORECASE)
@@ -52,7 +56,7 @@ def _extract_sql(text: str) -> str:
     elif not sql.endswith(";"):
         sql = sql + ";"
 
-    return sql
+    return clean_unreadable_characters(strip_ansi_escapes(sql))
 
 
 class PostgresQueryGenerator(QueryGenerator):
@@ -88,8 +92,9 @@ class PostgresQueryGenerator(QueryGenerator):
 
         feedback_section = ""
         if feedback:
+            cleaned_feedback = clean_unreadable_characters(strip_ansi_escapes(feedback))
             feedback_section = (
-                f"ATTENTION - PREVIOUS ATTEMPT FAILED WITH FEEDBACK:\n{feedback}\n"
+                f"ATTENTION - PREVIOUS ATTEMPT FAILED WITH FEEDBACK:\n{cleaned_feedback}\n"
                 "Please fix the above issue in the generated query."
             )
 

@@ -85,6 +85,19 @@ with st.sidebar:
     )
     api_url = st.text_input("FastAPI Backend URL", value=API_BASE_URL)
 
+    PROVIDER_OPTIONS = {
+        "koboldcpp": "SLM (KoboldCpp)",
+        "huggingface": "Hugging Face",
+        "gemini": "Gemini",
+    }
+    provider_choice = st.selectbox(
+        "LLM Provider",
+        options=list(PROVIDER_OPTIONS.keys()),
+        format_func=lambda key: PROVIDER_OPTIONS[key],
+        index=0,
+        help="Select the language model provider for query generation.",
+    )
+
     st.divider()
     st.markdown("### Database Ingestion")
     use_mst = st.checkbox(
@@ -169,18 +182,30 @@ question = st.text_input(
     value=current_question,
     placeholder="e.g. Show me all customers from Chicago",
 )
+jargons_input = st.text_input(
+    "Domain Jargon / Technical Terms (optional, comma-separated):",
+    placeholder="e.g. PostgreSQL, MongoDB, KoboldCpp, NL2AnyQuery, customer_id, GenWorx",
+    help="Words entered here will be treated as valid vocabulary by the spelling checker.",
+)
 
 col1, col2 = st.columns([1, 5])
 with col1:
     run_btn = st.button("🚀 Run Query", type="primary", use_container_width=True)
 
 if run_btn and question.strip():
-    with st.spinner("Executing pipeline through local SLM..."):
+    spinner_label = f"Executing pipeline through {PROVIDER_OPTIONS.get(provider_choice, provider_choice)}..."
+    with st.spinner(spinner_label):
         try:
+            jargon_list = [j.strip() for j in jargons_input.split(",") if j.strip()]
             resp = httpx.post(
                 f"{api_url}/query",
-                json={"database": db_choice, "question": question.strip()},
-                timeout=300.0,
+                json={
+                    "database": db_choice,
+                    "question": question.strip(),
+                    "provider": provider_choice,
+                    "jargons": jargon_list,
+                },
+                timeout=None,
             )
             resp.raise_for_status()
             data = resp.json()
@@ -189,6 +214,13 @@ if run_btn and question.strip():
                 f"Could not connect to FastAPI backend at {api_url}. "
                 "Please make sure it is running via `uv run run-api`."
             )
+            st.stop()
+        except httpx.HTTPStatusError as err:
+            try:
+                detail = err.response.json().get("detail", err.response.text)
+            except Exception:
+                detail = err.response.text
+            st.error(f"❌ Provider Error ({PROVIDER_OPTIONS.get(provider_choice, provider_choice)}): {detail}")
             st.stop()
         except Exception as err:
             st.error(f"Error querying API: {err}")
@@ -250,6 +282,22 @@ if run_btn and question.strip():
 
     with st.expander("Guardrail"):
         st.json(data.get("guardrail", {}))
+
+    with st.expander("Spelling Checker (SymSpell)"):
+        spelling_data = data.get("spelling_correction")
+        if spelling_data:
+            st.markdown(f"**Original Question:** `{spelling_data.get('original_question')}`")
+            st.markdown(f"**Corrected Question:** `{spelling_data.get('corrected_question')}`")
+            corrections = spelling_data.get("corrections", [])
+            if corrections:
+                st.markdown("**Corrections Made:**")
+                st.dataframe(pd.DataFrame(corrections), hide_index=True, use_container_width=True)
+            else:
+                st.info("No spelling corrections needed.")
+            if spelling_data.get("jargons_applied"):
+                st.markdown(f"**Custom Jargon Applied:** `{spelling_data.get('jargons_applied')}`")
+        else:
+            st.info("Spelling check was not executed for this query.")
 
     with st.expander("Semantic Analysis"):
         st.json(data.get("semantic_analysis", {}))

@@ -24,6 +24,29 @@ def strip_think_tags(text: str) -> str:
     return cleaned.strip()
 
 
+def strip_ansi_escapes(text: str) -> str:
+    """Remove ANSI terminal escape codes (colors, underline, reset, etc.) from text."""
+    if not text:
+        return ""
+    # Standard ANSI escape codes (\x1b[...m, \x1b[...K, etc.)
+    cleaned = re.sub(r"\x1b\[[0-9;]*[a-zA-Z]", "", text)
+    # OSC sequences
+    cleaned = re.sub(r"\x1b\][^\x1b]*\x1b\\", "", cleaned)
+    # Leftover raw bracket escape remnants like [4m or [0m
+    cleaned = re.sub(r"\[[0-9;]+m", "", cleaned)
+    return cleaned
+
+
+def clean_unreadable_characters(text: str) -> str:
+    """Strip ANSI escape sequences and non-printable control characters except standard whitespace."""
+    if not text:
+        return ""
+    cleaned = strip_ansi_escapes(text)
+    # Strip non-printable control chars, keeping \t (0x09), \n (0x0A), \r (0x0D)
+    cleaned = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]", "", cleaned)
+    return cleaned.strip()
+
+
 def extract_json_block(text: str) -> dict[str, Any] | list[Any]:
     """Extract and parse a JSON object or array from a model response.
 

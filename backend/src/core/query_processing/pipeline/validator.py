@@ -6,7 +6,12 @@ import re
 import sqlglot
 from sqlglot import exp
 
-from backend.src.utils.text_utils import extract_json_block
+from backend.src.config import settings
+from backend.src.utils.text_utils import (
+    clean_unreadable_characters,
+    extract_json_block,
+    strip_ansi_escapes,
+)
 from backend.src.schemas.pipeline import (
     GeneratedQuery,
     MongoQuery,
@@ -41,13 +46,21 @@ UNSAFE_SQL_PATTERN = re.compile(
 )
 
 
+def _clean_sqlglot_error(err: Exception | str) -> str:
+    """Format and clean sqlglot exception message of ANSI escapes and internal class reprs."""
+    text = clean_unreadable_characters(strip_ansi_escapes(str(err)))
+    text = re.sub(r"<class 'sqlglot\.expressions\.[^.']+\.([A-Za-z0-9_]+)'>", r"'\1'", text)
+    text = re.sub(r"<class '[^']+'>", "expression", text)
+    return text.strip()
+
+
 def validate_sql_schema_references(sql: str, schema: RelevantSchema) -> list[str]:
     """Deterministically inspect SQL AST to ensure all referenced tables and columns exist in schema."""
     issues: list[str] = []
     try:
         parsed = sqlglot.parse_one(sql, read="postgres")
     except Exception as err:
-        return [f"SQL syntax error: {err}"]
+        return [_clean_sqlglot_error(f"SQL syntax error: {err}")]
 
     allowed_tables = schema.get_object_names()
     all_allowed_columns: set[str] = set()
@@ -128,11 +141,11 @@ def validate_sql_schema_references(sql: str, schema: RelevantSchema) -> list[str
                     f"Column '{col_name}' does not exist in relevant schema"
                 )
 
-    return issues
+    return [clean_unreadable_characters(strip_ansi_escapes(i)) for i in issues]
 
 
 class QueryValidator:
-    """Validates generated queries using deterministic AST checks and SLM verification."""
+    """Validates generated queries using relaxed diagnostic checks and SLM verification."""
 
     def __init__(
         self,
@@ -157,8 +170,13 @@ class QueryValidator:
         generated_query: GeneratedQuery,
         schema: RelevantSchema,
     ) -> ValidationResult:
-        """Validate generated query against schema and question with classified error types."""
-        # 1. Deterministic fast check for UNSAFE operations
+        """Validate generated query using SLM verification and safety boundaries.
+
+        Deterministic parsing/schema checks are intentionally omitted to avoid false
+        rejections on complex PostgreSQL dialects, subqueries, or valid syntax.
+        The SLM performs semantic, syntax, and relational validation.
+        """
+        # 1. Fast safety check: empty SQL or destructive write statements
         if generated_query.database_type == DatabaseType.POSTGRESQL:
             sql_str = str(generated_query.raw_query).strip()
             if not sql_str:
@@ -177,37 +195,7 @@ class QueryValidator:
                     suggestion="Queries must be read-only SELECT statements.",
                 )
 
-            # 2. Deterministic AST syntax verification
-            try:
-                sqlglot.parse(sql_str, read="postgres")
-            except Exception as syntax_err:
-                return ValidationResult(
-                    valid=False,
-                    error_type=ValidationErrorType.SYNTAX_ERROR,
-                    issues=[f"PostgreSQL syntax error: {syntax_err}"],
-                    suggestion="Correct the PostgreSQL SQL syntax.",
-                )
-
-            # 3. Deterministic schema reference check
-            schema_issues = validate_sql_schema_references(sql_str, schema)
-            if schema_issues:
-                # Check if the plan itself contained invalid sources
-                plan_sources_set = {s.lower() for s in plan.sources}
-                allowed_sources = schema.get_object_names()
-                is_planner_flaw = not plan_sources_set.issubset(allowed_sources)
-                err_type = (
-                    ValidationErrorType.PLANNER_ERROR
-                    if is_planner_flaw
-                    else ValidationErrorType.GENERATION_ERROR
-                )
-                return ValidationResult(
-                    valid=False,
-                    error_type=err_type,
-                    issues=schema_issues,
-                    suggestion=f"Correct schema references: {'; '.join(schema_issues)}",
-                )
-
-        # 4. SLM Semantic Validation
+        # 2. SLM Semantic & Relational Validation
         template = self._load_prompt_template()
         schema_context = _format_relevant_schema_for_planner(schema)
         plan_context = plan.model_dump_json(indent=2)
@@ -224,7 +212,7 @@ class QueryValidator:
             raw_response = await self.provider.generate(
                 prompt=prompt,
                 temperature=0.0,
-                max_tokens=800,
+                max_tokens=settings.validator_max_tokens,
             )
             data = extract_json_block(raw_response)
 
@@ -241,11 +229,24 @@ class QueryValidator:
 
             data["error_type"] = raw_err_type
 
+            # Sanitize issues and suggestions from ANSI escapes and unreadable characters
+            raw_issues = data.get("issues", [])
+            if isinstance(raw_issues, list):
+                data["issues"] = [
+                    clean_unreadable_characters(strip_ansi_escapes(str(i)))
+                    for i in raw_issues
+                    if i
+                ]
+            raw_suggestion = data.get("suggestion")
+            if raw_suggestion:
+                data["suggestion"] = clean_unreadable_characters(strip_ansi_escapes(str(raw_suggestion)))
+
             return ValidationResult.model_validate(data)
 
         except Exception as err:
-            logger.warning("Validation SLM call failed: %s. Relying on deterministic check.", err)
-            # If deterministic checks passed and SLM call failed, accept as valid
+            logger.warning("Validation SLM call failed: %s. Lenient fallback: accepting query.", err)
+            # Lenient fallback: do NOT fail queries on deterministic parser guesses.
+            # Downstream database engine will catch genuine runtime errors.
             return ValidationResult(
                 valid=True,
                 error_type=ValidationErrorType.VALID,

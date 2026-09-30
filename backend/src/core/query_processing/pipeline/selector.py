@@ -3,6 +3,7 @@
 import logging
 from pathlib import Path
 
+from backend.src.config import settings
 from backend.src.utils.text_utils import extract_json_block
 from backend.src.schemas.pipeline import (
     CandidateTable,
@@ -68,18 +69,34 @@ class TableSelector:
         candidate_map = {c.table_name.lower(): c.table_name for c in candidates}
         schema_map = {obj.name.lower(): obj.name for obj in schema.objects} if schema else {}
 
-        # Format candidates context with similarity scores and compact schema fields if available
+        # Format candidates context with similarity scores, column types/descriptions, and known links
+        candidate_names = {c.table_name.lower(): c.table_name for c in candidates}
         lines: list[str] = []
         for c in candidates:
             line = f"• {c.table_name} (similarity: {c.similarity:.4f}, rank: {c.rank})"
             if schema:
                 obj = schema.get_object(c.table_name)
                 if obj:
-                    fields_sample = obj.all_field_paths()[:8]
                     desc = f" - {obj.description}" if obj.description else ""
-                    line += f"{desc}\n  Fields: {', '.join(fields_sample)}"
+                    fields_repr = []
+                    for f in obj.fields[:35]:
+                        f_desc = f": {f.description}" if f.description else ""
+                        fields_repr.append(f"{f.name} ({f.type}){f_desc}")
+                    line += f"{desc}\n  Columns: {', '.join(fields_repr)}"
             lines.append(line)
+
+        # Include relationships connecting any candidate tables
+        rel_lines: list[str] = []
+        if schema and schema.relationships:
+            for r in schema.relationships:
+                if r.from_object.lower() in candidate_names and r.to_object.lower() in candidate_names:
+                    rel_lines.append(
+                        f"• {r.from_object}.{r.from_field} -> {r.to_object}.{r.to_field} ({r.relationship_type})"
+                    )
+
         candidates_context = "\n".join(lines)
+        if rel_lines:
+            candidates_context += "\n\nKnown Relationships Between Candidates:\n" + "\n".join(rel_lines)
 
         feedback_context = ""
         if feedback:
@@ -99,7 +116,7 @@ class TableSelector:
             raw_response = await self.provider.generate(
                 prompt=prompt,
                 temperature=0.0,
-                max_tokens=800,
+                max_tokens=settings.table_selector_max_tokens,
             )
             data = extract_json_block(raw_response)
             parsed = TableSelectionResult.model_validate(data)

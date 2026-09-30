@@ -72,3 +72,42 @@ async def test_mongo_generator_typed_output():
     assert result.raw_query.collection == "customers"
     assert result.raw_query.filter == {"address.city": "Chennai"}
     assert result.raw_query.limit == 50
+
+
+class RecordingFeedbackProvider:
+    def __init__(self) -> None:
+        self.recorded_prompt: str = ""
+
+    async def generate(self, prompt: str, **kwargs) -> str:
+        self.recorded_prompt = prompt
+        return "\x1b[4m```sql\nSELECT * FROM \x1b[0mcustomers;"
+
+
+@pytest.mark.asyncio
+async def test_postgres_generator_strips_ansi_escapes():
+    """Generator strips ANSI escape codes from feedback in prompt and from output SQL."""
+    provider = RecordingFeedbackProvider()
+    generator = PostgresQueryGenerator(provider=provider)
+    plan = QueryPlan(sources=["customers"], projections=["*"])
+    schema = RelevantSchema(
+        objects=[
+            SchemaObject(
+                name="customers",
+                kind=SchemaObjectKind.TABLE,
+                fields=[Field(name="id", type="int")],
+            )
+        ]
+    )
+
+    dirty_feedback = "Syntax error near \x1b[4m.\x1b[0m.. with [4mcode[0m"
+    result = await generator.generate_query("Show customers", plan, schema, feedback=dirty_feedback)
+
+    # Prompt sent to model must have cleaned feedback
+    assert "\x1b" not in provider.recorded_prompt
+    assert "[4m" not in provider.recorded_prompt
+    assert "[0m" not in provider.recorded_prompt
+
+    # Output SQL must be clean
+    assert "\x1b" not in result.raw_query
+    assert "[4m" not in result.raw_query
+    assert "SELECT * FROM customers;" in result.raw_query

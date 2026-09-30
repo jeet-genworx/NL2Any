@@ -5,7 +5,11 @@ from pathlib import Path
 import re
 
 from backend.src.config import settings
-from backend.src.utils.text_utils import extract_json_block
+from backend.src.utils.text_utils import (
+    clean_unreadable_characters,
+    extract_json_block,
+    strip_ansi_escapes,
+)
 from backend.src.schemas.pipeline import (
     QueryPlan,
     QuestionAnalysis,
@@ -95,8 +99,9 @@ class QueryPlanner:
 
         feedback_section = ""
         if feedback:
+            cleaned_feedback = clean_unreadable_characters(strip_ansi_escapes(feedback))
             feedback_section = (
-                f"\nATTENTION - PREVIOUS PLAN FAILED VALIDATION (RETRY):\n{feedback}\n"
+                f"\nATTENTION - PREVIOUS PLAN FAILED VALIDATION (RETRY):\n{cleaned_feedback}\n"
                 "Please fix the above plan issues."
             )
 
@@ -148,8 +153,44 @@ class QueryPlanner:
                 all_allowed_fields.add(f.name.lower())
                 all_allowed_fields.add(f"{obj.name.lower()}.{f.name.lower()}")
 
-        # 1. Validate sources
-        valid_sources = [s for s in plan.sources if s.lower() in allowed_sources]
+        # 1. Validate sources and detect any missing tables whose schema is not retrieved
+        def _is_table_in_allowed(tbl_name: str) -> bool:
+            t = tbl_name.lower().strip()
+            if not t:
+                return True
+            if t in allowed_sources:
+                return True
+            short_t = t.split(".")[-1]
+            return any(a.split(".")[-1] == short_t for a in allowed_sources)
+
+        missing_tables: list[str] = []
+        for m in plan.missing_tables:
+            m_clean = m.strip()
+            if m_clean and not _is_table_in_allowed(m_clean) and m_clean not in missing_tables:
+                missing_tables.append(m_clean)
+
+        valid_sources = []
+        for s in plan.sources:
+            s_clean = s.strip()
+            if _is_table_in_allowed(s_clean):
+                valid_sources.append(s_clean)
+            else:
+                if s_clean and s_clean not in missing_tables:
+                    missing_tables.append(s_clean)
+
+        for rel in plan.relationships_used:
+            for part in rel.split("->"):
+                tokens = part.strip().split(".")
+                if len(tokens) >= 3:
+                    tbl = f"{tokens[0]}.{tokens[1]}"
+                elif len(tokens) >= 2:
+                    tbl = tokens[0]
+                else:
+                    tbl = part.strip()
+                if tbl and not _is_table_in_allowed(tbl) and tbl not in missing_tables:
+                    missing_tables.append(tbl)
+
+        plan.missing_tables = missing_tables
         if not valid_sources and relevant_schema.objects:
             valid_sources = [relevant_schema.objects[0].name]
         plan.sources = valid_sources

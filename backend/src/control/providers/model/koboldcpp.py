@@ -28,9 +28,12 @@ class KoboldCppProvider:
         )
         # Local SLM generation is slow, and long-form stages (ingestion's per-table
         # plus per-column descriptions) can run for minutes on one batch.
-        self.timeout = (
-            timeout if timeout is not None else float(settings.model_timeout_seconds)
-        )
+        if timeout is not None:
+            self.timeout = float(timeout) if timeout > 0 else None
+        elif settings.model_timeout_seconds is not None and settings.model_timeout_seconds > 0:
+            self.timeout = float(settings.model_timeout_seconds)
+        else:
+            self.timeout = None
         self._external_client = http_client
 
     async def _get_client(self) -> httpx.AsyncClient:

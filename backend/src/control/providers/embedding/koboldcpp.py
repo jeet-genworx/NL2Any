@@ -27,7 +27,12 @@ class KoboldCppEmbeddingProvider(EmbeddingProvider):
         self.model = model or settings.embedding_model
         # Same KoboldCpp server as generation, so an embedding call can queue
         # behind an in-flight completion; share the model timeout.
-        self.timeout = timeout if timeout is not None else float(settings.model_timeout_seconds)
+        if timeout is not None:
+            self.timeout = float(timeout) if timeout > 0 else None
+        elif settings.model_timeout_seconds is not None and settings.model_timeout_seconds > 0:
+            self.timeout = float(settings.model_timeout_seconds)
+        else:
+            self.timeout = None
         self._client = client
         self.expected_dim = expected_dim
 

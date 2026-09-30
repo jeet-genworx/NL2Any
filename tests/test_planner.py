@@ -174,3 +174,27 @@ async def test_query_planner_with_feedback(sample_schema):
 
     assert "ATTENTION - PREVIOUS PLAN FAILED VALIDATION (RETRY)" in provider.last_prompt
     assert feedback_msg in provider.last_prompt
+
+
+@pytest.mark.asyncio
+async def test_query_planner_identifies_missing_tables(sample_schema):
+    raw_response = """
+    ```json
+    {
+      "operation": "select",
+      "sources": ["customers", "orders"],
+      "missing_tables": ["invoices"],
+      "projections": ["id"],
+      "relationships_used": ["customers.id -> shipments.customer_id"]
+    }
+    ```
+    """
+    planner = QueryPlanner(provider=MockPlannerProvider(raw_response))
+    qa = QuestionAnalysis(question="Show customers with orders and shipments")
+
+    plan = await planner.plan(qa, sample_schema, DatabaseType.POSTGRESQL)
+    # Allowed source was only 'customers'; orders, invoices, and shipments were missing
+    assert plan.sources == ["customers"]
+    assert "orders" in plan.missing_tables
+    assert "invoices" in plan.missing_tables
+    assert "shipments" in plan.missing_tables
