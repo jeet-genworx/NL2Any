@@ -1,72 +1,72 @@
 [database]
 type = "postgresql"
 name = "nl2anyquery_db"
-generated_at = "2026-09-29T10:46:19.800103+00:00"
+generated_at = "2026-09-30T06:15:01.039872+00:00"
 
 [tables.customers]
-description = "Stores information about customers, including their personal details and when they were created. This table links to orders and support tickets via customer_id."
+description = "The customers table stores information about all registered customers. It contains columns for customer ID, name, email, phone, city, and creation date. This table is used to look up customer details and is connected to orders and support tickets through customer_id foreign keys."
 
 [tables.customers.columns]
-id = "Primary key identifying the customer"
-name = "Customer's full name"
-email = "Customer's contact email"
-phone = "Customer's phone number"
-city = "Customer's city of residence"
-created_at = "Timestamp when the customer was added"
+id = "Unique identifier for the customer"
+name = "Full name of the customer"
+email = "Email address of the customer"
+phone = "Phone number of the customer"
+city = "City where the customer is located"
+created_at = "Timestamp when the customer was created"
 
 [tables.orders]
-description = "Records customer orders, including details like order date, status, total amount, and shipping city. This table links to customers and order items via foreign keys."
+description = "The orders table records all customer orders. It includes order ID, customer ID, order date, status, total amount, and shipping city. This table is connected to customers through customer_id and to order_items through order_id."
 
 [tables.orders.columns]
-id = "Primary key identifying the order"
+id = "Unique identifier for the order"
 customer_id = "FK to customers"
 order_date = "Timestamp when the order was placed"
 status = "Current status of the order"
-total_amount = "Total cost of the order"
-shipping_city = "City for order delivery"
+total_amount = "Total monetary value of the order"
+shipping_city = "City where the order is shipped to"
 
 [tables.support_tickets]
-description = "Tracks support tickets for customers, including subject, status, priority, and timestamps. This table links to customers and employees via foreign keys."
+description = "The support_tickets table tracks customer support requests. It contains ticket ID, customer ID, employee ID, subject, status, priority, and timestamps for creation and resolution. This table is connected to customers through customer_id and to employees through employee_id."
 
 [tables.support_tickets.columns]
-id = "Primary key identifying the ticket"
+id = "Unique identifier for the support ticket"
 customer_id = "FK to customers"
 employee_id = "FK to employees"
 subject = "Summary of the support request"
 status = "Current status of the ticket"
-priority = "Urgency level of the ticket"
-created_at = "Timestamp when the ticket was opened"
-resolved_at = "Timestamp when the ticket was closed"
+priority = "Level of urgency for the ticket"
+created_at = "Timestamp when the ticket was created"
+resolved_at = "Timestamp when the ticket was resolved"
 
 [tables.order_items]
-description = "Records items in orders, including product details, quantity, and unit price. This table links to orders and products via foreign keys."
+description = "The order_items table lists the products included in each order. It contains item ID, order ID, product ID, quantity, and unit price. This table is connected to orders through order_id and to products through product_id (though products table is not in this batch)."
 
 [tables.order_items.columns]
-id = "Primary key identifying the item"
+id = "Unique identifier for the order item"
 order_id = "FK to orders"
 product_id = "FK to products"
-quantity = "Number of items ordered"
-unit_price = "Price per item"
+quantity = "Number of units purchased"
+unit_price = "Price per unit of the product"
 
 [tables.employees]
-description = "Stores information about employees, including their name, department, role, and hire date. This table links to support tickets via foreign keys."
+description = "The employees table stores information about all employees. It includes employee ID, name, email, department, role, city, and hire date. This table is connected to support_tickets through employee_id."
 
 [tables.employees.columns]
-id = "Primary key identifying the employee"
-name = "Employee's full name"
-email = "Employee's contact email"
-department = "Employee's department"
-role = "Employee's job title"
-city = "Employee's city of residence"
-hire_date = "Timestamp when the employee started"
+id = "Unique identifier for the employee"
+name = "Full name of the employee"
+email = "Email address of the employee"
+department = "Department the employee belongs to"
+role = "Job title or role of the employee"
+city = "City where the employee is located"
+hire_date = "Timestamp when the employee was hired"
 
 [tables.products]
-description = "This table stores detailed information about products, including their unique identifier, name, category, price, stock quantity, and creation timestamp. It is used to look up product details for inventory management, pricing, and historical records."
+description = "The products table stores information about available items in the inventory. It contains the unique identifier, name, category, price, stock quantity, and timestamp of when the product was created. This table is used to look up product details, manage inventory levels, and track when products were added to the system."
 
 [tables.products.columns]
-id = "Primary key identifier for the product"
+id = "Unique identifier for the product"
 name = "Name of the product"
 category = "Product category"
-price = "Product price"
-stock_quantity = "Quantity of product in stock"
-created_at = "Timestamp when the product was created"
+price = "Price of the product"
+stock_quantity = "Current stock level of the product"
+created_at = "Timestamp when the product was added to the system"

@@ -63,6 +63,15 @@ class Settings(BaseSettings):
         alias="EMBEDDING_MODEL",
         description="Embedding model name",
     )
+    embedding_dimension: int = Field(
+        default=768,
+        alias="EMBEDDING_DIMENSION",
+        description=(
+            "Length of the vectors the embedding model produces. Stored embeddings "
+            "and query embeddings are both checked against it, so changing the "
+            "model to one with a different size means changing this and re-ingesting."
+        ),
+    )
     postgres_embeddings_path: str = Field(
         default="backend/src/data/embeddings/postgres_embeddings.json",
         alias="POSTGRES_EMBEDDINGS_PATH",

@@ -9,8 +9,6 @@ from backend.src.control.providers.embedding.base import EmbeddingProvider
 
 logger = logging.getLogger(__name__)
 
-EXPECTED_DIMENSION = 384  # for all-MiniLM-L6-v2
-
 
 class KoboldCppEmbeddingProvider(EmbeddingProvider):
     """Generates embeddings using KoboldCpp /v1/embeddings endpoint."""
@@ -21,7 +19,7 @@ class KoboldCppEmbeddingProvider(EmbeddingProvider):
         model: str | None = None,
         timeout: float | None = None,
         client: httpx.AsyncClient | None = None,
-        expected_dim: int = EXPECTED_DIMENSION,
+        expected_dim: int | None = None,
     ) -> None:
         self.base_url = (base_url or settings.koboldcpp_base_url).rstrip("/")
         self.model = model or settings.embedding_model
@@ -29,7 +27,9 @@ class KoboldCppEmbeddingProvider(EmbeddingProvider):
         # behind an in-flight completion; share the model timeout.
         self.timeout = timeout if timeout is not None else float(settings.model_timeout_seconds)
         self._client = client
-        self.expected_dim = expected_dim
+        self.expected_dim = (
+            expected_dim if expected_dim is not None else settings.embedding_dimension
+        )
 
     async def embed(self, text: str) -> list[float]:
         """Generate embedding vector for input text via KoboldCpp."""

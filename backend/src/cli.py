@@ -432,7 +432,7 @@ def run_ui_cli() -> None:
 
 
 def generate_test_embeddings_cli() -> None:
-    """Generate table description embeddings using KoboldCpp and all-MiniLM-L6-v2."""
+    """Generate table description embeddings using KoboldCpp's embedding model."""
     import json
     from backend.src.control.providers.embedding.koboldcpp import KoboldCppEmbeddingProvider
 
@@ -472,8 +472,10 @@ def generate_test_embeddings_cli() -> None:
         for tbl_name, desc in table_descriptions.items():
             print(f"Generating embedding for '{tbl_name}'...")
             vec = await provider.embed(desc)
-            if len(vec) != 384:
-                raise ValueError(f"Table '{tbl_name}' vector dimension {len(vec)} != 384")
+            if len(vec) != settings.embedding_dimension:
+                raise ValueError(
+                    f"Table '{tbl_name}' vector dimension {len(vec)} != {settings.embedding_dimension}"
+                )
             embeddings[tbl_name] = vec
 
         out_path = Path(args.output)
