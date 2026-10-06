@@ -367,7 +367,10 @@ if run_btn and question.strip():
                 detail = err.response.json().get("detail", err.response.text)
             except Exception:
                 detail = err.response.text
-            st.error(f"❌ Provider Error ({PROVIDER_OPTIONS.get(provider_choice, provider_choice)}): {detail}")
+            if err.response.status_code >= 500:
+                st.error(f"❌ Backend Server Error (HTTP {err.response.status_code}): {detail}")
+            else:
+                st.error(f"❌ Provider Error ({PROVIDER_OPTIONS.get(provider_choice, provider_choice)}): {detail}")
             st.stop()
         except Exception as err:
             st.error(f"Error querying API: {err}")
@@ -427,10 +430,7 @@ if run_btn and question.strip():
     st.divider()
     st.markdown("### 🔍 Pipeline Tracing & Inspection")
 
-    with st.expander("Guardrail"):
-        st.json(data.get("guardrail", {}))
-
-    with st.expander("Spelling Checker (SymSpell)"):
+    with st.expander("1. Spelling Checker (SymSpell)", expanded=False):
         spelling_data = data.get("spelling_correction")
         if spelling_data:
             st.markdown(f"**Original Question:** `{spelling_data.get('original_question')}`")
@@ -446,37 +446,19 @@ if run_btn and question.strip():
         else:
             st.info("Spelling check was not executed for this query.")
 
-    with st.expander("Semantic Analysis"):
-        st.json(data.get("semantic_analysis", {}))
+    with st.expander("2. Guardrail", expanded=False):
+        st.json(data.get("guardrail", {}))
 
-    with st.expander("Linguistic Analysis"):
-        st.json(data.get("linguistic_analysis", {}))
-
-    with st.expander("Embedding Retrieval"):
-        candidate_tables = data.get("candidate_tables", [])
-        if candidate_tables:
-            st.markdown("**Embedding Candidates (Cosine Similarity > 0.80, Top 15 max):**")
-            cand_df = pd.DataFrame(candidate_tables)[["rank", "table_name", "similarity"]]
-            cand_df.columns = ["Rank", "Table", "Similarity Score"]
-            st.dataframe(cand_df, hide_index=True, use_container_width=True)
-        else:
-            st.info("No candidate tables retrieved or applicable.")
-
-    with st.expander("Table Selection"):
+    with st.expander("3. Table Selection & Grounded Schema", expanded=False):
         st.markdown(f"**Selected Tables / Objects:** `{data.get('selected_objects', [])}`")
         st.markdown(f"**Selection Retries:** {data.get('selection_retries', 0)}")
+        if data.get("relevant_schema"):
+            st.markdown("**Grounded Schema for Selected Tables:**")
+            st.json(data.get("relevant_schema", {}))
 
-    with st.expander("Relevant Schema"):
-        st.json(data.get("relevant_schema", {}))
-
-    with st.expander("Query Plan"):
-        st.json(data.get("query_plan", {}))
-
-    with st.expander("Generated Query"):
+    with st.expander("4. Generated Query", expanded=True):
         gen_q = data.get("generated_query")
         if gen_q:
-            # Driven by the engine, not the target key, so a PostgreSQL database
-            # added from a connection string is still highlighted as SQL.
             if db_type == "postgresql":
                 st.code(gen_q, language="sql")
             else:
@@ -487,7 +469,7 @@ if run_btn and question.strip():
         else:
             st.write("No query generated.")
 
-    with st.expander("Validation"):
+    with st.expander("5. Validation", expanded=False):
         val_data = data.get("validation", {}) or {}
         st.markdown(f"**Validation Retries:** {data.get('validation_retries', 0)}")
         st.markdown(f"**Valid:** `{val_data.get('valid')}`")
@@ -498,11 +480,11 @@ if run_btn and question.strip():
             st.markdown(f"**Suggestion:** {val_data.get('suggestion')}")
         st.json(val_data)
 
-    with st.expander("Policy"):
+    with st.expander("6. Safety Policy", expanded=False):
         pol_data = data.get("policy", {}) or {}
         st.markdown(f"**Allowed:** `{pol_data.get('allowed')}`")
         st.markdown(f"**Reason:** {pol_data.get('reason', '')}")
         st.json(pol_data)
 
-    with st.expander("Results"):
+    with st.expander("7. Execution Results", expanded=False):
         st.json(data.get("results", {}))

@@ -27,6 +27,7 @@ RULES:
     }}
   }}
 }}
+7. Do NOT include trailing commas after the last field or element in objects or arrays. Output standard valid JSON with double-quoted property names and string values.
 
 Tables in this batch:
 {tables_context}

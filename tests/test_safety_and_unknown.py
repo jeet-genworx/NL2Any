@@ -21,16 +21,12 @@ from backend.src.core.query_processing.pipeline.guardrail import GuardrailClassi
 from backend.src.core.query_processing.pipeline.orchestrator import NL2AnyQueryOrchestrator
 from backend.src.core.query_processing.pipeline.policy import SafetyPolicyValidator
 from tests.test_orchestrator import (
-    MockEmbeddingProvider,
     MockExecutor,
     MockGuardrail,
-    MockPlanner,
     MockPolicy,
     MockPostgresGen,
     MockSelector,
-    MockSemantic,
     MockValidator,
-    MockVectorRetriever,
 )
 
 
@@ -66,14 +62,14 @@ def mock_shop_schema() -> DatabaseSchema:
     ],
 )
 async def test_unknown_schema_zero_candidates(question, mock_shop_schema):
-    """When vector retriever returns 0 candidates for out-of-domain questions, halt cleanly."""
+    """When Table Selector identifies 0 relevant tables for out-of-domain questions, halt cleanly."""
     executor = MockExecutor()
+    selector = MockSelector(
+        results=[TableSelectionResult(selected_objects=[], sufficient=False, reasoning="Out of domain")]
+    )
     orchestrator = NL2AnyQueryOrchestrator(
-        embedding_provider=MockEmbeddingProvider(),
-        vector_retriever=MockVectorRetriever(candidates=[]),  # No candidate above threshold
         guardrail=MockGuardrail(GuardrailDecision.READ_QUERY),
-        semantic=MockSemantic(),
-        selector=MockSelector(),
+        selector=selector,
         executor=executor,
     )
     orchestrator._schemas[DatabaseType.POSTGRESQL] = mock_shop_schema

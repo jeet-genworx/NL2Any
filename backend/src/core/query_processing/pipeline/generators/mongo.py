@@ -1,14 +1,16 @@
-"""MongoDB query generator translating QueryPlan into typed MongoQuery."""
+"""MongoDB query generator translating user question and Selected Schema directly into typed MongoQuery."""
 
 import json
 import logging
 from pathlib import Path
+from typing import Any
+
 from backend.src.config import settings
 from backend.src.utils.text_utils import extract_json_block
-from backend.src.schemas.pipeline import GeneratedQuery, MongoQuery, QueryPlan, RelevantSchema
+from backend.src.schemas.pipeline import GeneratedQuery, GeneratorMissingInfo, MongoQuery, RelevantSchema
 from backend.src.data.models.schema import DatabaseType
 from backend.src.core.query_processing.pipeline.generators.base import QueryGenerator
-from backend.src.core.query_processing.pipeline.planner import _format_relevant_schema_for_planner
+from backend.src.core.query_processing.pipeline.selector import format_relevant_schema
 from backend.src.control.providers.model.base import ModelProvider
 from backend.src.control.providers.model.koboldcpp import KoboldCppProvider
 
@@ -29,7 +31,7 @@ DEFAULT_MONGO_PROMPT = _get_mongo_prompt_path()
 
 
 class MongoQueryGenerator(QueryGenerator):
-    """Generates structured, typed MongoQuery objects."""
+    """Generates structured, typed MongoQuery objects directly from question and selected schema."""
 
     def __init__(
         self,
@@ -50,25 +52,36 @@ class MongoQueryGenerator(QueryGenerator):
     async def generate_query(
         self,
         question: str,
-        plan: QueryPlan,
-        schema: RelevantSchema,
+        schema: Any = None,
         feedback: str | None = None,
-    ) -> GeneratedQuery:
-        """Generate typed MongoQuery from QueryPlan and RelevantSchema."""
+        plan: Any = None,
+        **kwargs: Any,
+    ) -> GeneratedQuery | GeneratorMissingInfo:
+        """Generate typed MongoQuery or return missing-information feedback."""
+        # Detect whether arguments were passed as (question, schema) or (question, plan, schema)
+        if isinstance(schema, RelevantSchema):
+            active_schema = schema
+        elif isinstance(plan, RelevantSchema):
+            active_schema = plan
+        elif isinstance(kwargs.get("schema"), RelevantSchema):
+            active_schema = kwargs["schema"]
+        else:
+            active_schema = schema if isinstance(schema, RelevantSchema) else RelevantSchema()
+
+        active_feedback = feedback if isinstance(feedback, str) else kwargs.get("feedback")
+
         template = self._load_prompt_template()
-        schema_context = _format_relevant_schema_for_planner(schema)
-        plan_context = plan.model_dump_json(indent=2)
+        schema_context = format_relevant_schema(active_schema)
 
         feedback_section = ""
-        if feedback:
+        if active_feedback:
             feedback_section = (
-                f"ATTENTION - PREVIOUS ATTEMPT FAILED WITH FEEDBACK:\n{feedback}\n"
+                f"ATTENTION - PREVIOUS ATTEMPT FAILED WITH FEEDBACK:\n{active_feedback}\n"
                 "Please fix the above issue in the generated query."
             )
 
         prompt = template.format(
             question=question,
-            plan_context=plan_context,
             schema_context=schema_context,
             feedback_section=feedback_section,
         )
@@ -83,6 +96,15 @@ class MongoQueryGenerator(QueryGenerator):
         if not isinstance(data, dict):
             raise ValueError(f"MongoDB generator expected a JSON object, got {type(data)}")
 
+        if data.get("status") == "missing_information":
+            missing = data.get("missing_tables") or data.get("missing_objects") or []
+            if isinstance(missing, str):
+                missing = [missing]
+            return GeneratorMissingInfo(
+                status="missing_information",
+                missing_tables=missing,
+                reason=str(data.get("reason", "Required schema information is missing.")),
+            )
         mongo_query = MongoQuery.model_validate(data)
         formatted_json = json.dumps(mongo_query.model_dump(exclude_none=True), indent=2)
 

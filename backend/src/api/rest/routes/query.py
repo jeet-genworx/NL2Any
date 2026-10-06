@@ -1,5 +1,6 @@
 """Query and ingestion API routes."""
 
+import logging
 from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -8,6 +9,8 @@ from backend.src.core.ingestion.pipeline import run_ingestion_pipeline
 from backend.src.core.query_processing.pipeline.orchestrator import NL2AnyQueryOrchestrator
 from backend.src.schemas.pipeline import PipelineResponse
 from backend.src.schemas.request import QueryRequest
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Query & Ingestion"])
 
@@ -56,4 +59,5 @@ async def query_endpoint(
     except ValueError as err:
         raise HTTPException(status_code=400, detail=str(err))
     except Exception as err:
+        logger.exception("Unexpected error executing query: %s", err)
         raise HTTPException(status_code=500, detail=str(err))

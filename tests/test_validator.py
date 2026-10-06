@@ -3,6 +3,7 @@
 import pytest
 from backend.src.schemas.pipeline import (
     GeneratedQuery,
+    MongoQuery,
     QueryPlan,
     RelevantSchema,
     ValidationErrorType,
@@ -399,4 +400,149 @@ async def test_query_validator_strips_ansi_escapes_from_slm_output():
     assert "[4m" not in res.issues[0]
     assert "[0m" not in res.issues[0]
     assert "\x1b" not in res.suggestion
+
+
+@pytest.mark.asyncio
+async def test_query_validator_mongodb_slm_validation():
+    """MongoDB validator preserves SLM validation results without deterministic overrides."""
+    schema = RelevantSchema(
+        objects=[
+            SchemaObject(
+                name="agent_health_logs",
+                kind=SchemaObjectKind.COLLECTION,
+                fields=[Field(name="agent_id", type="string"), Field(name="response_ms", type="int")],
+            ),
+        ]
+    )
+    slm_resp = """```json
+    {
+      "valid": false,
+      "error_type": "GENERATION_ERROR",
+      "issues": [
+        "Unrecognized stage or missing collection filter."
+      ],
+      "suggestion": "Add proper match stage."
+    }
+    ```"""
+    provider = MockValidatorProvider(slm_resp)
+    validator = QueryValidator(provider=provider)
+    query = GeneratedQuery(
+        database_type=DatabaseType.MONGODB,
+        raw_query=MongoQuery(
+            operation="aggregate",
+            collection="agent_health_logs",
+            pipeline=[{"$match": {}}],
+        ),
+        formatted_query='{"operation": "aggregate"}',
+    )
+
+    res = await validator.validate("Show health logs", None, query, schema)
+    assert res.valid is False
+    assert res.error_type == ValidationErrorType.GENERATION_ERROR
+    assert "Unrecognized stage" in res.issues[0]
+
+
+@pytest.mark.asyncio
+async def test_postgres_query_validator_direct():
+    """PostgresQueryValidator operates directly on SQL queries."""
+    from backend.src.core.query_processing.pipeline.validators import PostgresQueryValidator
+
+    slm_resp = '{"valid": true, "error_type": "VALID", "issues": [], "suggestion": null}'
+    provider = MockValidatorProvider(slm_resp)
+    validator = PostgresQueryValidator(provider=provider)
+    query = GeneratedQuery(
+        database_type=DatabaseType.POSTGRESQL,
+        raw_query="SELECT id FROM customers;",
+        formatted_query="SELECT id FROM customers;",
+    )
+    res = await validator.validate("Show customers", query)
+    assert res.valid is True
+    assert res.error_type == ValidationErrorType.VALID
+
+
+@pytest.mark.asyncio
+async def test_mongo_query_validator_bare_stage_syntax_error():
+    """MongoQueryValidator immediately flags bare stage operators missing $ prefix."""
+    from backend.src.core.query_processing.pipeline.validators import MongoQueryValidator
+
+    # Provider should never be called because the fast-path syntax check catches this
+    class FailIfCalledProvider:
+        async def generate(self, *args, **kwargs):
+            raise AssertionError("Provider should not be called for bare stage syntax errors")
+
+    validator = MongoQueryValidator(provider=FailIfCalledProvider())
+    query = GeneratedQuery(
+        database_type=DatabaseType.MONGODB,
+        raw_query=MongoQuery(
+            operation="aggregate",
+            collection="agent_health_logs",
+            pipeline=[
+                {"$lookup": {"from": "agents", "localField": "agent_id", "foreignField": "agent_id", "as": "agent"}},
+                {"$unwind": "$agent"},
+                {"$group": {"_id": "$agent.name", "avg_response_time": {"$avg": "$response_ms"}}},
+                {"limit": 10},
+            ],
+        ),
+        formatted_query='{"operation": "aggregate"}',
+    )
+    res = await validator.validate("What is the average response time for each agent grouped by agent name?", query)
+    assert res.valid is False
+    assert res.error_type == ValidationErrorType.SYNTAX_ERROR
+    assert any("limit" in issue and "$limit" in issue for issue in res.issues)
+    assert res.suggestion is not None
+    assert "$limit" in res.suggestion
+
+
+@pytest.mark.asyncio
+async def test_mongo_query_validator_direct():
+    """MongoQueryValidator operates directly on MongoDB queries."""
+    from backend.src.core.query_processing.pipeline.validators import MongoQueryValidator
+
+    slm_resp = '{"valid": true, "error_type": "VALID", "issues": [], "suggestion": null}'
+    provider = MockValidatorProvider(slm_resp)
+    validator = MongoQueryValidator(provider=provider)
+    query = GeneratedQuery(
+        database_type=DatabaseType.MONGODB,
+        raw_query=MongoQuery(
+            operation="aggregate",
+            collection="agents",
+            pipeline=[{"$match": {"team": "AB"}}],
+        ),
+        formatted_query='{"operation": "aggregate"}',
+    )
+    res = await validator.validate("Show agents in team AB", query)
+    assert res.valid is True
+    assert res.error_type == ValidationErrorType.VALID
+
+
+@pytest.mark.asyncio
+async def test_mongo_query_validator_size_in_group_syntax_error():
+    """MongoQueryValidator immediately flags $size inside $group stage as syntax error."""
+    from backend.src.core.query_processing.pipeline.validators import MongoQueryValidator
+
+    class FailIfCalledProvider:
+        async def generate(self, *args, **kwargs):
+            raise AssertionError("Provider should not be called for syntax errors")
+
+    validator = MongoQueryValidator(provider=FailIfCalledProvider())
+    query = GeneratedQuery(
+        database_type=DatabaseType.MONGODB,
+        raw_query=MongoQuery(
+            operation="aggregate",
+            collection="agents",
+            pipeline=[
+                {"$match": {"team": "Agent Backbone"}},
+                {"$lookup": {"from": "runs", "localField": "agent_id", "foreignField": "agent_id", "as": "completed_runs"}},
+                {"$unwind": "$completed_runs"},
+                {"$group": {"_id": "$name", "run_count": {"$size": "$completed_runs"}}},
+            ],
+        ),
+        formatted_query='{"operation": "aggregate"}',
+    )
+    res = await validator.validate("Show the number of runs executed by each user", query)
+    assert res.valid is False
+    assert res.error_type == ValidationErrorType.SYNTAX_ERROR
+    assert any("$size" in issue and "$sum" in issue for issue in res.issues)
+    assert res.suggestion is not None
+    assert "$sum" in res.suggestion
 

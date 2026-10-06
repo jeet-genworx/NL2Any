@@ -1,18 +1,21 @@
-"""PostgreSQL query generator translating QueryPlan into SQL."""
+"""PostgreSQL query generator translating user question and Selected Schema directly into SQL."""
 
 import logging
 from pathlib import Path
 import re
+from typing import Any
+
 from backend.src.config import settings
 from backend.src.utils.text_utils import (
     clean_unreadable_characters,
+    extract_json_block,
     strip_ansi_escapes,
     strip_think_tags,
 )
-from backend.src.schemas.pipeline import GeneratedQuery, QueryPlan, RelevantSchema
+from backend.src.schemas.pipeline import GeneratedQuery, GeneratorMissingInfo, RelevantSchema
 from backend.src.data.models.schema import DatabaseType
 from backend.src.core.query_processing.pipeline.generators.base import QueryGenerator
-from backend.src.core.query_processing.pipeline.planner import _format_relevant_schema_for_planner
+from backend.src.core.query_processing.pipeline.selector import format_relevant_schema
 from backend.src.control.providers.model.base import ModelProvider
 from backend.src.control.providers.model.koboldcpp import KoboldCppProvider
 
@@ -60,7 +63,7 @@ def _extract_sql(text: str) -> str:
 
 
 class PostgresQueryGenerator(QueryGenerator):
-    """Generates read-only PostgreSQL queries."""
+    """Generates read-only PostgreSQL queries directly from question and selected schema."""
 
     def __init__(
         self,
@@ -81,18 +84,30 @@ class PostgresQueryGenerator(QueryGenerator):
     async def generate_query(
         self,
         question: str,
-        plan: QueryPlan,
-        schema: RelevantSchema,
+        schema: Any = None,
         feedback: str | None = None,
-    ) -> GeneratedQuery:
-        """Generate PostgreSQL query from QueryPlan and RelevantSchema."""
+        plan: Any = None,
+        **kwargs: Any,
+    ) -> GeneratedQuery | GeneratorMissingInfo:
+        """Generate PostgreSQL query or return missing-information feedback."""
+        # Detect whether arguments were passed as (question, schema) or (question, plan, schema)
+        if isinstance(schema, RelevantSchema):
+            active_schema = schema
+        elif isinstance(plan, RelevantSchema):
+            active_schema = plan
+        elif isinstance(kwargs.get("schema"), RelevantSchema):
+            active_schema = kwargs["schema"]
+        else:
+            active_schema = schema if isinstance(schema, RelevantSchema) else RelevantSchema()
+
+        active_feedback = feedback if isinstance(feedback, str) else kwargs.get("feedback")
+
         template = self._load_prompt_template()
-        schema_context = _format_relevant_schema_for_planner(schema)
-        plan_context = plan.model_dump_json(indent=2)
+        schema_context = format_relevant_schema(active_schema)
 
         feedback_section = ""
-        if feedback:
-            cleaned_feedback = clean_unreadable_characters(strip_ansi_escapes(feedback))
+        if active_feedback:
+            cleaned_feedback = clean_unreadable_characters(strip_ansi_escapes(active_feedback))
             feedback_section = (
                 f"ATTENTION - PREVIOUS ATTEMPT FAILED WITH FEEDBACK:\n{cleaned_feedback}\n"
                 "Please fix the above issue in the generated query."
@@ -100,7 +115,6 @@ class PostgresQueryGenerator(QueryGenerator):
 
         prompt = template.format(
             question=question,
-            plan_context=plan_context,
             schema_context=schema_context,
             feedback_section=feedback_section,
         )
@@ -110,6 +124,21 @@ class PostgresQueryGenerator(QueryGenerator):
             temperature=0.1,
             max_tokens=settings.model_max_tokens,
         )
+
+        # Check if model returned a structured missing information response
+        try:
+            data = extract_json_block(raw_response)
+            if isinstance(data, dict) and data.get("status") == "missing_information":
+                missing = data.get("missing_tables") or data.get("missing_objects") or []
+                if isinstance(missing, str):
+                    missing = [missing]
+                return GeneratorMissingInfo(
+                    status="missing_information",
+                    missing_tables=missing,
+                    reason=str(data.get("reason", "Required schema information is missing.")),
+                )
+        except Exception:
+            pass
 
         sql = _extract_sql(raw_response)
         return GeneratedQuery(
