@@ -25,7 +25,7 @@ from backend.src.schemas.pipeline import (
     ValidationErrorType,
     ValidationResult,
 )
-from backend.src.schemas.pipeline import QueryPlan
+from backend.src.schemas.pipeline import JoinPathResolution, QueryPlan
 from backend.src.data.models.schema import DatabaseSchema, DatabaseType
 from backend.src.core.query_processing.nlp.linguistic import LinguisticAnalyzer
 from backend.src.core.query_processing.pipeline.executor import QueryExecutor
@@ -33,6 +33,7 @@ from backend.src.core.query_processing.pipeline.expansion import SchemaExpander
 from backend.src.core.query_processing.pipeline.generators.mongo import MongoQueryGenerator
 from backend.src.core.query_processing.pipeline.generators.postgres import PostgresQueryGenerator
 from backend.src.core.query_processing.pipeline.guardrail import GuardrailClassifier
+from backend.src.core.query_processing.pipeline.path_selector import JoinPathSelector
 from backend.src.core.query_processing.pipeline.planner import QueryPlanner
 from backend.src.core.query_processing.pipeline.policy import SafetyPolicyValidator
 from backend.src.core.query_processing.pipeline.results import ResultProcessor
@@ -68,6 +69,7 @@ class NL2AnyQueryOrchestrator:
         linguistic: LinguisticAnalyzer | None = None,
         selector: TableSelector | None = None,
         expander: SchemaExpander | None = None,
+        path_selector: JoinPathSelector | None = None,
         planner: QueryPlanner | None = None,
         postgres_gen: PostgresQueryGenerator | None = None,
         mongo_gen: MongoQueryGenerator | None = None,
@@ -88,6 +90,7 @@ class NL2AnyQueryOrchestrator:
         self.linguistic = linguistic or LinguisticAnalyzer()
         self.selector = selector or TableSelector(provider=self.provider)
         self.expander = expander or SchemaExpander()
+        self.path_selector = path_selector or JoinPathSelector(provider=self.provider)
         self.descriptions_client = descriptions_client or DescriptionsClient()
         self.planner = planner or QueryPlanner(provider=self.provider)
         self.postgres_gen = postgres_gen or PostgresQueryGenerator(provider=self.provider)
@@ -101,6 +104,7 @@ class NL2AnyQueryOrchestrator:
         self._custom_guardrail = guardrail is not None
         self._custom_semantic = semantic is not None
         self._custom_selector = selector is not None
+        self._custom_path_selector = path_selector is not None
         self._custom_planner = planner is not None
         self._custom_postgres_gen = postgres_gen is not None
         self._custom_mongo_gen = mongo_gen is not None
@@ -116,6 +120,7 @@ class NL2AnyQueryOrchestrator:
                 self.guardrail,
                 self.semantic,
                 self.selector,
+                self.path_selector,
                 self.planner,
                 self.postgres_gen,
                 self.mongo_gen,
@@ -135,6 +140,11 @@ class NL2AnyQueryOrchestrator:
             self.selector
             if self._custom_selector
             else TableSelector(provider=active_provider)
+        )
+        path_selector = (
+            self.path_selector
+            if self._custom_path_selector
+            else JoinPathSelector(provider=active_provider)
         )
         planner = (
             self.planner
@@ -156,7 +166,16 @@ class NL2AnyQueryOrchestrator:
             if self._custom_validator
             else QueryValidator(provider=active_provider)
         )
-        return guardrail, semantic, selector, planner, postgres_gen, mongo_gen, validator
+        return (
+            guardrail,
+            semantic,
+            selector,
+            path_selector,
+            planner,
+            postgres_gen,
+            mongo_gen,
+            validator,
+        )
 
     def get_or_load_schema(self, database: DatabaseTarget | DatabaseType | str) -> DatabaseSchema:
         """Load and cache canonical schema from TOML file."""
@@ -220,6 +239,7 @@ class NL2AnyQueryOrchestrator:
         candidates: list[CandidateTable] | None = None,
         selected: list[str] | None = None,
         selection_retries: int = 0,
+        join_path_resolution: JoinPathResolution | None = None,
         schema: RelevantSchema | None = None,
         plan: Any = None,
         query: GeneratedQuery | None = None,
@@ -265,6 +285,7 @@ class NL2AnyQueryOrchestrator:
             candidate_objects=[c.table_name for c in cand_list],
             selected_objects=selected or [],
             selection_retries=selection_retries,
+            join_path_resolution=join_path_resolution,
             relevant_schema=schema.model_dump() if schema else None,
             query_plan=plan,
             generated_query=query.formatted_query if query else None,
@@ -383,6 +404,48 @@ class NL2AnyQueryOrchestrator:
                     err,
                 )
 
+    async def _resolve_paths_and_expand(
+        self,
+        analysis: QuestionAnalysis,
+        selected_objs: list[str],
+        schema: DatabaseSchema,
+        database: Any,
+        path_selector: JoinPathSelector | None = None,
+    ) -> tuple[RelevantSchema, JoinPathResolution]:
+        """Resolve how the selected objects join, then expand and enrich the slice.
+
+        Selection names the objects a question is about; it does not say how they
+        connect, and two selected tables with no column in common leave the
+        generator to invent a join. The path selector walks the schema's real
+        relationships and returns the objects actually needed -- the selected
+        ones the question still wants, plus every intermediate table the chosen
+        paths pass through -- which is what the expander then materializes.
+        """
+        active_path_selector = path_selector or self.path_selector
+        resolution = await active_path_selector.resolve(
+            question_analysis=analysis,
+            selected_objects=selected_objs,
+            schema=schema,
+        )
+        if resolution.connector_objects:
+            logger.info(
+                "Join path resolution added connector objects %s via paths %s",
+                resolution.connector_objects,
+                resolution.chosen_path_ids,
+            )
+        if resolution.dropped_objects:
+            logger.info(
+                "Join path resolution dropped unconnected objects %s",
+                resolution.dropped_objects,
+            )
+
+        relevant_schema = self.expander.expand(
+            selected_object_names=resolution.resolved_objects,
+            schema=schema,
+        )
+        await self._enrich_schema_descriptions(relevant_schema, database)
+        return relevant_schema, resolution
+
     async def _plan_generate_validate(
         self,
         question: str,
@@ -496,9 +559,16 @@ class NL2AnyQueryOrchestrator:
             if isinstance(provider, str)
             else (provider or self.provider)
         )
-        guardrail, semantic, selector, planner, postgres_gen, mongo_gen, validator = (
-            self._get_stages_for_provider(active_provider)
-        )
+        (
+            guardrail,
+            semantic,
+            selector,
+            path_selector,
+            planner,
+            postgres_gen,
+            mongo_gen,
+            validator,
+        ) = self._get_stages_for_provider(active_provider)
 
         # 1. Resolve database target & type
         if isinstance(database, DatabaseTarget):
@@ -616,11 +686,15 @@ class NL2AnyQueryOrchestrator:
                 error=sel_err or "I could not find any relevant tables or collections in the database schema matching your question.",
             )
 
-        # 6. Stage 7: Deterministic Schema Expansion
-        relevant_schema = self.expander.expand(selected_object_names=selected_objs, schema=schema)
-
-        # Stage 7b: Enrich RelevantSchema with table & column descriptions via Descriptions API
-        await self._enrich_schema_descriptions(relevant_schema, target)
+        # 6. Stage 6.5 & 7: Join Path Resolution, Deterministic Schema Expansion
+        #    and description enrichment via the Descriptions API.
+        relevant_schema, join_resolution = await self._resolve_paths_and_expand(
+            analysis=analysis,
+            selected_objs=selected_objs,
+            schema=schema,
+            database=target,
+            path_selector=path_selector,
+        )
 
         # 7. Stage 8: Query Planning (with feedback loop to Table Selector if required tables are missing)
         planner_retries = 0
@@ -661,8 +735,13 @@ class NL2AnyQueryOrchestrator:
                 if set(new_selected) == set(selected_objs):
                     break
                 selected_objs = new_selected
-                relevant_schema = self.expander.expand(selected_object_names=selected_objs, schema=schema)
-                await self._enrich_schema_descriptions(relevant_schema, target)
+                relevant_schema, join_resolution = await self._resolve_paths_and_expand(
+                    analysis=analysis,
+                    selected_objs=selected_objs,
+                    schema=schema,
+                    database=target,
+                    path_selector=path_selector,
+                )
             else:
                 break
 
@@ -691,6 +770,7 @@ class NL2AnyQueryOrchestrator:
             "candidates": candidates,
             "selected": selected_objs,
             "selection_retries": total_sel_retries,
+            "join_path_resolution": join_resolution,
             "schema": relevant_schema,
             "plan": query_plan,
             "query": last_query,

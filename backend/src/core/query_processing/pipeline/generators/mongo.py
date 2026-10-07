@@ -8,7 +8,10 @@ from backend.src.utils.text_utils import extract_json_block
 from backend.src.schemas.pipeline import GeneratedQuery, MongoQuery, QueryPlan, RelevantSchema
 from backend.src.data.models.schema import DatabaseType
 from backend.src.core.query_processing.pipeline.generators.base import QueryGenerator
-from backend.src.core.query_processing.pipeline.planner import _format_relevant_schema_for_planner
+from backend.src.core.query_processing.pipeline.planner import (
+    _format_relevant_schema_for_planner,
+    format_column_manifest,
+)
 from backend.src.control.providers.model.base import ModelProvider
 from backend.src.control.providers.model.koboldcpp import KoboldCppProvider
 
@@ -70,6 +73,7 @@ class MongoQueryGenerator(QueryGenerator):
             question=question,
             plan_context=plan_context,
             schema_context=schema_context,
+            column_manifest=format_column_manifest(schema),
             feedback_section=feedback_section,
         )
 

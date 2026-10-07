@@ -110,6 +110,133 @@ def run_ingestion(database: str, use_mst: bool, api_url: str, force: bool = Fals
     except Exception as err:
         return False, f"Ingestion failed: {err}"
 
+
+def _short(name: str) -> str:
+    """Drop the schema prefix so a path reads as a chain, not a wall of prefixes."""
+    return name.split(".")[-1]
+
+
+def _path_arrow(candidate: dict) -> str:
+    """A candidate's table chain, or the object alone when it connects nothing."""
+    tables = candidate.get("tables") or []
+    if not tables:
+        return "(empty)"
+    return " → ".join(_short(t) for t in tables)
+
+
+def _join_keys(candidate: dict) -> str:
+    """The columns each hop joins on.
+
+    Two candidates can walk the identical table chain and still be different
+    joins -- `flights → airports` via `origin_airport_id` or via
+    `destination_airport_id`, `discrepancies → genbooks_requests` via `match_id`
+    or via `discrepancies_id`. Those rows are indistinguishable without their
+    keys, which makes the table useless for exactly the case the stage exists to
+    surface.
+    """
+    edges = candidate.get("edges") or []
+    if not edges:
+        return "—"
+    return ", ".join(
+        f"{e.get('from_field', '')}={e.get('to_field', '')}" for e in edges
+    )
+
+
+def _render_join_paths(resolution: dict | None) -> None:
+    """Show every join path BFS enumerated, and which ones were chosen.
+
+    The point of the stage is that several real paths usually connect the same
+    tables and only the question says which is right, so the rejected candidates
+    matter as much as the chosen one: seeing that a query went through
+    `purchase_orders` when it should have gone through `invoices` is how a wrong
+    answer gets diagnosed.
+    """
+    if not resolution:
+        st.info(
+            "No join path resolution for this query. Fewer than two objects were "
+            "selected, or the schema has no relationships to walk."
+        )
+        return
+
+    chosen_ids = set(resolution.get("chosen_path_ids") or [])
+    candidates = resolution.get("candidates") or []
+
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Paths found", len(candidates))
+    col2.metric("Paths chosen", len(chosen_ids))
+    col3.metric("Tables added", len(resolution.get("connector_objects") or []))
+
+    if resolution.get("fallback_used"):
+        st.warning(
+            "The model's choice could not be used, so the shortest path per pair "
+            "was taken instead. Treat the selection below as a default, not a decision."
+        )
+    elif not resolution.get("slm_invoked"):
+        st.caption("Resolved deterministically -- the model was not consulted.")
+
+    connectors = resolution.get("connector_objects") or []
+    if connectors:
+        st.markdown(
+            "**Tables added to bridge the selection:** "
+            + ", ".join(f"`{_short(c)}`" for c in connectors)
+        )
+    dropped = resolution.get("dropped_objects") or []
+    if dropped:
+        st.markdown(
+            "**Dropped as unrelated to the question:** "
+            + ", ".join(f"`{_short(d)}`" for d in dropped)
+        )
+    unjoinable = resolution.get("unjoinable_objects") or []
+    if unjoinable:
+        st.warning(
+            "No foreign-key path connects "
+            + ", ".join(f"`{_short(u)}`" for u in unjoinable)
+            + " to the rest of the query. Any join between them would be invented."
+        )
+    if resolution.get("reason"):
+        st.caption(f"Reason given: {resolution['reason']}")
+
+    if not candidates:
+        st.info("No candidate paths were enumerated.")
+        return
+
+    st.markdown("**Enumerated paths** (chosen ones marked ✅):")
+    rows = []
+    for c in candidates:
+        rows.append(
+            {
+                "": "✅" if c.get("path_id") in chosen_ids else "",
+                "Id": c.get("path_id", ""),
+                "Path": _path_arrow(c),
+                "Hops": c.get("hops", 0),
+                "Join keys": _join_keys(c),
+                "Kind": "connected" if c.get("connected", True) else "standalone",
+                "Note": c.get("note", ""),
+            }
+        )
+    # Chosen first, then shortest, so the decision is visible without scrolling.
+    paths_df = pd.DataFrame(rows).sort_values(
+        by=["", "Hops", "Id"], ascending=[False, True, True]
+    )
+    st.dataframe(paths_df, hide_index=True, use_container_width=True)
+
+    chosen = [c for c in candidates if c.get("path_id") in chosen_ids]
+    if chosen:
+        st.markdown("**Join conditions from the chosen paths:**")
+        for c in chosen:
+            edges = c.get("edges") or []
+            if not edges:
+                st.markdown(f"- `{c.get('path_id')}` {_path_arrow(c)} — standalone, no join")
+                continue
+            st.markdown(f"- `{c.get('path_id')}` {_path_arrow(c)} ({c.get('hops', 0)} hops)")
+            for e in edges:
+                st.code(
+                    f"{_short(e.get('from_object',''))}.{e.get('from_field','')}"
+                    f" = {_short(e.get('to_object',''))}.{e.get('to_field','')}",
+                    language="sql",
+                )
+
+
 # Sidebar
 with st.sidebar:
     st.header("Settings")
@@ -465,6 +592,9 @@ if run_btn and question.strip():
     with st.expander("Table Selection"):
         st.markdown(f"**Selected Tables / Objects:** `{data.get('selected_objects', [])}`")
         st.markdown(f"**Selection Retries:** {data.get('selection_retries', 0)}")
+
+    with st.expander("Join Path Resolution (BFS)"):
+        _render_join_paths(data.get("join_path_resolution"))
 
     with st.expander("Relevant Schema"):
         st.json(data.get("relevant_schema", {}))

@@ -162,3 +162,35 @@ def test_postgres_uses_the_supplied_dsn(monkeypatch):
 
     executor.execute(query)
     assert recorded["dsn"] == "postgresql://settings/demo"
+
+
+def test_unconfigured_target_dsn_errors_instead_of_using_the_default_database():
+    """An unconfigured target must not silently execute against POSTGRES_DSN.
+
+    `finops` with FINOPS_DSN unset yields connection="" and the old
+    `dsn or self.postgres_dsn` ran the query against the demo database instead.
+    That does not fail -- it answers from the wrong data or returns no rows,
+    which is far worse than an error.
+    """
+    executor = QueryExecutor(postgres_dsn="postgresql://real:real@localhost:5432/demo")
+    query = GeneratedQuery(
+        database_type=DatabaseType.POSTGRESQL,
+        raw_query="SELECT 1;",
+        formatted_query="SELECT 1;",
+    )
+    with pytest.raises(ValueError, match="not configured"):
+        executor.execute(query, connection="")
+    with pytest.raises(ValueError, match="not configured"):
+        executor.execute(query, connection="   ")
+
+
+def test_unconfigured_mongo_target_uri_errors():
+    """Same guard on the MongoDB path."""
+    executor = QueryExecutor(mongo_uri="mongodb://localhost:27017", mongo_database="demo")
+    query = GeneratedQuery(
+        database_type=DatabaseType.MONGODB,
+        raw_query=MongoQuery(operation="find", collection="users"),
+        formatted_query="{}",
+    )
+    with pytest.raises(ValueError, match="not configured"):
+        executor.execute(query, connection="", database="finops")

@@ -140,3 +140,25 @@ Semantic Context:
 Candidate Tables (with similarity scores):
 {candidates_context}
 {feedback_context}
+
+====================================================================
+NOW PRODUCE YOUR ANSWER.
+
+* Scan EVERY rank. Similarity rank is raw vector proximity and is often wrong
+  about which table is canonical.
+* If a candidate's table NAME is the concept asked about, select it even when
+  another table scored higher. A question about "invoices" means the table
+  named `invoices`, not a reminder/state/revision/log table that merely holds
+  invoice columns.
+* Prefer the canonical entity table over auxiliary ones (state, reminder,
+  revision, audit, link, history) unless the question asks for that aspect.
+* Do NOT write a summary or describe the schema in prose.
+
+Output NOTHING but one JSON object, in exactly this shape:
+{{
+"reason": "<brief: concepts; candidate matches; sufficiency>",
+"selected_objects": ["<candidate_table_name>"],
+"sufficient": true,
+"missing_objects": [],
+"retrieval_hint": null
+}}

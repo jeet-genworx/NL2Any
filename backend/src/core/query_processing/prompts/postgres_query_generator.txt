@@ -43,4 +43,13 @@ Query Plan:
 Relevant Schema:
 {schema_context}
 
+EXHAUSTIVE COLUMN LIST (authoritative -- every column you may use):
+{column_manifest}
+
+A column exists ONLY if it is listed above, on that exact table. The verbose
+schema is for understanding what a column MEANS; this list is for checking
+whether it EXISTS and which table owns it. If a column is not on a table's line
+here, that table does not have it -- do not use it, and do not assume a column
+belongs to a table because its name resembles the table's name.
+
 {feedback_section}

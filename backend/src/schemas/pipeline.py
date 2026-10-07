@@ -81,6 +81,43 @@ class TableSelectionResult(BaseModel):
     retrieval_hint: str | None = None
 
 
+class JoinPathCandidate(BaseModel):
+    """One candidate way of connecting selected schema objects.
+
+    A connected candidate is a simple foreign-key path between two selected
+    objects, carrying the ordered tables it walks through and the exact edges
+    to join on. A candidate with `connected=False` is a selected object that
+    has no path to any other selected object within the hop limit -- it is
+    offered as a candidate in its own right so the path selector can decide
+    whether the question really is about that standalone object, or whether it
+    was picked up in error and should be dropped.
+    """
+
+    path_id: str
+    endpoints: list[str] = PydanticField(default_factory=list)
+    tables: list[str] = PydanticField(default_factory=list)
+    edges: list[Relationship] = PydanticField(default_factory=list)
+    hops: int = 0
+    connected: bool = True
+    component_id: int = 0
+    note: str = ""
+
+
+class JoinPathResolution(BaseModel):
+    """Outcome of join-path resolution between table selection and expansion."""
+
+    selected_objects: list[str] = PydanticField(default_factory=list)
+    candidates: list[JoinPathCandidate] = PydanticField(default_factory=list)
+    chosen_path_ids: list[str] = PydanticField(default_factory=list)
+    resolved_objects: list[str] = PydanticField(default_factory=list)
+    connector_objects: list[str] = PydanticField(default_factory=list)
+    dropped_objects: list[str] = PydanticField(default_factory=list)
+    unjoinable_objects: list[str] = PydanticField(default_factory=list)
+    slm_invoked: bool = False
+    fallback_used: bool = False
+    reason: str = ""
+
+
 class RelevantSchema(BaseModel):
     """Subset of database schema relevant to the question."""
 
@@ -209,6 +246,7 @@ class PipelineResponse(BaseModel):
     candidate_objects: list[str] = PydanticField(default_factory=list)
     candidate_tables: list[CandidateTable] = PydanticField(default_factory=list)
     selected_objects: list[str] = PydanticField(default_factory=list)
+    join_path_resolution: JoinPathResolution | None = None
     relevant_schema: dict[str, Any] | None = None
     query_plan: QueryPlan | None = None
     generated_query: str | dict[str, Any] | None = None

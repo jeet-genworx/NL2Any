@@ -143,6 +143,13 @@ async def test_query_planner_no_sql_syntax(sample_schema):
           "value": "Chennai"
         }
       ],
+      "aggregations": [
+        {
+          "field": "id",
+          "function": "count",
+          "alias": "n"
+        }
+      ],
       "group_by": ["GROUP BY city"],
       "order_by": [
         {
@@ -198,3 +205,70 @@ async def test_query_planner_identifies_missing_tables(sample_schema):
     assert "orders" in plan.missing_tables
     assert "invoices" in plan.missing_tables
     assert "shipments" in plan.missing_tables
+
+
+@pytest.mark.asyncio
+async def test_incoherent_group_by_is_dropped(sample_schema):
+    """GROUP BY over a subset of the projections with nothing aggregated is
+    dropped: PostgreSQL cannot execute it, and leaving it in makes the
+    generator choose between invalid SQL and being failed for ignoring the plan.
+    """
+    raw = """
+    ```json
+    {
+      "operation": "select",
+      "sources": ["customers"],
+      "projections": ["id", "name", "city"],
+      "aggregations": [],
+      "group_by": ["city"]
+    }
+    ```
+    """
+    planner = QueryPlanner(provider=MockPlannerProvider(raw))
+    plan = await planner.plan(
+        QuestionAnalysis(question="Show customers"), sample_schema, DatabaseType.POSTGRESQL
+    )
+    assert plan.group_by == []
+
+
+@pytest.mark.asyncio
+async def test_group_by_covering_all_projections_is_kept(sample_schema):
+    """Grouping every projected field with no aggregate is a DISTINCT, which is
+    valid SQL and must survive."""
+    raw = """
+    ```json
+    {
+      "operation": "select",
+      "sources": ["customers"],
+      "projections": ["name", "city"],
+      "aggregations": [],
+      "group_by": ["name", "city"]
+    }
+    ```
+    """
+    planner = QueryPlanner(provider=MockPlannerProvider(raw))
+    plan = await planner.plan(
+        QuestionAnalysis(question="Distinct customer cities"), sample_schema, DatabaseType.POSTGRESQL
+    )
+    assert plan.group_by == ["name", "city"]
+
+
+@pytest.mark.asyncio
+async def test_group_by_with_aggregations_is_kept(sample_schema):
+    """A real aggregate grouped by a subset is the normal case and is kept."""
+    raw = """
+    ```json
+    {
+      "operation": "aggregate",
+      "sources": ["customers"],
+      "projections": ["city"],
+      "aggregations": [{"field": "id", "function": "count", "alias": "n"}],
+      "group_by": ["city"]
+    }
+    ```
+    """
+    planner = QueryPlanner(provider=MockPlannerProvider(raw))
+    plan = await planner.plan(
+        QuestionAnalysis(question="Customers per city"), sample_schema, DatabaseType.POSTGRESQL
+    )
+    assert plan.group_by == ["city"]

@@ -53,6 +53,18 @@ class QueryExecutor:
         sql: str,
         dsn: str | None = None,
     ) -> tuple[list[str], list[dict[str, Any]]]:
+        # An empty string means the caller HAS a target and that target's DSN is
+        # unconfigured. Falling back to POSTGRES_DSN there runs the query against
+        # a different database than the one the user selected, which does not
+        # fail -- it answers from the wrong data, or returns no rows at all. Only
+        # the absence of a target (None) may fall back.
+        if dsn is not None and not dsn.strip():
+            raise ValueError(
+                "This database's connection string is not configured, so the query "
+                "would have run against the default POSTGRES_DSN database instead. "
+                "Set its DSN (for the FinOps target, FINOPS_DSN) in .env."
+            )
+
         conn_str = dsn or self.postgres_dsn
         if not conn_str:
             raise ValueError("PostgreSQL connection string (POSTGRES_DSN) is not configured.")
@@ -78,6 +90,14 @@ class QueryExecutor:
         uri: str | None = None,
         database: str | None = None,
     ) -> tuple[list[str], list[dict[str, Any]]]:
+        # As above: an unconfigured target must not quietly become MONGODB_URI.
+        if uri is not None and not uri.strip():
+            raise ValueError(
+                "This database's connection URI is not configured, so the query "
+                "would have run against the default MONGODB_URI database instead. "
+                "Set its URI in .env."
+            )
+
         conn_uri = uri or self.mongo_uri
         if not conn_uri:
             raise ValueError("MongoDB connection URI (MONGODB_URI) is not configured.")

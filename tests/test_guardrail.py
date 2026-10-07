@@ -52,3 +52,35 @@ def test_guardrail_deterministic_basic_handler():
     ans3 = guardrail.handle_basic_question("What database are you connected to?", "mongodb", "shop_mongo")
     assert "MONGODB" in ans3
     assert "shop_mongo" in ans3
+
+
+@pytest.mark.asyncio
+async def test_misspelled_read_question_is_not_rejected():
+    """A typo must never cost a user their query.
+
+    The guardrail runs before the spelling corrector, so it sees raw, misspelled
+    text. It once stretched "perform actions outside read-only analytics" into
+    rejecting anything it found ambiguous, which killed read questions whose
+    only fault was a typo.
+    """
+    provider = MockModelProvider(
+        '{"decision": "READ_QUERY", "reason": "Read-only question with typos"}'
+    )
+    guardrail = GuardrailClassifier(provider=provider)
+    result = await guardrail.classify("Show me desperencies with custmer emails")
+    assert result.decision == GuardrailDecision.READ_QUERY
+
+
+def test_guardrail_prompt_forbids_rejecting_on_spelling_or_ambiguity():
+    """Pins the instructions that keep typos and unknown jargon out of REJECT."""
+    guardrail = GuardrailClassifier(provider=None)
+    prompt = guardrail._load_prompt_template().lower()
+
+    assert "not grounds for rejection" in prompt
+    for topic in ("misspelling", "typo", "jargon", "ambiguous"):
+        assert topic in prompt, f"guardrail prompt no longer mentions {topic!r}"
+
+    # The template must still render, with its JSON block intact.
+    rendered = guardrail._load_prompt_template().format(question="show me desperencies")
+    assert '"decision"' in rendered
+    assert "show me desperencies" in rendered

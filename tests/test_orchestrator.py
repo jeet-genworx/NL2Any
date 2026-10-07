@@ -577,3 +577,174 @@ async def test_orchestrator_planner_loops_back_to_selector_on_missing_tables(tes
     assert "orders" in resp.selected_objects
     assert resp.results is not None
 
+
+
+class MockDescriptionsClient:
+    """Descriptions API stub: the canonical schema already carries descriptions,
+    and the real client would attempt an HTTP call per table."""
+
+    def __init__(self) -> None:
+        self.call_count = 0
+
+    async def get_table_description(self, database_type: str, table_name: str):
+        self.call_count += 1
+        return None
+
+
+class RecordingPlanner:
+    """Planner that records the schema slice it was handed."""
+
+    def __init__(self) -> None:
+        self.call_count = 0
+        self.seen_object_names: list[list[str]] = []
+
+    async def plan(self, *args, **kwargs) -> QueryPlan:
+        self.call_count += 1
+        schema = kwargs["relevant_schema"]
+        self.seen_object_names.append([obj.name for obj in schema.objects])
+        return QueryPlan(sources=["customers"], projections=["id"])
+
+
+class MockPathSelectorStage:
+    """Join path selector backed by the real graph, with a scripted model choice."""
+
+    def __init__(self, chosen: list[str]) -> None:
+        from backend.src.core.query_processing.pipeline.path_selector import JoinPathSelector
+
+        class _Provider:
+            def __init__(self, ids: list[str]) -> None:
+                self.ids = ids
+
+            async def generate(self, prompt: str, **kwargs) -> str:
+                import json
+
+                return json.dumps({"chosen_paths": self.ids, "reason": "scripted"})
+
+        self._inner = JoinPathSelector(provider=_Provider(chosen))
+        self.call_count = 0
+
+    async def resolve(self, **kwargs):
+        self.call_count += 1
+        return await self._inner.resolve(**kwargs)
+
+
+@pytest.fixture
+def transitive_schema() -> DatabaseSchema:
+    """customers and products share no column; order_items bridges them."""
+    from backend.src.data.models.schema import Relationship
+
+    return DatabaseSchema(
+        database_type=DatabaseType.POSTGRESQL,
+        database_name="test_shop",
+        objects=[
+            SchemaObject(
+                name="customers",
+                kind=SchemaObjectKind.TABLE,
+                fields=[Field(name="id", type="integer")],
+            ),
+            SchemaObject(
+                name="orders",
+                kind=SchemaObjectKind.TABLE,
+                fields=[Field(name="id", type="integer"), Field(name="customer_id", type="integer")],
+            ),
+            SchemaObject(
+                name="order_items",
+                kind=SchemaObjectKind.TABLE,
+                fields=[
+                    Field(name="id", type="integer"),
+                    Field(name="order_id", type="integer"),
+                    Field(name="product_id", type="integer"),
+                ],
+            ),
+            SchemaObject(
+                name="products",
+                kind=SchemaObjectKind.TABLE,
+                fields=[Field(name="id", type="integer")],
+            ),
+        ],
+        relationships=[
+            Relationship(from_object="orders", from_field="customer_id", to_object="customers", to_field="id"),
+            Relationship(from_object="order_items", from_field="order_id", to_object="orders", to_field="id"),
+            Relationship(from_object="order_items", from_field="product_id", to_object="products", to_field="id"),
+        ],
+    )
+
+
+@pytest.mark.asyncio
+async def test_pipeline_gives_planner_the_connector_tables(transitive_schema):
+    """The transitive case: selecting only the endpoints must still reach the planner
+    with the intervening tables, so no join condition has to be invented."""
+    planner = RecordingPlanner()
+    path_selector = MockPathSelectorStage(chosen=["p1"])
+
+    orchestrator = NL2AnyQueryOrchestrator(
+        embedding_provider=MockEmbeddingProvider(),
+        vector_retriever=MockVectorRetriever([
+            CandidateTable(table_name="customers", similarity=0.9, rank=1),
+            CandidateTable(table_name="products", similarity=0.88, rank=2),
+        ]),
+        guardrail=MockGuardrail(GuardrailDecision.READ_QUERY),
+        semantic=MockSemantic(),
+        selector=MockSelector([
+            TableSelectionResult(selected_objects=["customers", "products"], sufficient=True)
+        ]),
+        path_selector=path_selector,
+        planner=planner,
+        postgres_gen=MockPostgresGen(),
+        validator=MockValidator(),
+        policy=MockPolicy(),
+        executor=MockExecutor(),
+        descriptions_client=MockDescriptionsClient(),
+    )
+    orchestrator._schemas[DatabaseType.POSTGRESQL] = transitive_schema
+
+    resp = await orchestrator.execute_pipeline(
+        "Which products do customers buy?", database="postgres"
+    )
+
+    assert resp.error is None
+    assert path_selector.call_count == 1
+
+    # The planner saw the whole join chain, not just the two selected endpoints.
+    assert planner.seen_object_names
+    assert set(planner.seen_object_names[0]) == {"customers", "orders", "order_items", "products"}
+
+    # And the decision is on the response for inspection.
+    resolution = resp.join_path_resolution
+    assert resolution is not None
+    assert resolution.slm_invoked is True
+    assert resolution.fallback_used is False
+    assert sorted(resolution.connector_objects) == ["order_items", "orders"]
+    assert resolution.dropped_objects == []
+    assert resp.selected_objects == ["customers", "products"]
+
+
+@pytest.mark.asyncio
+async def test_pipeline_records_resolution_for_single_table(test_schema):
+    """A one-table question needs no path, and must not pay for a model call."""
+    path_selector = MockPathSelectorStage(chosen=[])
+
+    orchestrator = NL2AnyQueryOrchestrator(
+        embedding_provider=MockEmbeddingProvider(),
+        vector_retriever=MockVectorRetriever(),
+        guardrail=MockGuardrail(GuardrailDecision.READ_QUERY),
+        semantic=MockSemantic(),
+        selector=MockSelector([
+            TableSelectionResult(selected_objects=["customers"], sufficient=True)
+        ]),
+        path_selector=path_selector,
+        planner=MockPlanner(),
+        postgres_gen=MockPostgresGen(),
+        validator=MockValidator(),
+        policy=MockPolicy(),
+        executor=MockExecutor(),
+        descriptions_client=MockDescriptionsClient(),
+    )
+    orchestrator._schemas[DatabaseType.POSTGRESQL] = test_schema
+
+    resp = await orchestrator.execute_pipeline("Show customers", database="postgres")
+
+    assert resp.error is None
+    assert resp.join_path_resolution is not None
+    assert resp.join_path_resolution.slm_invoked is False
+    assert resp.join_path_resolution.resolved_objects == ["customers"]

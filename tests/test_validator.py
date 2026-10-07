@@ -332,7 +332,9 @@ async def test_query_validator_incomplete_placeholder_detection():
     assert "[0m" not in res.issues[0]
     assert any("placeholder" in i.lower() or "syntax" in i.lower() for i in res.issues)
     assert res.suggestion is not None
-    assert "JOIN" in res.suggestion
+    # The unparseable placeholder is caught by the deterministic parser before
+    # the SLM is consulted, so the suggestion is the parser's, not the model's.
+    assert "syntax" in res.suggestion.lower() or "parse" in res.suggestion.lower()
 
 
 class FailingProvider:
@@ -354,6 +356,41 @@ async def test_query_validator_lenient_fallback_on_slm_failure():
     )
     validator = QueryValidator(provider=FailingProvider())
     plan = QueryPlan(sources=["finopsiq.invoices"], projections=["invoice_id"])
+    # Every column here exists in the schema above, so the deterministic check
+    # passes and the SLM failure is what the fallback has to absorb.
+    query = GeneratedQuery(
+        database_type=DatabaseType.POSTGRESQL,
+        raw_query="SELECT invoice_id FROM finopsiq.invoices WHERE invoice_id = 'CTR-001';",
+        formatted_query="SELECT invoice_id FROM finopsiq.invoices WHERE invoice_id = 'CTR-001';",
+    )
+
+    res = await validator.validate("Show invoice CTR-001", plan, query, schema)
+    # Lenient fallback accepts the query rather than inventing semantic errors
+    assert res.valid is True
+    assert res.error_type == ValidationErrorType.VALID
+    assert res.issues == []
+
+
+@pytest.mark.asyncio
+async def test_query_validator_rejects_unknown_column_without_the_slm():
+    """A column that is not on the table it is qualified with is rejected
+    deterministically, even when the SLM is unavailable.
+
+    The leniency above covers judgement calls the model would have made; it must
+    not extend to facts sqlglot can settle, or the query reaches the database
+    only to fail there.
+    """
+    schema = RelevantSchema(
+        objects=[
+            SchemaObject(
+                name="finopsiq.invoices",
+                kind=SchemaObjectKind.TABLE,
+                fields=[Field(name="invoice_id", type="uuid")],
+            )
+        ]
+    )
+    validator = QueryValidator(provider=FailingProvider())
+    plan = QueryPlan(sources=["finopsiq.invoices"], projections=["invoice_id"])
     query = GeneratedQuery(
         database_type=DatabaseType.POSTGRESQL,
         raw_query="SELECT invoice_id FROM finopsiq.invoices WHERE contract_number = 'CTR-001';",
@@ -361,10 +398,36 @@ async def test_query_validator_lenient_fallback_on_slm_failure():
     )
 
     res = await validator.validate("Show invoice CTR-001", plan, query, schema)
-    # Lenient fallback accepts the query rather than inventing deterministic syntax errors
-    assert res.valid is True
-    assert res.error_type == ValidationErrorType.VALID
-    assert res.issues == []
+    assert res.valid is False
+    assert res.error_type == ValidationErrorType.GENERATION_ERROR
+    assert any("contract_number" in i for i in res.issues)
+
+
+@pytest.mark.asyncio
+async def test_query_validator_reports_each_bad_column_once():
+    """The same bad column in SELECT, WHERE and ORDER BY is one issue, not three."""
+    schema = RelevantSchema(
+        objects=[
+            SchemaObject(
+                name="finopsiq.invoices",
+                kind=SchemaObjectKind.TABLE,
+                fields=[Field(name="invoice_id", type="uuid")],
+            )
+        ]
+    )
+    validator = QueryValidator(provider=FailingProvider())
+    plan = QueryPlan(sources=["finopsiq.invoices"], projections=["invoice_id"])
+    sql = (
+        "SELECT i.bogus FROM finopsiq.invoices i "
+        "WHERE i.bogus = 'x' ORDER BY i.bogus ASC;"
+    )
+    query = GeneratedQuery(
+        database_type=DatabaseType.POSTGRESQL, raw_query=sql, formatted_query=sql
+    )
+
+    res = await validator.validate("q", plan, query, schema)
+    assert res.valid is False
+    assert len(res.issues) == 1, res.issues
 
 
 @pytest.mark.asyncio
@@ -400,3 +463,88 @@ async def test_query_validator_strips_ansi_escapes_from_slm_output():
     assert "[0m" not in res.issues[0]
     assert "\x1b" not in res.suggestion
 
+
+
+def test_false_omission_claims_are_discarded_but_true_ones_survive():
+    """The model reports columns as omitted that are in the SELECT list.
+
+    It compares the plan's spelling (`finopsiq.products.x`) to the query's
+    (`products.x`), finds a textual difference, and calls the column missing.
+    Whether a column is selected is checkable, so it is checked rather than
+    believed -- but a claim about a column the query really lacks must survive.
+    """
+    from backend.src.core.query_processing.pipeline.validator import (
+        _drop_false_omission_claims,
+    )
+
+    sql = (
+        "SELECT inv.invoice_id, products.product_id, products.product_code "
+        "FROM finopsiq.invoice_line_items li "
+        "JOIN finopsiq.invoices inv ON li.invoice_id = inv.invoice_id "
+        "JOIN finopsiq.products products ON li.product_id = products.product_id;"
+    )
+    issues = [
+        "The query does not include the 'products.product_id' column in the SELECT list.",
+        "The query does not include the 'finopsiq.products.product_code' column.",
+        "The query does not include the 'vendors.company_name' column in the SELECT list.",
+        "The query uses '=' with a multi-row subquery, which raises a runtime error.",
+    ]
+    kept, discarded = _drop_false_omission_claims(issues, sql)
+
+    assert len(discarded) == 2
+    assert any("product_id" in d for d in discarded)
+    # Qualifier differences must not protect a claim from being checked.
+    assert any("product_code" in d for d in discarded)
+    assert len(kept) == 2
+    assert any("company_name" in k for k in kept)
+    assert any("multi-row subquery" in k for k in kept)
+
+
+def test_omission_filter_is_inert_on_unparseable_sql():
+    """With no AST to check against, every issue is left alone."""
+    from backend.src.core.query_processing.pipeline.validator import (
+        _drop_false_omission_claims,
+    )
+
+    issues = ["The query does not include the 'products.product_id' column."]
+    kept, discarded = _drop_false_omission_claims(issues, "SELECT FROM WHERE ...;")
+    assert kept == issues
+    assert discarded == []
+
+
+def test_clause_scoped_claims_are_never_discarded():
+    """A GROUP BY complaint must survive the omission filter.
+
+    "...does not include these in a GROUP BY clause" matches the omission
+    wording and names columns that are present as projections, so the presence
+    check would call it false. But the claim is about WHERE the columns appear,
+    and discarding it on "the column is somewhere in the query" would silence a
+    real grouping bug.
+    """
+    from backend.src.core.query_processing.pipeline.validator import (
+        _drop_false_omission_claims,
+    )
+
+    sql = (
+        "SELECT products.product_code, vendors.vendor_id, invoices.invoice_id "
+        "FROM finopsiq.invoice_line_items li "
+        "JOIN finopsiq.invoices invoices ON li.invoice_id = invoices.invoice_id "
+        "JOIN finopsiq.products products ON li.product_id = products.product_id;"
+    )
+    issues = [
+        "The query does not group by the required fields as per the query plan. The "
+        "plan specifies grouping by 'products.product_id', 'vendors.vendor_id' and "
+        "'invoices.invoice_id', but the query does not include these in a GROUP BY clause.",
+        "The query does not include 'invoices.invoice_id' in the ORDER BY clause.",
+        "The query omits the 'products.product_code' from the HAVING clause.",
+        "The query does not include the 'products.product_code' column in the SELECT list.",
+    ]
+    kept, discarded = _drop_false_omission_claims(issues, sql)
+
+    # Only the plainly-false SELECT-list claim is dropped.
+    assert len(discarded) == 1
+    assert "SELECT list" in discarded[0]
+    assert len(kept) == 3
+    assert any("GROUP BY" in k for k in kept)
+    assert any("ORDER BY" in k for k in kept)
+    assert any("HAVING" in k for k in kept)

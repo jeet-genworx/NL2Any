@@ -61,10 +61,82 @@ def _format_relevant_schema_for_planner(schema: RelevantSchema) -> str:
     return "\n".join(lines)
 
 
+def format_column_manifest(schema: RelevantSchema) -> str:
+    """List every column per table, tersely, for lookup rather than reading.
+
+    The verbose schema block above is the right shape for deciding what a column
+    MEANS -- it carries descriptions and sample values -- and the wrong shape for
+    answering "does this table have this column". A six-table slice renders as
+    253 lines and 25k characters with one column per line, and a small model
+    asked to find `customer_email` in there reports it missing, then qualifies it
+    against whichever table its name resembles. The same facts on one line per
+    table fit in a tenth of the space and can be scanned, so this is included
+    alongside the verbose block, not instead of it.
+    """
+    lines: list[str] = []
+    for obj in schema.objects:
+        names = [f.name for f in obj.fields]
+        # Dotted paths for subdocument fields, so a Mongo collection's nested
+        # keys are listed the way a query has to spell them.
+        for f in obj.fields:
+            names.extend(f"{f.name}.{nested.name}" for nested in f.nested)
+        lines.append(f"{obj.name}: {', '.join(names)}")
+    return "\n".join(lines)
+
+
 def _clean_sql_syntax(text: str) -> str:
     """Strip extraneous SQL syntax keywords that SLM might mistakenly include."""
     cleaned = SQL_KEYWORD_PATTERN.sub("", text).strip()
     return cleaned if cleaned else text
+
+
+def _build_field_index(
+    relevant_schema: RelevantSchema,
+) -> tuple[set[str], dict[str, set[str]]]:
+    """Index the slice's fields globally and per table.
+
+    The per-table map is keyed by both the full object name and its bare name,
+    because the planner refers to `discrepancies_details.customer_email` while
+    the schema object is `finopsiq.discrepancies_details`.
+    """
+    all_fields: set[str] = set()
+    by_table: dict[str, set[str]] = {}
+    for obj in relevant_schema.objects:
+        columns = {f.lower() for f in obj.all_field_paths()}
+        columns.update(f.name.lower() for f in obj.fields)
+        full = obj.name.lower()
+        by_table.setdefault(full, set()).update(columns)
+        by_table.setdefault(full.split(".")[-1], set()).update(columns)
+        all_fields.update(columns)
+        all_fields.update(f"{full}.{c}" for c in columns)
+    return all_fields, by_table
+
+
+def _field_is_valid(
+    field: str,
+    all_fields: set[str],
+    by_table: dict[str, set[str]],
+) -> bool:
+    """Whether a plan field exists, honouring its table qualifier.
+
+    Matching on the bare leaf name alone is what let
+    `discrepancies_details.customer_email` through: `customer_email` does exist
+    -- on `invoices` -- so a filter was planned against a table that has no such
+    column, the generator faithfully emitted it, and validation rejected the
+    query on every retry because the plan kept demanding it. When a qualifier is
+    present it must be the qualifier that decides.
+    """
+    norm = field.lower().strip()
+    if not norm:
+        return False
+    if "." in norm:
+        qualifier, column = norm.rsplit(".", 1)
+        known = by_table.get(qualifier)
+        if known is not None:
+            return column in known
+        # Unknown qualifier: it may be a query alias rather than a table, so
+        # fall back to the global check rather than dropping a valid field.
+    return norm in all_fields or norm.split(".")[-1] in all_fields
 
 
 class QueryPlanner:
@@ -111,6 +183,7 @@ class QueryPlanner:
             subjective=", ".join(question_analysis.subjective) or "None",
             objective=", ".join(question_analysis.objective) or "None",
             schema_context=schema_context,
+            column_manifest=format_column_manifest(relevant_schema),
             feedback_section=feedback_section,
         )
 
@@ -146,12 +219,7 @@ class QueryPlanner:
     ) -> QueryPlan:
         """Validate and sanitize plan against schema to guarantee no invalid tables or raw SQL."""
         allowed_sources = relevant_schema.get_object_names()
-        all_allowed_fields: set[str] = set()
-        for obj in relevant_schema.objects:
-            all_allowed_fields.update(f.lower() for f in obj.all_field_paths())
-            for f in obj.fields:
-                all_allowed_fields.add(f.name.lower())
-                all_allowed_fields.add(f"{obj.name.lower()}.{f.name.lower()}")
+        all_allowed_fields, fields_by_table = _build_field_index(relevant_schema)
 
         # 1. Validate sources and detect any missing tables whose schema is not retrieved
         def _is_table_in_allowed(tbl_name: str) -> bool:
@@ -195,15 +263,50 @@ class QueryPlanner:
             valid_sources = [relevant_schema.objects[0].name]
         plan.sources = valid_sources
 
+        # 1b. Qualify bare projection columns against the slice.
+        #
+        # The plan names projections without a table, so the generator has to
+        # guess which one owns each column -- and it guesses by name, putting
+        # `customer_email` on `customers` when the column actually lives on
+        # `invoices`. Validation then rejects the query, and the generator
+        # reproduces it verbatim on every retry, because the feedback does not
+        # change the plan it is working from. Resolving the owner here removes
+        # the guess. Only unambiguous columns are qualified; one that several
+        # slice tables share is left alone, since the generator picking any of
+        # them is correct.
+        # Qualified with the BARE table name, not the schema-qualified one: the
+        # generator aliases tables by their bare name, and the validator compares
+        # the plan's projections to the query's columns as strings. Writing
+        # `finopsiq.products.product_id` where the SQL says `products.product_id`
+        # reads as a difference to it, and it reports a column as missing that is
+        # plainly in the SELECT list.
+        owners: dict[str, list[str]] = {}
+        for obj in relevant_schema.objects:
+            bare = obj.name.split(".")[-1]
+            for field in obj.fields:
+                owners.setdefault(field.name.lower(), []).append(bare)
+        qualified_projections: list[str] = []
+        for projection in plan.projections:
+            candidate = projection.strip()
+            if candidate and candidate != "*" and "." not in candidate:
+                tables = owners.get(candidate.lower(), [])
+                if len(tables) == 1:
+                    qualified = f"{tables[0]}.{candidate}"
+                    if qualified != candidate:
+                        logger.info(
+                            "Qualified plan projection %r as %r", candidate, qualified
+                        )
+                    candidate = qualified
+            qualified_projections.append(candidate)
+        plan.projections = qualified_projections
+
         # 2. Sanitize and validate filters (strip SQL keywords like WHERE)
         sanitized_filters = []
         for flt in plan.filters:
             clean_field = _clean_sql_syntax(flt.field)
             clean_op = _clean_sql_syntax(flt.operator).lower() or "equals"
-            # Verify field exists in schema
-            f_norm = clean_field.lower()
-            leaf = f_norm.split(".")[-1]
-            if f_norm in all_allowed_fields or leaf in all_allowed_fields:
+            # Verify the field exists on the table it is qualified with
+            if _field_is_valid(clean_field, all_allowed_fields, fields_by_table):
                 flt.field = clean_field
                 flt.operator = clean_op
                 sanitized_filters.append(flt)
@@ -215,20 +318,48 @@ class QueryPlanner:
         clean_group = []
         for g in plan.group_by:
             cg = _clean_sql_syntax(g)
-            g_norm = cg.lower()
-            leaf = g_norm.split(".")[-1]
-            if g_norm in all_allowed_fields or leaf in all_allowed_fields:
+            if _field_is_valid(cg, all_allowed_fields, fields_by_table):
                 clean_group.append(cg)
+            else:
+                logger.warning("Dropped group_by on unknown field: %r", g)
         plan.group_by = clean_group
 
         clean_order = []
         for o in plan.order_by:
             co = _clean_sql_syntax(o.field)
-            o_norm = co.lower()
-            leaf = o_norm.split(".")[-1]
-            if o_norm in all_allowed_fields or leaf in all_allowed_fields:
+            if _field_is_valid(co, all_allowed_fields, fields_by_table):
                 o.field = co
                 clean_order.append(o)
+            else:
+                logger.warning("Dropped order_by on unknown field: %r", o.field)
         plan.order_by = clean_order
+
+        # 4. Drop an incoherent GROUP BY.
+        #
+        # Grouping with nothing aggregated is only meaningful when the grouped
+        # fields cover every projection, which is a DISTINCT by another name and
+        # is left alone. Grouping a SUBSET of the projections with no aggregate
+        # cannot be executed at all -- PostgreSQL rejects it with "column must
+        # appear in the GROUP BY clause or be used in an aggregate function" --
+        # and the planner emits it readily, three grouped fields against twelve
+        # projections. The generator then either obeys the plan and produces
+        # invalid SQL, or ignores it and gets failed for not implementing the
+        # plan, so the incoherent clause is removed here instead.
+        if plan.group_by and not plan.aggregations:
+            grouped = {g.lower().split(".")[-1] for g in plan.group_by}
+            projected = {
+                p.lower().split(".")[-1]
+                for p in plan.projections
+                if p.strip() and p.strip() != "*"
+            }
+            if projected and not projected <= grouped:
+                logger.warning(
+                    "Dropped GROUP BY %s: no aggregations, and it covers only "
+                    "%d of %d projected fields, which PostgreSQL cannot execute.",
+                    plan.group_by,
+                    len(projected & grouped),
+                    len(projected),
+                )
+                plan.group_by = []
 
         return plan
