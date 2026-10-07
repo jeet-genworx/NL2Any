@@ -2,6 +2,7 @@
 
 import json
 import os
+import time
 import httpx
 import pandas as pd
 import streamlit as st
@@ -257,6 +258,9 @@ with st.sidebar:
         st.session_state["ingested_db"] = db_choice if ok else None
         st.session_state["ingestion_summary"] = payload if ok else None
         st.session_state["ingestion_error"] = None if ok else payload
+        st.session_state["query_data"] = None
+        st.session_state["query_execution_time"] = None
+        st.session_state["query_error"] = None
 
     # Rendered from session_state so the status survives later reruns.
     if st.session_state.get("ingestion_error"):
@@ -316,6 +320,9 @@ with st.sidebar:
         for q in sample_questions:
             if st.button(q, key=f"btn_{q}"):
                 st.session_state["question_input"] = q
+                st.session_state["query_data"] = None
+                st.session_state["query_execution_time"] = None
+                st.session_state["query_error"] = None
     else:
         st.caption(
             "No canned questions for this database — ask anything about its own "
@@ -335,50 +342,107 @@ jargons_input = st.text_input(
     help="Words entered here will be treated as valid vocabulary by the spelling checker.",
 )
 
+if "is_executing_query" not in st.session_state:
+    st.session_state["is_executing_query"] = False
+if "query_data" not in st.session_state:
+    st.session_state["query_data"] = None
+if "query_execution_time" not in st.session_state:
+    st.session_state["query_execution_time"] = None
+if "query_error" not in st.session_state:
+    st.session_state["query_error"] = None
+
+
+def on_run_query_click() -> None:
+    st.session_state["is_executing_query"] = True
+
+
+is_executing = st.session_state["is_executing_query"]
+
 col1, col2 = st.columns([1, 5])
 with col1:
-    run_btn = st.button("🚀 Run Query", type="primary", use_container_width=True)
+    st.button(
+        "⏳ Running..." if is_executing else "🚀 Run Query",
+        type="primary",
+        use_container_width=True,
+        disabled=is_executing,
+        on_click=on_run_query_click,
+        key="run_query_btn",
+    )
 
-if run_btn and question.strip():
-    spinner_label = f"Executing pipeline through {PROVIDER_OPTIONS.get(provider_choice, provider_choice)}..."
-    with st.spinner(spinner_label):
-        try:
-            jargon_list = [j.strip() for j in jargons_input.split(",") if j.strip()]
-            resp = httpx.post(
-                f"{api_url}/query",
-                json={
-                    "database": db_choice,
-                    "question": question.strip(),
-                    "provider": provider_choice,
-                    "jargons": jargon_list,
-                },
-                timeout=None,
-            )
-            resp.raise_for_status()
-            data = resp.json()
-        except httpx.ConnectError:
-            st.error(
-                f"Could not connect to FastAPI backend at {api_url}. "
-                "Please make sure it is running via `uv run run-api`."
-            )
-            st.stop()
-        except httpx.HTTPStatusError as err:
+with col2:
+    if is_executing:
+        st.caption("⏳ Executing query pipeline... please wait.")
+    elif st.session_state.get("query_execution_time") is not None:
+        exec_time = st.session_state["query_execution_time"]
+        st.caption(f"⏱️ **Total Execution Time:** `{exec_time:.2f}s`")
+
+if is_executing:
+    if not question.strip():
+        st.warning("⚠️ Please enter a question before running.")
+        st.session_state["is_executing_query"] = False
+    else:
+        spinner_label = f"Executing pipeline through {PROVIDER_OPTIONS.get(provider_choice, provider_choice)}..."
+        with st.spinner(spinner_label):
+            start_time = time.perf_counter()
             try:
-                detail = err.response.json().get("detail", err.response.text)
-            except Exception:
-                detail = err.response.text
-            if err.response.status_code >= 500:
-                st.error(f"❌ Backend Server Error (HTTP {err.response.status_code}): {detail}")
-            else:
-                st.error(f"❌ Provider Error ({PROVIDER_OPTIONS.get(provider_choice, provider_choice)}): {detail}")
-            st.stop()
-        except Exception as err:
-            st.error(f"Error querying API: {err}")
-            st.stop()
+                jargon_list = [j.strip() for j in jargons_input.split(",") if j.strip()]
+                resp = httpx.post(
+                    f"{api_url}/query",
+                    json={
+                        "database": db_choice,
+                        "question": question.strip(),
+                        "provider": provider_choice,
+                        "jargons": jargon_list,
+                    },
+                    timeout=None,
+                )
+                elapsed_time = time.perf_counter() - start_time
+                resp.raise_for_status()
+                st.session_state["query_data"] = resp.json()
+                st.session_state["query_execution_time"] = elapsed_time
+                st.session_state["query_error"] = None
+            except httpx.ConnectError:
+                elapsed_time = time.perf_counter() - start_time
+                st.session_state["query_data"] = None
+                st.session_state["query_execution_time"] = elapsed_time
+                st.session_state["query_error"] = (
+                    f"Could not connect to FastAPI backend at {api_url}. "
+                    "Please make sure it is running via `uv run run-api`."
+                )
+            except httpx.HTTPStatusError as err:
+                elapsed_time = time.perf_counter() - start_time
+                try:
+                    detail = err.response.json().get("detail", err.response.text)
+                except Exception:
+                    detail = err.response.text
+                if err.response.status_code >= 500:
+                    err_msg = f"❌ Backend Server Error (HTTP {err.response.status_code}): {detail}"
+                else:
+                    err_msg = f"❌ Provider Error ({PROVIDER_OPTIONS.get(provider_choice, provider_choice)}): {detail}"
+                st.session_state["query_data"] = None
+                st.session_state["query_execution_time"] = elapsed_time
+                st.session_state["query_error"] = err_msg
+            except Exception as err:
+                elapsed_time = time.perf_counter() - start_time
+                st.session_state["query_data"] = None
+                st.session_state["query_execution_time"] = elapsed_time
+                st.session_state["query_error"] = f"Error querying API: {err}"
+            finally:
+                st.session_state["is_executing_query"] = False
+                st.rerun()
 
+if st.session_state.get("query_error"):
+    st.error(st.session_state["query_error"])
+
+data = st.session_state.get("query_data")
+execution_time = st.session_state.get("query_execution_time")
+
+if data:
     # Check for basic answers or errors
     if data.get("basic_answer"):
         st.info(f"ℹ️ **System Response:** {data['basic_answer']}")
+        if execution_time is not None:
+            st.caption(f"⏱️ Total execution time: `{execution_time:.2f}s`")
 
     elif data.get("error"):
         if data.get("guardrail", {}).get("decision") == "REJECT":
@@ -387,12 +451,15 @@ if run_btn and question.strip():
                 st.caption(f"Reason: {data['guardrail']['reason']}")
         else:
             st.error(f"❌ **Pipeline Notice:** {data['error']}")
+        if execution_time is not None:
+            st.caption(f"⏱️ Total execution time: `{execution_time:.2f}s`")
 
     # Results section if present
     results = data.get("results")
     if results:
         row_count = results.get("row_count", 0)
-        st.subheader(f"📊 Results ({row_count} rows)")
+        time_badge = f" — ⏱️ `{execution_time:.2f}s`" if execution_time is not None else ""
+        st.subheader(f"📊 Results ({row_count} rows){time_badge}")
 
         preview_rows = results.get("preview_rows", [])
         if preview_rows:
