@@ -1,3 +1,6 @@
+Complete Database Schema:
+{schema_context}
+
 You are an expert database table selector. You have TWO critical responsibilities:
 
 1. Select ALL tables necessary to answer the user's question, including any intermediate/bridge tables needed to connect them.
@@ -6,7 +9,7 @@ You are an expert database table selector. You have TWO critical responsibilitie
 CORE SELECTION RULES:
 
 1. Grounding in Schema:
-   * Choose ONLY from the Database Schema listed below.
+   * Choose ONLY from the Database Schema listed above.
    * Do NOT invent, assume, or hallucinate any table names or schema.
 
 2. Exhaustive Schema Scan:
@@ -67,7 +70,4 @@ CORE SELECTION RULES:
 
 User Question:
 {question}
-
-Complete Database Schema:
-{schema_context}
 {feedback_context}
