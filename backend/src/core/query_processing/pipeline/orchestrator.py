@@ -40,6 +40,10 @@ from backend.src.core.query_processing.pipeline.validator import QueryValidator
 from backend.src.control.providers.model.base import ModelProvider
 from backend.src.control.providers.model.factory import resolve_model_provider
 from backend.src.control.providers.model.koboldcpp import KoboldCppProvider
+from backend.src.control.providers.model.koboldcpp_cache import (
+    KoboldCppCacheManager,
+    get_cache_manager,
+)
 from backend.src.utils.text_utils import clean_unreadable_characters, strip_ansi_escapes
 
 logger = logging.getLogger(__name__)
@@ -61,12 +65,14 @@ class NL2AnyQueryOrchestrator:
         executor: QueryExecutor | None = None,
         results: ResultProcessor | None = None,
         max_retries: int | None = None,
+        cache_manager: KoboldCppCacheManager | None = None,
         **kwargs: Any,
     ) -> None:
+        self.cache_manager = cache_manager or get_cache_manager()
         self.provider = provider or KoboldCppProvider()
         self.guardrail = guardrail or GuardrailClassifier(provider=self.provider)
         self.spelling_checker = spelling_checker or SpellingChecker()
-        self.selector = selector or TableSelector(provider=self.provider)
+        self.selector = selector or TableSelector(provider=self.provider, cache_manager=self.cache_manager)
         self.postgres_gen = postgres_gen or PostgresQueryGenerator(provider=self.provider)
         self.mongo_gen = mongo_gen or MongoQueryGenerator(provider=self.provider)
         self.validator = validator or QueryValidator(provider=self.provider)
@@ -101,7 +107,7 @@ class NL2AnyQueryOrchestrator:
         selector = (
             self.selector
             if self._custom_selector
-            else TableSelector(provider=active_provider)
+            else TableSelector(provider=active_provider, cache_manager=self.cache_manager)
         )
         postgres_gen = (
             self.postgres_gen
@@ -319,6 +325,7 @@ class NL2AnyQueryOrchestrator:
                 question=processed_question,
                 schema=schema,
                 feedback=selector_feedback,
+                target_key=target.key,
             )
 
             if not selection.selected_objects:

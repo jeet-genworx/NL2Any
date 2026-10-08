@@ -116,6 +116,7 @@ services:
       # host. Reads then fail with IsADirectoryError. Mounting the directory
       # makes new targets work with no compose change, too.
       - ./backend/src/data/embeddings:/app/backend/src/data/embeddings
+      - ./backend/src/core/query_processing/prompts:/app/backend/src/core/query_processing/prompts
     ports:
       - "8000:8000"
     command: ["uvicorn", "backend.src.main:app", "--host", "0.0.0.0", "--port", "8000"]

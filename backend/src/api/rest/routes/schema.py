@@ -6,11 +6,14 @@ live database or to the model; if an artifact is missing, the response says
 which command regenerates it.
 """
 
+import logging
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, BackgroundTasks, HTTPException
 
 from backend.src.api.rest.dependencies import is_ingested, resolve_db_target
+from backend.src.config import settings
+from backend.src.control.providers.model.koboldcpp_cache import get_cache_manager
 from backend.src.data.models.schema import DatabaseSchema
 from backend.src.data.models.targets import DatabaseTarget, all_targets
 from backend.src.data.repositories import (
@@ -19,6 +22,8 @@ from backend.src.data.repositories import (
     schema_repository,
 )
 from backend.src.schemas.metadata import TableDescriptionResponse
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Schema"])
 
@@ -54,6 +59,34 @@ def list_databases_endpoint() -> dict[str, Any]:
             for target in all_targets().values()
         ]
     }
+
+
+@router.post("/databases/{database_type}/select")
+async def select_database_endpoint(
+    database_type: str,
+    background_tasks: BackgroundTasks,
+) -> dict[str, Any]:
+    """Notify backend that a database was selected in the frontend.
+
+    Triggers non-blocking Stage 1 KV cache warm-up as a background task.
+    """
+    target = resolve_db_target(database_type)
+    slot = None
+    if settings.koboldcpp_admin_enabled:
+        try:
+            cache_mgr = get_cache_manager()
+            slot = cache_mgr.get_or_allocate_slot(target.key)
+            from backend.src.core.query_processing.pipeline.orchestrator import NL2AnyQueryOrchestrator
+            from backend.src.core.query_processing.pipeline.selector import TableSelector
+            orc = NL2AnyQueryOrchestrator()
+            schema = orc.get_or_load_schema(target)
+            selector = TableSelector(cache_manager=cache_mgr)
+            background_tasks.add_task(cache_mgr.trigger_warmup, target, selector, schema)
+            return {"status": "warming", "database": target.key, "slot": slot}
+        except Exception as err:
+            logger.debug("Failed to schedule background warm-up for %s: %s", target.key, err)
+    return {"status": "ok", "database": target.key, "slot": slot}
+
 
 
 def _load_schema(target: DatabaseTarget) -> DatabaseSchema:

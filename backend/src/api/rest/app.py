@@ -12,6 +12,8 @@ from backend.src.api.rest.routes import (
     query_router,
     schema_router,
 )
+from backend.src.config import settings
+from backend.src.control.providers.model.koboldcpp_cache import get_cache_manager
 from backend.src.data.repositories import connection_repository
 
 logger = logging.getLogger(__name__)
@@ -28,6 +30,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     restored = connection_repository.load_connections()
     if restored:
         logger.info("Restored %d saved database connection(s).", len(restored))
+
+    if settings.koboldcpp_admin_enabled:
+        cache_mgr = get_cache_manager()
+        reachable = await cache_mgr.is_reachable()
+        if reachable:
+            logger.info("KoboldCpp admin API reachable at %s. KV cache ready.", cache_mgr.admin_url)
+        else:
+            logger.warning(
+                "KoboldCpp admin API unreachable at %s at startup. KV cache warm-up deferred to lazy execution.",
+                cache_mgr.admin_url,
+            )
     yield
 
 

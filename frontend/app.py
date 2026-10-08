@@ -211,6 +211,14 @@ with st.sidebar:
     )
     db_type = db_types.get(db_choice, "postgresql")
 
+    # When active database changes, notify backend to trigger background KV cache warm-up
+    if db_choice and st.session_state.get("_last_selected_db") != db_choice:
+        st.session_state["_last_selected_db"] = db_choice
+        try:
+            httpx.post(f"{api_url}/databases/{db_choice}/select", timeout=1.0)
+        except Exception:
+            pass
+
     PROVIDER_OPTIONS = {
         "koboldcpp": "SLM (KoboldCpp)",
         "huggingface": "Hugging Face",

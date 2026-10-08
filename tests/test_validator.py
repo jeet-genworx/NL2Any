@@ -546,3 +546,58 @@ async def test_mongo_query_validator_size_in_group_syntax_error():
     assert res.suggestion is not None
     assert "$sum" in res.suggestion
 
+
+@pytest.mark.asyncio
+async def test_mongo_query_validator_nested_lookup_field_projection_error():
+    """MongoQueryValidator catches fields projected from non-unwound sub-pipeline lookup arrays."""
+    from backend.src.core.query_processing.pipeline.validators import MongoQueryValidator
+
+    class FailIfCalledProvider:
+        async def generate(self, *args, **kwargs):
+            raise AssertionError("Provider should not be called for fast-path validation errors")
+
+    validator = MongoQueryValidator(provider=FailIfCalledProvider())
+    query = GeneratedQuery(
+        database_type=DatabaseType.MONGODB,
+        raw_query=MongoQuery(
+            operation="aggregate",
+            collection="agents",
+            pipeline=[
+                {"$match": {"team": "AB"}},
+                {
+                    "$lookup": {
+                        "from": "agent_health_logs",
+                        "localField": "agent_id",
+                        "foreignField": "agent_id",
+                        "pipeline": [
+                            {
+                                "$group": {
+                                    "_id": None,
+                                    "healthy_count": {"$sum": 1},
+                                    "unhealthy_count": {"$sum": 1},
+                                }
+                            }
+                        ],
+                        "as": "health_logs_summary",
+                    }
+                },
+                {
+                    "$project": {
+                        "_id": 0,
+                        "name": 1,
+                        "healthy_count": 1,
+                        "unhealthy_count": 1,
+                    }
+                },
+            ],
+        ),
+        formatted_query='{"operation": "aggregate"}',
+    )
+    res = await validator.validate("Find all agents in team AB with healthy vs unhealthy checks", query)
+    assert res.valid is False
+    assert res.error_type == ValidationErrorType.GENERATION_ERROR
+    assert any("healthy_count" in issue and "health_logs_summary" in issue for issue in res.issues)
+    assert res.suggestion is not None
+    assert "$filter" in res.suggestion
+
+

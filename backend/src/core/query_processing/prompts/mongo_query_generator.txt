@@ -31,6 +31,8 @@ RULES
       - NEVER use "$size" inside $group! "$size" is an array expression operator, NOT a $group accumulator. MongoDB will fail with: unknown group operator 'size'.
    b) In $project stages:
       - When counting related records without unwinding, use {{"$size": "$<lookup_alias>"}} in $project.
+      - For MULTIPLE or CONDITIONAL counts (e.g. healthy checks vs unhealthy checks, succeeded vs failed) from a looked-up array, use {{"$size": {{"$filter": {{"input": "$<lookup_alias>", "as": "item", "cond": {{...}}}}}}}} directly in $project!
+      - NEVER put a $group sub-pipeline inside $lookup to compute counts and then project them with "count": 1. Looked-up fields are inside an array and do NOT exist at root level!
       - Once an array is unwound with $unwind, it is a single document, NOT an array. Never call $size on an unwound field.
    c) Aggregating related records:
       - Average related array values in $project: use {{"$avg": "$<lookup_alias>.<field>"}}.
@@ -65,6 +67,8 @@ QUESTION TYPE -> PATTERN MAPPING (MATCH YOUR QUESTION TO EXACTLY ONE PATTERN):
   => PATTERN E: collection = "agents", $match name, $lookup runs with status: "completed", $unwind, $addFields run_id_str with $toString, $lookup run_usage, $unwind, $group with $sum.
 - "count of child records for each user/group across entities" (e.g. "runs executed by each user for team X")
   => PATTERN F: collection = "agents", $match team, $lookup child, $unwind "$child", $group by "$child.<group_field>" with {{"$sum": 1}}, $sort, $limit.
+- "multiple or conditional counts for entities" (e.g. "count of healthy checks versus unhealthy checks for agents in team X", "completed vs failed runs")
+  => PATTERN G: collection = "<entity>", $match filters, $lookup child "as": "logs", $project with $size + $filter for each condition: {{"$size": {{"$filter": {{"input": "$logs", "as": "item", "cond": {{...}}}}}}}}. Never sub-pipeline $group.
 
 OUTPUT FORMAT
 find:
@@ -83,23 +87,41 @@ aggregate:
 PATTERNS (CONCRETE EXAMPLES)
 Pattern A) Count related records for a named entity (start from entity collection):
 Question: "Show me the total number of unhealthy logs for the agent with name Test-Agent-Langgraph."
-{{"operation": "aggregate", "collection": "agents", "pipeline": [
-  {{"$match": {{"name": "Test-Agent-Langgraph"}}}},
-  {{"$lookup": {{
-    "from": "agent_health_logs",
-    "localField": "agent_id",
-    "foreignField": "agent_id",
-    "pipeline": [
-      {{"$match": {{"is_healthy": false}}}}
-    ],
-    "as": "unhealthy_logs"
-  }}}},
-  {{"$project": {{
-    "_id": 0,
-    "name": 1,
-    "total_unhealthy_logs": {{"$size": "$unhealthy_logs"}}
-  }}}}
-]}}
+{{
+  "operation": "aggregate",
+  "collection": "agents",
+  "pipeline": [
+    {{
+      "$match": {{
+        "name": "Test-Agent-Langgraph"
+      }}
+    }},
+    {{
+      "$lookup": {{
+        "from": "agent_health_logs",
+        "localField": "agent_id",
+        "foreignField": "agent_id",
+        "pipeline": [
+          {{
+            "$match": {{
+              "is_healthy": false
+            }}
+          }}
+        ],
+        "as": "unhealthy_logs"
+      }}
+    }},
+    {{
+      "$project": {{
+        "_id": 0,
+        "name": 1,
+        "total_unhealthy_logs": {{
+          "$size": "$unhealthy_logs"
+        }}
+      }}
+    }}
+  ]
+}}
 
 Pattern B) Average/sum of a related field for a named entity:
 Question: "What is the average response time of health checks for agent Test-Agent-Langgraph?"
@@ -203,7 +225,43 @@ Question: "Show the number of runs executed by each user for agents belonging to
   {{"$limit": 100}}
 ]}}
 
+Pattern G) Multiple conditional counts of child records for entities (start from parent, lookup, project with $size + $filter):
+Question: "Find all agents in team AB along with their total count of healthy checks versus unhealthy checks."
+{{"operation": "aggregate", "collection": "agents", "pipeline": [
+  {{"$match": {{"team": "AB"}}}},
+  {{"$lookup": {{
+    "from": "agent_health_logs",
+    "localField": "agent_id",
+    "foreignField": "agent_id",
+    "as": "logs"
+  }}}},
+  {{"$project": {{
+    "_id": 0,
+    "name": 1,
+    "healthy_count": {{
+      "$size": {{
+        "$filter": {{
+          "input": "$logs",
+          "as": "log",
+          "cond": {{"$eq": ["$$log.is_healthy", true]}}
+        }}
+      }}
+    }},
+    "unhealthy_count": {{
+      "$size": {{
+        "$filter": {{
+          "input": "$logs",
+          "as": "log",
+          "cond": {{"$eq": ["$$log.is_healthy", false]}}
+        }}
+      }}
+    }}
+  }}}}
+]}}
+
 COMMON MISTAKES
+WRONG $lookup with sub-pipeline $group -> $project {{"healthy_count": 1}}   RIGHT: fields in lookup array are NOT root fields (silently dropped); use Pattern G with $size + $filter
+WRONG expecting $lookup "as": "summary" to expose top-level fields          RIGHT: use Pattern G directly in $project with $size over $filter
 WRONG {{"$size": "$$ROOT"}}                                         RIGHT: {{"$size": "$unhealthy_logs"}} ($size requires array field)
 WRONG {{"run_count": {{"$size": "$runs"}}}} inside $group               RIGHT: {{"run_count": {{"$sum": 1}}}} ($size is NOT a $group operator; counting in $group is ALWAYS {{"$sum": 1}})
 WRONG grouping by parent "_id": "$name" when question asks "by each user" RIGHT: {{"_id": "$runs.invoked_by_user_id"}} (group by the requested child attribute)
@@ -228,3 +286,5 @@ Selected Schema:
 {schema_context}
 
 {feedback_section}
+
+Output strictly ONE valid JSON object starting with {{ and ending with }}. Do NOT include "Output:", conversational text, or markdown code blocks.

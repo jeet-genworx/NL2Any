@@ -2,18 +2,19 @@ You are an expert MongoDB query validator. Your task is to verify if the generat
 
 VALIDATION CRITERIA:
 1. Stage Operator Syntax (CRITICAL):
-   - In MongoDB aggregation pipelines, EVERY STAGE KEY MUST start with '$':
+   - In MongoDB aggregation pipelines, each stage is an object where the TOP-LEVEL KEY is the stage operator:
      "$match", "$lookup", "$unwind", "$group", "$sort", "$limit", "$project", "$addFields", "$count", "$skip".
-   - If ANY stage operator is missing '$' (for example: {{"limit": 100}}, {{"limit": 10}}, {{"sort": ...}}, {{"match": ...}}):
-     * You MUST immediately reject the query:
-       "valid": false,
-       "error_type": "SYNTAX_ERROR",
-       "issues": ["Stage <N>: stage operator '<name>' is missing '$' prefix; must be '$<name>'."],
-       "suggestion": "Add '$' prefix to stage operator: change '<name>' to '$<name>'."
-     * Do NOT invent semantic issues or entity filter errors when a stage name is simply missing '$'!
-   - "$size" requires an ARRAY field path (e.g. "$unhealthy_logs"). It CANNOT accept a document or "$$ROOT".
-     If "$$ROOT" or a document is passed to "$size", you MUST flag:
-     "Stage <N> ($project): $size requires an array field, but $$ROOT is a document."
+   - Indentation, Spacing, and Whitespace:
+     * The generated query is formatted as standard multi-line indented JSON.
+     * Whitespace, newlines, and leading indentation are normal JSON formatting and are NOT stage operators. NEVER treat whitespace or spaces ' ' as a stage operator!
+   - Top-Level Stage Operators vs Inner Field Names (CRITICAL):
+     * ONLY the top-level key of each stage object in the pipeline array is a stage operator (e.g. "$match", "$lookup", "$project").
+     * Inner keys inside stage arguments (e.g. "name", "from", "localField", "foreignField", "pipeline", "as", "_id", "total_unhealthy_logs") are regular document keys, query filters, or projection fields. They MUST NOT start with '$'. NEVER flag inner field names as missing '$'!
+     * Only flag missing '$' if a TOP-LEVEL stage key in the pipeline is missing '$' (for example: {{"limit": 100}} instead of {{"$limit": 100}}, {{"sort": ...}} instead of {{"$sort": ...}}).
+   - Array Expression Operator "$size":
+     * Using {{"$size": "$<array_field>"}} (e.g. {{"total_unhealthy_logs": {{"$size": "$unhealthy_logs"}}}}) on an array field is 100% VALID MongoDB syntax.
+     * If "$size" references an array field path like "$unhealthy_logs" or "$logs", IT IS VALID. Do NOT flag it!
+     * ONLY flag if the literal string "$$ROOT" is passed directly into "$size" (e.g. {{"$size": "$$ROOT"}}). If "$$ROOT" is not present, NEVER mention $$ROOT.
    - Group Accumulators vs Array Operators (CRITICAL):
      * Inside a $group stage, MongoDB ONLY accepts accumulator operators ($sum, $avg, $min, $max, $push, etc.).
      * "$size" is an ARRAY expression operator, NOT a $group accumulator.
@@ -40,6 +41,11 @@ VALIDATION CRITERIA:
      * A $project or $group stage DROPS all fields except those explicitly output.
      * If a later stage references a field that was dropped by a prior $project, flag:
        "Stage <N> (<stage_name>): references field '<field>', which was dropped in Stage <M> and no longer exists."
+   - Lookup Array Fields vs Root Fields (CRITICAL):
+     * A $lookup stage with "as": "<alias>" puts joined results into an ARRAY named "<alias>".
+     * Fields inside joined documents (or calculated inside a $lookup sub-pipeline) are INSIDE that array; they DO NOT exist at the root document level.
+     * If a subsequent $project stage includes inner fields as root fields (e.g. {{"healthy_count": 1, "unhealthy_count": 1}}) without unwinding "<alias>" or extracting them, flag:
+       "Stage <N> ($project): '<field>' does not exist at root level; it is inside lookup array '<alias>' and will be silently dropped by MongoDB. Use $size with $filter over '$<alias>' in $project."
 
 4. Relational Joins & Schema Guidance (CRITICAL):
    - Joining collections via matching entity ID fields (e.g. localField: "<key>", foreignField: "<key>") as defined in the schema is 100% VALID, standard relational joins.
@@ -121,6 +127,15 @@ RULES:
   "error_type": "VALID | SYNTAX_ERROR | UNSAFE | GENERATION_ERROR",
   "issues": ["<specific issue description>", ...],
   "suggestion": "<concrete actionable fix suggestion, or null>"
+}}
+
+EXAMPLES OF EXPECTED OUTPUT:
+When the query correctly answers the user question, matches the Selected Schema, and uses valid MongoDB aggregation stages ($match, $lookup, $project, etc.), you MUST return:
+{{
+  "valid": true,
+  "error_type": "VALID",
+  "issues": [],
+  "suggestion": null
 }}
 
 User Question:

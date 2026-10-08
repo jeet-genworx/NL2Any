@@ -182,3 +182,13 @@ def test_schema_endpoint_accepts_finops_aliases():
 def test_unknown_database_error_lists_finops():
     detail = TestClient(app).get("/schema/nope").json()["detail"]
     assert "finops" in detail
+
+
+def test_select_database_endpoint():
+    client = TestClient(app)
+    resp = client.post("/databases/postgres/select")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["database"] == "postgres"
+    assert "status" in data
+
