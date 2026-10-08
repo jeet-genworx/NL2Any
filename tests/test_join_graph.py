@@ -1,4 +1,4 @@
-"""Tests for the deterministic join-path graph."""
+"""Tests for the deterministic foreign-key graph and the BFS neighborhood walk."""
 
 from backend.src.data.models.schema import (
     DatabaseSchema,
@@ -10,14 +10,17 @@ from backend.src.data.models.schema import (
 )
 from backend.src.core.query_processing.pipeline.join_graph import (
     JoinGraph,
-    build_join_path_candidates,
+    build_table_neighborhood,
+    connect_selection,
+    relationships_among,
 )
 
 
-def _table(name: str, *columns: str) -> SchemaObject:
+def _table(name: str, *columns: str, description: str = "") -> SchemaObject:
     return SchemaObject(
         name=name,
         kind=SchemaObjectKind.TABLE,
+        description=description,
         fields=[Field(name=c, type="int") for c in columns],
     )
 
@@ -37,7 +40,7 @@ def _transitive_schema() -> DatabaseSchema:
         [
             _table("customers", "id", "city"),
             _table("orders", "id", "customer_id"),
-            _table("order_items", "id", "order_id", "product_id"),
+            _table("order_items", "id", "order_id", "product_id", description="line items"),
             _table("products", "id", "name"),
         ],
         [
@@ -48,55 +51,38 @@ def _transitive_schema() -> DatabaseSchema:
     )
 
 
-def test_finds_transitive_path_between_unconnected_endpoints():
+def _seeds(*names: str) -> list[tuple[str, float | None, int | None]]:
+    """Seed triples as embedding retrieval produces them, descending similarity."""
+    return [(name, 0.9 - 0.01 * i, i + 1) for i, name in enumerate(names)]
+
+
+def test_bfs_levels_records_shortest_hop_count():
     graph = JoinGraph(_transitive_schema())
-    paths = graph.find_paths("customers", "products", max_hops=3, max_paths=8)
+    levels = graph.bfs_levels("customers", max_levels=3)
 
-    assert len(paths) == 1
-    tables, edges = paths[0]
-    assert tables == ["customers", "orders", "order_items", "products"]
-    assert len(edges) == 3
+    assert levels == {"customers": 0, "orders": 1, "order_items": 2, "products": 3}
 
 
-def test_paths_are_undirected():
+def test_bfs_levels_respects_the_limit():
     graph = JoinGraph(_transitive_schema())
-    forward = graph.find_paths("customers", "orders", max_hops=3, max_paths=8)
-    backward = graph.find_paths("orders", "customers", max_hops=3, max_paths=8)
 
-    assert len(forward) == 1 and len(backward) == 1
-    assert forward[0][0] == ["customers", "orders"]
-    assert backward[0][0] == ["orders", "customers"]
+    assert graph.bfs_levels("customers", max_levels=1) == {"customers": 0, "orders": 1}
+    assert "products" not in graph.bfs_levels("customers", max_levels=2)
 
 
-def test_max_hops_excludes_paths_that_are_too_long():
+def test_traversal_is_undirected():
     graph = JoinGraph(_transitive_schema())
-    assert graph.find_paths("customers", "products", max_hops=2, max_paths=8) == []
-    assert len(graph.find_paths("customers", "products", max_hops=3, max_paths=8)) == 1
+
+    # orders points at customers; the walk reaches customers from orders anyway.
+    assert graph.bfs_levels("orders", max_levels=1) == {
+        "orders": 0,
+        "customers": 1,
+        "order_items": 1,
+    }
 
 
-def test_paths_are_returned_shortest_first():
-    # customers reaches payments directly, and also via orders.
-    schema = _schema(
-        [
-            _table("customers", "id"),
-            _table("orders", "id", "customer_id"),
-            _table("payments", "id", "customer_id", "order_id"),
-        ],
-        [
-            Relationship(from_object="orders", from_field="customer_id", to_object="customers", to_field="id"),
-            Relationship(from_object="payments", from_field="customer_id", to_object="customers", to_field="id"),
-            Relationship(from_object="payments", from_field="order_id", to_object="orders", to_field="id"),
-        ],
-    )
-    paths = JoinGraph(schema).find_paths("customers", "payments", max_hops=3, max_paths=8)
-
-    hops = [len(edges) for _, edges in paths]
-    assert hops == sorted(hops)
-    assert hops[0] == 1
-
-
-def test_parallel_foreign_keys_are_distinct_paths():
-    """origin and destination both point at airports: two different joins."""
+def test_parallel_foreign_keys_yield_one_neighbor():
+    """origin and destination both point at airports: one table, two joins."""
     schema = _schema(
         [
             _table("flights", "id", "origin_airport_id", "destination_airport_id"),
@@ -107,11 +93,15 @@ def test_parallel_foreign_keys_are_distinct_paths():
             Relationship(from_object="flights", from_field="destination_airport_id", to_object="airports", to_field="id"),
         ],
     )
-    paths = JoinGraph(schema).find_paths("flights", "airports", max_hops=3, max_paths=8)
+    graph = JoinGraph(schema)
 
-    assert len(paths) == 2
-    joined_on = {edges[0].from_field for _, edges in paths}
-    assert joined_on == {"origin_airport_id", "destination_airport_id"}
+    assert graph.neighbors("flights") == ["airports"]
+    # Both keys survive as relationships, so the generator can still pick one.
+    neighborhood = build_table_neighborhood(_seeds("flights"), schema, max_levels=1, max_tables=10)
+    assert {r.from_field for r in neighborhood.relationships} == {
+        "origin_airport_id",
+        "destination_airport_id",
+    }
 
 
 def test_components_separate_unrelated_tables():
@@ -123,7 +113,7 @@ def test_components_separate_unrelated_tables():
 
     assert graph.component_of("customers") == graph.component_of("orders")
     assert graph.component_of("audit_log") != graph.component_of("customers")
-    assert graph.find_paths("customers", "audit_log", max_hops=3, max_paths=8) == []
+    assert "audit_log" not in graph.bfs_levels("customers", max_levels=3)
 
 
 def test_self_referencing_key_does_not_break_traversal():
@@ -134,10 +124,11 @@ def test_self_referencing_key_does_not_break_traversal():
             Relationship(from_object="employees", from_field="dept_id", to_object="departments", to_field="id"),
         ],
     )
-    paths = JoinGraph(schema).find_paths("employees", "departments", max_hops=3, max_paths=8)
 
-    assert len(paths) == 1
-    assert paths[0][0] == ["employees", "departments"]
+    assert JoinGraph(schema).bfs_levels("employees", max_levels=2) == {
+        "employees": 0,
+        "departments": 1,
+    }
 
 
 def test_relationship_naming_a_missing_object_is_skipped():
@@ -153,69 +144,207 @@ def test_relationship_naming_a_missing_object_is_skipped():
     )
     graph = JoinGraph(schema)
 
-    assert graph.find_paths("customers", "ghost", max_hops=3, max_paths=8) == []
+    assert graph.bfs_levels("customers", max_levels=3) == {"customers": 0}
     assert not graph.has_edges()
 
 
-def test_candidates_include_transitive_path_and_no_standalone():
-    candidates = build_join_path_candidates(
-        selected_object_names=["customers", "products"],
-        schema=_transitive_schema(),
-        max_hops=3,
-        max_paths_per_pair=8,
-        max_candidates=40,
+def test_neighborhood_reaches_the_bridge_table_nobody_matched():
+    """The case the stage exists for: customers and products match, the bridge does not."""
+    neighborhood = build_table_neighborhood(
+        _seeds("customers", "products"),
+        _transitive_schema(),
+        max_levels=3,
+        max_tables=40,
     )
 
-    assert len(candidates) == 1
-    assert candidates[0].path_id == "p1"
-    assert candidates[0].connected is True
-    assert candidates[0].tables == ["customers", "orders", "order_items", "products"]
-    assert candidates[0].hops == 3
+    assert neighborhood.seed_objects == ["customers", "products"]
+    assert set(neighborhood.table_names()) == {"customers", "products", "orders", "order_items"}
+    levels = {t.name: t.level for t in neighborhood.tables}
+    assert levels == {"customers": 0, "products": 0, "order_items": 1, "orders": 1}
+    # Every foreign key internal to the set comes along.
+    assert len(neighborhood.relationships) == 3
+    assert neighborhood.truncated is False
 
 
-def test_candidates_offer_unreachable_object_as_standalone():
+def test_neighborhood_records_which_seed_reached_each_table():
+    neighborhood = build_table_neighborhood(
+        _seeds("customers", "products"),
+        _transitive_schema(),
+        max_levels=1,
+        max_tables=40,
+    )
+    reached = {t.name: t.reached_from for t in neighborhood.tables}
+
+    assert reached["orders"] == ["customers"]
+    assert reached["order_items"] == ["products"]
+    assert reached["customers"] == ["customers"]
+
+
+def test_seeds_come_first_and_carry_their_retrieval_scores():
+    neighborhood = build_table_neighborhood(
+        [("products", 0.81, 2), ("customers", 0.93, 1)],
+        _transitive_schema(),
+        max_levels=2,
+        max_tables=40,
+    )
+
+    # Seed order is retrieval order, not alphabetical.
+    assert neighborhood.table_names()[:2] == ["products", "customers"]
+    assert neighborhood.tables[0].similarity == 0.81
+    assert neighborhood.tables[0].rank == 2
+    # Discovered tables carry no score, because nothing scored them.
+    discovered = [t for t in neighborhood.tables if t.level > 0]
+    assert discovered and all(t.similarity is None and t.rank is None for t in discovered)
+
+
+def test_neighborhood_descriptions_come_from_the_schema():
+    neighborhood = build_table_neighborhood(
+        _seeds("customers"), _transitive_schema(), max_levels=2, max_tables=40
+    )
+    by_name = {t.name: t for t in neighborhood.tables}
+
+    assert by_name["order_items"].description == "line items"
+
+
+def test_cap_discards_the_far_end_of_the_walk_and_keeps_seeds():
+    neighborhood = build_table_neighborhood(
+        _seeds("customers"),
+        _transitive_schema(),
+        max_levels=3,
+        max_tables=2,
+    )
+
+    assert neighborhood.truncated is True
+    assert neighborhood.table_names() == ["customers", "orders"]
+    assert neighborhood.discarded_objects == ["order_items", "products"]
+    # Relationships never reference a discarded table.
+    names = {n.lower() for n in neighborhood.table_names()}
+    assert all(
+        r.from_object.lower() in names and r.to_object.lower() in names
+        for r in neighborhood.relationships
+    )
+
+
+def test_cap_never_drops_a_seed():
+    neighborhood = build_table_neighborhood(
+        _seeds("customers", "products", "orders"),
+        _transitive_schema(),
+        max_levels=3,
+        max_tables=1,
+    )
+
+    assert set(neighborhood.table_names()) == {"customers", "products", "orders"}
+    assert neighborhood.truncated is True
+
+
+def test_unknown_seed_is_skipped_rather_than_walked():
+    neighborhood = build_table_neighborhood(
+        _seeds("customers", "not_a_table"),
+        _transitive_schema(),
+        max_levels=1,
+        max_tables=40,
+    )
+
+    assert neighborhood.seed_objects == ["customers"]
+    assert "not_a_table" not in neighborhood.table_names()
+
+
+def test_duplicate_seeds_are_collapsed():
+    neighborhood = build_table_neighborhood(
+        [("customers", 0.9, 1), ("CUSTOMERS", 0.7, 2)],
+        _transitive_schema(),
+        max_levels=0,
+        max_tables=40,
+    )
+
+    assert neighborhood.table_names() == ["customers"]
+
+
+def test_mongodb_schema_without_relationships_yields_only_the_seeds():
+    schema = DatabaseSchema(
+        database_type=DatabaseType.MONGODB,
+        database_name="shop",
+        objects=[
+            SchemaObject(name="users", kind=SchemaObjectKind.COLLECTION, fields=[Field(name="_id", type="objectId")]),
+            SchemaObject(name="carts", kind=SchemaObjectKind.COLLECTION, fields=[Field(name="_id", type="objectId")]),
+        ],
+        relationships=[],
+    )
+    neighborhood = build_table_neighborhood(
+        _seeds("users"), schema, max_levels=3, max_tables=40
+    )
+
+    assert neighborhood.table_names() == ["users"]
+    assert neighborhood.relationships == []
+    assert neighborhood.tables[0].kind == "collection"
+
+
+def test_relationships_among_is_restricted_to_the_given_set():
+    schema = _transitive_schema()
+
+    assert relationships_among(["customers", "orders"], schema) == [schema.relationships[0]]
+    assert relationships_among(["customers", "products"], schema) == []
+
+
+def test_connect_selection_adds_the_bridge_the_selector_left_out():
+    """The observed failure: endpoints selected, connecting table omitted."""
+    resolved, added, unjoinable = connect_selection(
+        ["customers", "products"], _transitive_schema()
+    )
+
+    assert added == ["orders", "order_items"]
+    assert set(resolved) == {"customers", "products", "orders", "order_items"}
+    assert unjoinable == []
+
+
+def test_connect_selection_leaves_a_joinable_selection_alone():
+    resolved, added, unjoinable = connect_selection(
+        ["customers", "orders"], _transitive_schema()
+    )
+
+    assert resolved == ["customers", "orders"]
+    assert added == []
+    assert unjoinable == []
+
+
+def test_connect_selection_only_bridges_through_tables_the_selector_saw():
+    """A bridge from outside the neighborhood is one nobody could have rejected."""
+    schema = _transitive_schema()
+
+    resolved, added, unjoinable = connect_selection(
+        ["customers", "products"],
+        schema,
+        allowed=["customers", "products", "orders"],
+    )
+
+    # order_items is the only route onward and was not shown, so products stays
+    # unjoinable rather than being connected through an unseen table.
+    assert "order_items" not in resolved
+    assert unjoinable == ["products"]
+    assert added == []
+
+
+def test_connect_selection_reports_what_no_path_can_reach():
     schema = _schema(
-        [_table("customers", "id"), _table("orders", "id", "customer_id"), _table("audit_log", "id")],
+        [
+            _table("customers", "id"),
+            _table("orders", "id", "customer_id"),
+            _table("audit_log", "id"),
+        ],
         [Relationship(from_object="orders", from_field="customer_id", to_object="customers", to_field="id")],
     )
-    candidates = build_join_path_candidates(
-        selected_object_names=["customers", "orders", "audit_log"],
-        schema=schema,
-        max_hops=3,
-        max_paths_per_pair=8,
-        max_candidates=40,
+
+    resolved, added, unjoinable = connect_selection(
+        ["customers", "orders", "audit_log"], schema
     )
 
-    connected = [c for c in candidates if c.connected]
-    standalone = [c for c in candidates if not c.connected]
-    assert [c.tables for c in connected] == [["customers", "orders"]]
-    assert [c.tables for c in standalone] == [["audit_log"]]
-    assert "separate part of the schema" in standalone[0].note
+    assert set(resolved) == {"customers", "orders"}
+    assert unjoinable == ["audit_log"]
+    assert added == []
 
 
-def test_standalone_note_distinguishes_too_far_from_disconnected():
-    # a -- b -- c -- d chain; a and d are 3 hops apart, excluded at max_hops=1.
-    schema = _schema(
-        [_table("a", "id"), _table("b", "id", "a_id"), _table("c", "id", "b_id"), _table("d", "id", "c_id")],
-        [
-            Relationship(from_object="b", from_field="a_id", to_object="a", to_field="id"),
-            Relationship(from_object="c", from_field="b_id", to_object="b", to_field="id"),
-            Relationship(from_object="d", from_field="c_id", to_object="c", to_field="id"),
-        ],
-    )
-    candidates = build_join_path_candidates(
-        selected_object_names=["a", "d"],
-        schema=schema,
-        max_hops=1,
-        max_paths_per_pair=8,
-        max_candidates=40,
-    )
-
-    assert all(not c.connected for c in candidates)
-    assert all("within 1 hops" in c.note for c in candidates)
-
-
-def test_candidate_ids_stay_contiguous_after_truncation():
+def test_connect_selection_takes_the_shortest_repair():
+    """customers reaches payments directly; the one-hop edge beats going via orders."""
     schema = _schema(
         [
             _table("customers", "id"),
@@ -228,35 +357,23 @@ def test_candidate_ids_stay_contiguous_after_truncation():
             Relationship(from_object="payments", from_field="order_id", to_object="orders", to_field="id"),
         ],
     )
-    candidates = build_join_path_candidates(
-        selected_object_names=["customers", "orders", "payments"],
-        schema=schema,
-        max_hops=3,
-        max_paths_per_pair=8,
-        max_candidates=2,
+
+    resolved, added, _ = connect_selection(["orders", "payments"], schema)
+
+    # Already joinable: payments.order_id -> orders.id needs no repair at all.
+    assert added == []
+    assert resolved == ["orders", "payments"]
+
+
+def test_connect_selection_is_a_no_op_below_two_tables():
+    assert connect_selection(["customers"], _transitive_schema()) == (["customers"], [], [])
+    assert connect_selection([], _transitive_schema()) == ([], [], [])
+
+
+def test_connect_selection_canonicalizes_and_de_duplicates():
+    resolved, added, _ = connect_selection(
+        ["CUSTOMERS", "customers", "Orders"], _transitive_schema()
     )
 
-    assert [c.path_id for c in candidates] == ["p1", "p2"]
-    assert [c.hops for c in candidates] == [1, 1]
-
-
-def test_mongodb_schema_without_relationships_yields_only_standalone():
-    schema = DatabaseSchema(
-        database_type=DatabaseType.MONGODB,
-        database_name="shop",
-        objects=[
-            SchemaObject(name="users", kind=SchemaObjectKind.COLLECTION, fields=[Field(name="_id", type="objectId")]),
-            SchemaObject(name="carts", kind=SchemaObjectKind.COLLECTION, fields=[Field(name="_id", type="objectId")]),
-        ],
-        relationships=[],
-    )
-    candidates = build_join_path_candidates(
-        selected_object_names=["users", "carts"],
-        schema=schema,
-        max_hops=3,
-        max_paths_per_pair=8,
-        max_candidates=40,
-    )
-
-    assert len(candidates) == 2
-    assert all(not c.connected for c in candidates)
+    assert resolved == ["customers", "orders"]
+    assert added == []

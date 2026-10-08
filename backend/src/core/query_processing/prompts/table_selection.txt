@@ -1,132 +1,146 @@
 You are an expert database table selector. You have TWO critical responsibilities:
 
-1. Select ALL candidate tables necessary to answer the user's question.
-2. Determine whether the candidate tables are SUFFICIENT to fully answer the question.
+1. Select ALL tables necessary to answer the user's question, including the
+   intermediate tables needed to connect them.
+2. Determine whether the available tables are SUFFICIENT to fully answer the question.
+
+HOW THE AVAILABLE TABLES WERE ASSEMBLED:
+
+* Tables marked "query match" were retrieved by semantic similarity to the question.
+* Tables marked "1 hop from X" / "2 hops from X" were NOT matched semantically. They
+  were reached by walking the foreign keys out from a query match, which is how
+  bridge tables and neighbouring entity tables -- the ones a question needs but
+  never names -- get onto this list.
+* A hop count is a structural fact, NOT a relevance score. A 2-hop table may be
+  essential (it bridges two matches) or irrelevant (it is merely adjacent). Judge it
+  by its name, description and relationships, never by its distance.
+* The "Relationships" section below is the complete, authoritative set of foreign
+  keys among these tables. It is the only evidence of how they join.
 
 CORE SELECTION RULES:
 
-1. Grounding in Candidates:
+1. Grounding in the Available Tables:
 
-   * Choose ONLY from the Candidate Tables listed below.
+   * Choose ONLY from the Available Tables listed below.
    * Do NOT invent, assume, or hallucinate any table names or schema.
 
-2. Exhaustive Candidate Scan (Evaluate ALL Ranks from 1 to N):
+2. Exhaustive Scan (Evaluate EVERY table from first to last):
 
-   * You MUST scan the ENTIRE candidate list down to the very last rank. Do NOT stop after checking the top ranks.
-   * Similarity scores and rank numbers only reflect raw vector proximity to the overall query string.
-   * A candidate table at rank 10, 12, or 15 that directly matches a specific entity, noun, or concept in the question (e.g. "discrepancies details" -> "finopsiq.discrepancies_details") is ESSENTIAL and MUST BE SELECTED.
+   * You MUST scan the ENTIRE list down to the very last entry. Do NOT stop after
+     checking the query matches at the top.
+   * Similarity scores and rank numbers only reflect raw vector proximity to the
+     overall query string.
+   * A table far down the list that directly matches a specific entity, noun, or
+     concept in the question (e.g. "discrepancies details" ->
+     "finopsiq.discrepancies_details") is ESSENTIAL and MUST BE SELECTED.
 
 3. Deconstruct Query Concepts & Ensure 100% Concept Coverage:
 
-   * Identify ALL distinct entities, subjects, and concepts requested in the User Question and Semantic Context.
+   * Identify ALL distinct entities, subjects, and concepts requested in the User
+     Question and Semantic Context.
 
-     * For example, in "Show me all the discrepancies details for all the invoices", there are TWO distinct concepts:
+     * For example, in "Show me all the discrepancies details for all the invoices",
+       there are TWO distinct concepts:
        (1) "discrepancies details" (the primary data to show)
        (2) "invoices" (the target scope/filter/entity)
-   * For EVERY requested concept, check if any candidate table specifically represents it (by table name, description, or column attributes).
-   * If a candidate table directly represents a requested concept (e.g. table "discrepancies_details" for "discrepancies details"), YOU MUST SELECT THAT TABLE regardless of its rank or similarity score.
-   * NEVER select tables for only one concept while ignoring candidate tables that match the other concept (e.g. NEVER select only invoice tables when the user explicitly asked for discrepancies details!).
+   * For EVERY requested concept, check if any available table specifically
+     represents it (by table name, description, or column attributes).
+   * If a table directly represents a requested concept (e.g. table
+     "discrepancies_details" for "discrepancies details"), YOU MUST SELECT THAT
+     TABLE regardless of its position, similarity score or hop distance.
+   * NEVER select tables for only one concept while ignoring tables that match the
+     other concept (e.g. NEVER select only invoice tables when the user explicitly
+     asked for discrepancies details!).
 
 4. Table & Column Attribute Matching:
 
-   * Inspect both the table names and their column lists.
-   * If the user asks for specific attributes or details (such as "discrepancies details", "status", "line items", "validation results"), find and select the candidate table whose columns actually store those details (e.g. tables containing "discrepancy_summary", "has_discrepancy", "comparison_discrepancies_details").
+   * Inspect both the table names and their column lists where shown.
+   * If the user asks for specific attributes or details (such as "discrepancies
+     details", "status", "line items", "validation results"), find and select the
+     table whose columns actually store those details (e.g. tables containing
+     "discrepancy_summary", "has_discrepancy", "comparison_discrepancies_details").
 
-5. Multi-Entity Relationships & Join Path Completeness:
+5. Connectivity: the selection must form ONE connected set.
 
-   * When the question involves multiple related entities (e.g. invoices and discrepancies, orders and line items), select ALL necessary candidate tables for each entity.
+   * When the question involves multiple related entities (e.g. invoices and
+     discrepancies, orders and line items), select ALL the tables for each entity.
 
-   * After identifying the tables representing the requested entities, you MUST verify that those tables can actually be connected through valid relationships.
+   * Then verify, using the Relationships section ONLY, that the selected tables are
+     actually connected:
 
-   * Do NOT assume that two tables can be joined merely because both are relevant to the question.
+     * Tables = nodes.
+     * Listed relationships = edges.
+     * Every selected table must be reachable from every other selected table
+       through listed relationships.
 
-   * Do NOT assume a relationship based only on similar table names or similar column names.
+   * Do NOT assume two tables join merely because both are relevant to the question.
+   * Do NOT assume a relationship from similar table names or similar column names.
+     If it is not in the Relationships section, it does not exist.
 
-   * FIRST, check whether the required entity tables have a direct relationship/common key that can connect them.
+   * IF a direct relationship between two required tables exists, select them both
+     and you are done.
 
-   * IF a direct relationship exists, select the required tables and use that relationship.
+   * IF there is NO direct relationship, find an INTERMEDIATE table in the list that
+     is related to both, and SELECT IT TOO -- even though the question never
+     mentions it. This is exactly what the hop-discovered tables are there for.
 
-   * IF a direct relationship does NOT exist, scan ALL remaining Candidate Tables for an INTERMEDIATE/JOIN TABLE that can connect the required tables.
-
-   * The intermediate table MUST contain the appropriate key(s) or relationship needed to connect to the existing tables.
-
-   * If one intermediate table is not enough, continue searching for additional intermediate tables.
-
-   * You may select ONE, TWO, or ANY NUMBER of intermediate tables when necessary to create a complete join path.
+   * Select as many intermediate tables as the chain requires: ONE, TWO, or more.
 
    Example:
 
-   User requires:
-   A = invoices
-   B = discrepancies
+   Required: A = invoices, B = discrepancies
 
-   Direct relationship:
-   invoices ←X→ discrepancies
+   If no relationship links invoices and discrepancies directly, look for:
+   invoices -> invoice_documents -> discrepancies
+   and if that is not available:
+   invoices -> A -> B -> discrepancies
 
-   If no valid direct relationship exists, search for a candidate such as:
-   invoices → invoice_documents → discrepancies
-
-   If that is still not possible, continue searching for:
-   invoices → A → B → discrepancies
-
-   Every link in the path MUST be valid.
-
-   The final selected tables must therefore form a CONNECTED RELATIONSHIP PATH between all required entities.
+   Select EVERY table on the chain. Every link must appear in the Relationships
+   section.
 
    IMPORTANT:
 
-   * Every relationship/link in the path must be supported by a common key, known relationship, or explicitly compatible columns provided in the candidate information.
-
-   * Do NOT select an intermediate table merely because it is semantically related.
-
-   * The intermediate table must actually help connect the required entities.
-
-   * If a table connects to one entity but cannot connect onward to the next entity, it is NOT a valid bridge.
-
-   * If multiple relationships are required, ALL relationships must be connectable.
-
-   * It is NOT sufficient for every requested table to be individually relevant; the COMPLETE SET of selected tables must be joinable into the required relationship graph.
-
-   * When determining sufficiency, think of the selected tables as a graph:
-
-     * Tables = nodes.
-     * Valid relationships/common keys = edges.
-     * All required entity tables must belong to the same connected graph.
-     * Intermediate candidate tables may be added to create missing edges.
-
-   * If the required entity tables cannot be connected even after checking all Candidate Tables for possible intermediate tables, the candidate set is insufficient.
-
-   * In that case, set "sufficient": false and describe the missing relationship/table dependency in "missing_objects" and "retrieval_hint".
-
-   * Do NOT discard a candidate table that represents a requested concept simply because an explicit foreign key relationship is not listed in "Known Relationships Between Candidates". The table may still be connected through common keys or through one or more intermediate candidate tables. The downstream query generator handles the final database-specific query.
+   * Do NOT select an intermediate table merely because it is semantically related;
+     it must actually close a gap in the chain.
+   * If a table connects to one entity but cannot connect onward to the next, it is
+     NOT a valid bridge.
+   * Do NOT pad the selection. A table that is neither a requested concept nor a
+     link on a required chain must be LEFT OUT, no matter how close it sits.
 
 6. Sufficiency Determination:
 
-   * Set "sufficient": true if the selected candidate tables:
+   * Set "sufficient": true if the selected tables:
 
      * cover ALL required concepts, AND
      * contain all required information/attributes, AND
-     * form a complete, valid relationship path between all required entities.
+     * form ONE connected set under the listed relationships.
    * Set "sufficient": false ONLY if:
 
-     * a vital table or concept needed to answer the question is completely missing from the Candidate Tables list, OR
-     * the required tables cannot be connected through any valid direct or intermediate relationship using the available Candidate Tables.
-     * List the missing table concepts/names or missing relationship dependency in "missing_objects".
-     * Explain why the candidate set is insufficient in "reason".
-     * Provide a clear "retrieval_hint" text to search for the missing tables or relationship bridge.
-   * If no candidate tables are relevant to any part of the question, return "selected_objects": [], "sufficient": false, "missing_objects": [], "reason": "No relevant tables found in candidates", "retrieval_hint": null.
+     * a vital table or concept needed to answer the question is completely missing
+       from the Available Tables list, OR
+     * the required tables cannot be connected through any listed relationship, with
+       or without intermediate tables.
+     * List the missing table concepts/names or the missing link in "missing_objects".
+     * Explain why the available set is insufficient in "reason".
+     * Provide a clear "retrieval_hint" to search for the missing tables or bridge.
+   * If no available table is relevant to any part of the question, return
+     "selected_objects": [], "sufficient": false, "missing_objects": [],
+     "reason": "No relevant tables found", "retrieval_hint": null.
 
 7. Response Format & Concise Reasoning:
 
    * Return strictly valid JSON matching this schema:
      {{
-     "reason": "<Step-by-step evaluation: 1. Concepts identified from question; 2. Candidate table matches across all ranks; 3. Sufficiency determination>",
-     "selected_objects": ["<candidate_table_name_1>", "<candidate_table_name_2>"],
+     "reason": "<Step-by-step evaluation: 1. Concepts identified from question; 2. Table matches across the whole list; 3. Connectivity chain; 4. Sufficiency determination>",
+     "selected_objects": ["<table_name_1>", "<table_name_2>"],
      "sufficient": true,
      "missing_objects": ["<missing_table_or_concept>", ...],
      "retrieval_hint": "<descriptive retrieval query hint to find missing tables, or null>"
      }}
-   * Keep thinking concise. Complete reasoning and output the JSON before reaching token limits.
+   * Do NOT output relationships; they are attached to your selection automatically
+     from the schema.
+   * Keep thinking concise. Complete reasoning and output the JSON before reaching
+     token limits.
 
 User Question:
 {question}
@@ -137,27 +151,30 @@ Semantic Context:
 * Analytical objectives: {objective}
 * Linguistic nouns/entities: {linguistic}
 
-Candidate Tables (with similarity scores):
-{candidates_context}
+Available Tables:
+{tables_context}
+
+Relationships (the ONLY valid joins between these tables):
+{relationships_context}
 {feedback_context}
 
 ====================================================================
 NOW PRODUCE YOUR ANSWER.
 
-* Scan EVERY rank. Similarity rank is raw vector proximity and is often wrong
-  about which table is canonical.
-* If a candidate's table NAME is the concept asked about, select it even when
-  another table scored higher. A question about "invoices" means the table
-  named `invoices`, not a reminder/state/revision/log table that merely holds
-  invoice columns.
-* Prefer the canonical entity table over auxiliary ones (state, reminder,
-  revision, audit, link, history) unless the question asks for that aspect.
+* Scan EVERY table, to the end of the list. Similarity rank is raw vector
+  proximity and is often wrong about which table is canonical.
+* If a table's NAME is the concept asked about, select it even when another table
+  scored higher. A question about "invoices" means the table named `invoices`, not
+  a reminder/state/revision/log table that merely holds invoice columns.
+* Prefer the canonical entity table over auxiliary ones (state, reminder, revision,
+  audit, link, history) unless the question asks for that aspect.
+* Add every intermediate table required to connect your selection, and nothing else.
 * Do NOT write a summary or describe the schema in prose.
 
 Output NOTHING but one JSON object, in exactly this shape:
 {{
-"reason": "<brief: concepts; candidate matches; sufficiency>",
-"selected_objects": ["<candidate_table_name>"],
+"reason": "<brief: concepts; table matches; connectivity; sufficiency>",
+"selected_objects": ["<table_name>"],
 "sufficient": true,
 "missing_objects": [],
 "retrieval_hint": null

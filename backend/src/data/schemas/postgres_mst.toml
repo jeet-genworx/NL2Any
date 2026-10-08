@@ -1,7 +1,7 @@
 [graph]
 database_type = "postgresql"
 database_name = "nl2anyquery_db"
-generated_at = "2026-10-07T08:57:33.235329+00:00"
+generated_at = "2026-10-07T12:36:17.493155+00:00"
 node_count = 6
 total_edge_count = 5
 mst_edge_count = 5

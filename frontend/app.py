@@ -116,125 +116,86 @@ def _short(name: str) -> str:
     return name.split(".")[-1]
 
 
-def _path_arrow(candidate: dict) -> str:
-    """A candidate's table chain, or the object alone when it connects nothing."""
-    tables = candidate.get("tables") or []
-    if not tables:
-        return "(empty)"
-    return " → ".join(_short(t) for t in tables)
+def _render_table_neighborhood(neighborhood: dict | None, selected: list | None) -> None:
+    """Show the BFS walk that produced the tables the selector chose from.
 
-
-def _join_keys(candidate: dict) -> str:
-    """The columns each hop joins on.
-
-    Two candidates can walk the identical table chain and still be different
-    joins -- `flights → airports` via `origin_airport_id` or via
-    `destination_airport_id`, `discrepancies → genbooks_requests` via `match_id`
-    or via `discrepancies_id`. Those rows are indistinguishable without their
-    keys, which makes the table useless for exactly the case the stage exists to
-    surface.
+    The point of the stage is that the embedding matches are not the candidate
+    space: the bridge tables a query must join through are never semantically
+    similar to the question, so they arrive only by walking the foreign keys.
+    Seeing which tables the walk reached, at what distance, and which of them
+    survived selection is how a missing join gets diagnosed.
     """
-    edges = candidate.get("edges") or []
-    if not edges:
-        return "—"
-    return ", ".join(
-        f"{e.get('from_field', '')}={e.get('to_field', '')}" for e in edges
-    )
-
-
-def _render_join_paths(resolution: dict | None) -> None:
-    """Show every join path BFS enumerated, and which ones were chosen.
-
-    The point of the stage is that several real paths usually connect the same
-    tables and only the question says which is right, so the rejected candidates
-    matter as much as the chosen one: seeing that a query went through
-    `purchase_orders` when it should have gone through `invoices` is how a wrong
-    answer gets diagnosed.
-    """
-    if not resolution:
-        st.info(
-            "No join path resolution for this query. Fewer than two objects were "
-            "selected, or the schema has no relationships to walk."
-        )
+    if not neighborhood:
+        st.info("No table neighborhood for this query.")
         return
 
-    chosen_ids = set(resolution.get("chosen_path_ids") or [])
-    candidates = resolution.get("candidates") or []
+    tables = neighborhood.get("tables") or []
+    relationships = neighborhood.get("relationships") or []
+    seeds = neighborhood.get("seed_objects") or []
+    selected_lower = {str(s).lower() for s in (selected or [])}
 
     col1, col2, col3 = st.columns(3)
-    col1.metric("Paths found", len(candidates))
-    col2.metric("Paths chosen", len(chosen_ids))
-    col3.metric("Tables added", len(resolution.get("connector_objects") or []))
+    col1.metric("Query matches", len(seeds))
+    col2.metric("Tables discovered", max(len(tables) - len(seeds), 0))
+    col3.metric("Relationships", len(relationships))
 
-    if resolution.get("fallback_used"):
+    st.caption(
+        f"Breadth-first walk of up to {neighborhood.get('max_levels', 0)} hop(s) "
+        f"from each query match, capped at {neighborhood.get('max_tables', 0)} tables."
+    )
+
+    discarded = neighborhood.get("discarded_objects") or []
+    if neighborhood.get("truncated") and discarded:
         st.warning(
-            "The model's choice could not be used, so the shortest path per pair "
-            "was taken instead. Treat the selection below as a default, not a decision."
+            f"The cap discarded {len(discarded)} table(s) at the far end of the walk: "
+            + ", ".join(f"`{_short(d)}`" for d in discarded[:12])
+            + ("..." if len(discarded) > 12 else "")
         )
-    elif not resolution.get("slm_invoked"):
-        st.caption("Resolved deterministically -- the model was not consulted.")
 
-    connectors = resolution.get("connector_objects") or []
-    if connectors:
-        st.markdown(
-            "**Tables added to bridge the selection:** "
-            + ", ".join(f"`{_short(c)}`" for c in connectors)
-        )
-    dropped = resolution.get("dropped_objects") or []
-    if dropped:
-        st.markdown(
-            "**Dropped as unrelated to the question:** "
-            + ", ".join(f"`{_short(d)}`" for d in dropped)
-        )
-    unjoinable = resolution.get("unjoinable_objects") or []
-    if unjoinable:
-        st.warning(
-            "No foreign-key path connects "
-            + ", ".join(f"`{_short(u)}`" for u in unjoinable)
-            + " to the rest of the query. Any join between them would be invented."
-        )
-    if resolution.get("reason"):
-        st.caption(f"Reason given: {resolution['reason']}")
-
-    if not candidates:
-        st.info("No candidate paths were enumerated.")
+    if not tables:
+        st.info("The walk reached no tables.")
         return
 
-    st.markdown("**Enumerated paths** (chosen ones marked ✅):")
+    # Sorted here rather than in the frame: "query match" and "2 hop(s)" do not
+    # order correctly as strings, and the selected rows belong at the top.
+    ordered = sorted(
+        tables,
+        key=lambda t: (
+            str(t.get("name", "")).lower() not in selected_lower,
+            t.get("level", 0),
+            str(t.get("name", "")),
+        ),
+    )
     rows = []
-    for c in candidates:
+    for t in ordered:
+        similarity = t.get("similarity")
         rows.append(
             {
-                "": "✅" if c.get("path_id") in chosen_ids else "",
-                "Id": c.get("path_id", ""),
-                "Path": _path_arrow(c),
-                "Hops": c.get("hops", 0),
-                "Join keys": _join_keys(c),
-                "Kind": "connected" if c.get("connected", True) else "standalone",
-                "Note": c.get("note", ""),
+                "": "✅" if str(t.get("name", "")).lower() in selected_lower else "",
+                "Table": _short(t.get("name", "")),
+                "Distance": "query match" if t.get("level", 0) == 0 else f"{t.get('level')} hop(s)",
+                "Reached from": ", ".join(_short(r) for r in (t.get("reached_from") or [])),
+                "Similarity": f"{similarity:.4f}" if isinstance(similarity, (int, float)) else "—",
+                "Description": (t.get("description") or "")[:160],
             }
         )
-    # Chosen first, then shortest, so the decision is visible without scrolling.
-    paths_df = pd.DataFrame(rows).sort_values(
-        by=["", "Hops", "Id"], ascending=[False, True, True]
-    )
-    st.dataframe(paths_df, hide_index=True, use_container_width=True)
+    # Selected first, then nearest, so the decision is visible without scrolling.
+    st.markdown("**Tables offered to the selector** (selected ones marked ✅):")
+    st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
 
-    chosen = [c for c in candidates if c.get("path_id") in chosen_ids]
-    if chosen:
-        st.markdown("**Join conditions from the chosen paths:**")
-        for c in chosen:
-            edges = c.get("edges") or []
-            if not edges:
-                st.markdown(f"- `{c.get('path_id')}` {_path_arrow(c)} — standalone, no join")
-                continue
-            st.markdown(f"- `{c.get('path_id')}` {_path_arrow(c)} ({c.get('hops', 0)} hops)")
-            for e in edges:
-                st.code(
-                    f"{_short(e.get('from_object',''))}.{e.get('from_field','')}"
-                    f" = {_short(e.get('to_object',''))}.{e.get('to_field','')}",
-                    language="sql",
-                )
+    if relationships:
+        st.markdown("**Relationships among these tables:**")
+        rel_rows = [
+            {
+                "From": f"{_short(r.get('from_object', ''))}.{r.get('from_field', '')}",
+                "To": f"{_short(r.get('to_object', ''))}.{r.get('to_field', '')}",
+                "Type": r.get("relationship_type", ""),
+            }
+            for r in relationships
+        ]
+        st.dataframe(pd.DataFrame(rel_rows), hide_index=True, use_container_width=True)
+    else:
+        st.info("No foreign keys link these tables; any join between them would be invented.")
 
 
 # Sidebar
@@ -589,12 +550,40 @@ if run_btn and question.strip():
         else:
             st.info("No candidate tables retrieved or applicable.")
 
+    with st.expander("Table Neighborhood (BFS)"):
+        _render_table_neighborhood(
+            data.get("table_neighborhood"), data.get("selected_objects")
+        )
+
     with st.expander("Table Selection"):
         st.markdown(f"**Selected Tables / Objects:** `{data.get('selected_objects', [])}`")
         st.markdown(f"**Selection Retries:** {data.get('selection_retries', 0)}")
-
-    with st.expander("Join Path Resolution (BFS)"):
-        _render_join_paths(data.get("join_path_resolution"))
+        notice = data.get("selection_notice")
+        if notice:
+            st.warning(notice)
+        connectors = data.get("connector_objects") or []
+        if connectors:
+            st.markdown(
+                "**Bridge tables added to make the selection joinable:** "
+                + ", ".join(f"`{_short(c)}`" for c in connectors)
+            )
+        unjoinable = data.get("unjoinable_objects") or []
+        if unjoinable:
+            st.warning(
+                "Dropped as unjoinable (no foreign-key path to the rest of the query): "
+                + ", ".join(f"`{_short(u)}`" for u in unjoinable)
+            )
+        selected_rels = data.get("selected_relationships") or []
+        if selected_rels:
+            st.markdown("**Relationships passed to the planner:**")
+            for r in selected_rels:
+                st.code(
+                    f"{_short(r.get('from_object', ''))}.{r.get('from_field', '')}"
+                    f" = {_short(r.get('to_object', ''))}.{r.get('to_field', '')}",
+                    language="sql",
+                )
+        else:
+            st.caption("No relationships accompany this selection.")
 
     with st.expander("Relevant Schema"):
         st.json(data.get("relevant_schema", {}))

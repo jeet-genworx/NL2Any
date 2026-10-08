@@ -40,12 +40,18 @@ User Question
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
-│ Table Selector SLM          (Bounded sufficiency retry ≤ 3) │
+│ Table Neighborhood (BFS)    (≤ 3 hops from each match)      │
 └─────────────────────────────┬───────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
-│ Relationship Expander       (Deterministic foreign keys)    │
+│ Table Selector SLM          (tables + relationships;        │
+│                              bounded sufficiency retry ≤ 3) │
+└─────────────────────────────┬───────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│ Schema Materializer         (columns for the chosen tables) │
 └─────────────────────────────┬───────────────────────────────┘
                               │
                               ▼
@@ -160,6 +166,7 @@ nl-anyql/
 │       │       │   ├── planner.py
 │       │       │   ├── policy.py
 │       │       │   ├── results.py
+│       │       │   ├── join_graph.py
 │       │       │   ├── selector.py
 │       │       │   ├── semantic.py
 │       │       │   ├── validator.py

@@ -9,6 +9,7 @@ from backend.src.schemas.pipeline import (
     PolicyResult,
     QueryPlan,
     SemanticAnalysisResult,
+    TableNeighborhood,
     TableSelectionResult,
     ValidationErrorType,
     ValidationResult,
@@ -433,11 +434,16 @@ async def test_orchestrator_selector_retry_success(test_schema):
 
 
 @pytest.mark.asyncio
-async def test_orchestrator_selector_exhaustion(test_schema):
+async def test_orchestrator_proceeds_when_selector_doubts_a_usable_selection(test_schema):
+    """Insufficiency with joinable tables in hand is doubt, not a dead end.
+
+    The selector's usual reason for reporting insufficiency is a join it could
+    not see, and that is settled deterministically before this point. Failing
+    the run would discard a usable answer, so the doubt rides on the response.
+    """
     retriever = MockVectorRetriever([
         CandidateTable(table_name="customers", similarity=0.88, rank=1)
     ])
-
     selector = MockSelector([
         TableSelectionResult(
             selected_objects=["customers"],
@@ -454,11 +460,57 @@ async def test_orchestrator_selector_exhaustion(test_schema):
         guardrail=MockGuardrail(GuardrailDecision.READ_QUERY),
         semantic=MockSemantic(),
         selector=selector,
+        planner=MockPlanner(),
+        postgres_gen=MockPostgresGen(),
+        validator=MockValidator(),
+        policy=MockPolicy(),
+        executor=MockExecutor(),
+        descriptions_client=MockDescriptionsClient(),
         max_retries=3,
     )
     orchestrator._schemas[DatabaseType.POSTGRESQL] = test_schema
+    orchestrator._schemas["postgres"] = test_schema
 
     resp = await orchestrator.execute_pipeline("Show mysterious data", database="postgres")
+
+    assert resp.error is None
+    assert resp.selected_objects == ["customers"]
+    assert resp.selection_retries == 3
+    assert resp.selection_notice is not None
+    assert "Missing unknown table." in resp.selection_notice
+    assert "unknown_table" in resp.selection_notice
+    assert resp.results is not None
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_selector_exhaustion_with_nothing_selected(test_schema):
+    """No tables at all is still a dead end -- there is nothing to plan over."""
+    retriever = MockVectorRetriever([
+        CandidateTable(table_name="customers", similarity=0.88, rank=1)
+    ])
+    selector = MockSelector([
+        TableSelectionResult(
+            selected_objects=[],
+            sufficient=False,
+            missing_objects=["unknown_table"],
+            reason="Nothing relevant.",
+            retrieval_hint="hint",
+        )
+    ])
+
+    orchestrator = NL2AnyQueryOrchestrator(
+        embedding_provider=MockEmbeddingProvider(),
+        vector_retriever=retriever,
+        guardrail=MockGuardrail(GuardrailDecision.READ_QUERY),
+        semantic=MockSemantic(),
+        selector=selector,
+        max_retries=3,
+    )
+    orchestrator._schemas[DatabaseType.POSTGRESQL] = test_schema
+    orchestrator._schemas["postgres"] = test_schema
+
+    resp = await orchestrator.execute_pipeline("Show mysterious data", database="postgres")
+
     assert "could not be identified reliably after maximum retries" in resp.error
     assert resp.selection_retries == 3
     assert resp.results is None
@@ -605,27 +657,25 @@ class RecordingPlanner:
         return QueryPlan(sources=["customers"], projections=["id"])
 
 
-class MockPathSelectorStage:
-    """Join path selector backed by the real graph, with a scripted model choice."""
+class RecordingSelector:
+    """Table selector that records the neighborhood it was handed.
 
-    def __init__(self, chosen: list[str]) -> None:
-        from backend.src.core.query_processing.pipeline.path_selector import JoinPathSelector
+    The neighborhood is the stage's whole input, and the thing that regressed
+    silently before: a selection is only as good as the tables it was offered.
+    """
 
-        class _Provider:
-            def __init__(self, ids: list[str]) -> None:
-                self.ids = ids
-
-            async def generate(self, prompt: str, **kwargs) -> str:
-                import json
-
-                return json.dumps({"chosen_paths": self.ids, "reason": "scripted"})
-
-        self._inner = JoinPathSelector(provider=_Provider(chosen))
+    def __init__(self, results: list[TableSelectionResult] | None = None) -> None:
+        self.results = results or [
+            TableSelectionResult(selected_objects=["customers"], sufficient=True)
+        ]
         self.call_count = 0
+        self.seen_neighborhoods: list[TableNeighborhood] = []
 
-    async def resolve(self, **kwargs):
+    async def select(self, **kwargs) -> TableSelectionResult:
+        self.seen_neighborhoods.append(kwargs["neighborhood"])
+        idx = min(self.call_count, len(self.results) - 1)
         self.call_count += 1
-        return await self._inner.resolve(**kwargs)
+        return self.results[idx]
 
 
 @pytest.fixture
@@ -671,11 +721,16 @@ def transitive_schema() -> DatabaseSchema:
 
 
 @pytest.mark.asyncio
-async def test_pipeline_gives_planner_the_connector_tables(transitive_schema):
-    """The transitive case: selecting only the endpoints must still reach the planner
-    with the intervening tables, so no join condition has to be invented."""
+async def test_pipeline_offers_bfs_discovered_tables_to_the_selector(transitive_schema):
+    """The transitive case: the bridge table is never retrieved, so the walk must
+    supply it and the selector must be able to choose it."""
     planner = RecordingPlanner()
-    path_selector = MockPathSelectorStage(chosen=["p1"])
+    selector = RecordingSelector([
+        TableSelectionResult(
+            selected_objects=["customers", "orders", "order_items", "products"],
+            sufficient=True,
+        )
+    ])
 
     orchestrator = NL2AnyQueryOrchestrator(
         embedding_provider=MockEmbeddingProvider(),
@@ -685,10 +740,65 @@ async def test_pipeline_gives_planner_the_connector_tables(transitive_schema):
         ]),
         guardrail=MockGuardrail(GuardrailDecision.READ_QUERY),
         semantic=MockSemantic(),
-        selector=MockSelector([
-            TableSelectionResult(selected_objects=["customers", "products"], sufficient=True)
+        selector=selector,
+        planner=planner,
+        postgres_gen=MockPostgresGen(),
+        validator=MockValidator(),
+        policy=MockPolicy(),
+        executor=MockExecutor(),
+        descriptions_client=MockDescriptionsClient(),
+    )
+    # Keyed by the resolved target as well, so the walk runs over this schema
+    # rather than whatever postgres.toml happens to hold.
+    orchestrator._schemas[DatabaseType.POSTGRESQL] = transitive_schema
+    orchestrator._schemas["postgres"] = transitive_schema
+
+    resp = await orchestrator.execute_pipeline(
+        "Which products do customers buy?", database="postgres"
+    )
+
+    assert resp.error is None
+
+    # The selector was offered the two matches plus everything within reach.
+    assert selector.call_count == 1
+    offered = selector.seen_neighborhoods[0]
+    assert offered.seed_objects == ["customers", "products"]
+    assert set(offered.table_names()) == {"customers", "orders", "order_items", "products"}
+    assert {t.name: t.level for t in offered.tables}["order_items"] == 1
+    assert len(offered.relationships) == 3
+
+    # The planner got exactly what the selector chose, with the join chain intact.
+    assert planner.seen_object_names
+    assert set(planner.seen_object_names[0]) == {"customers", "orders", "order_items", "products"}
+
+    # And the walk is on the response for inspection.
+    assert resp.table_neighborhood is not None
+    assert set(resp.table_neighborhood.table_names()) == {
+        "customers",
+        "orders",
+        "order_items",
+        "products",
+    }
+    assert resp.selected_objects == ["customers", "orders", "order_items", "products"]
+    assert len(resp.selected_relationships) == 3
+
+
+@pytest.mark.asyncio
+async def test_planner_relationships_are_limited_to_the_selected_tables(transitive_schema):
+    """A selection that stops short of the bridge gets no edge it cannot use."""
+    planner = RecordingPlanner()
+    selector = RecordingSelector([
+        TableSelectionResult(selected_objects=["customers", "orders"], sufficient=True)
+    ])
+
+    orchestrator = NL2AnyQueryOrchestrator(
+        embedding_provider=MockEmbeddingProvider(),
+        vector_retriever=MockVectorRetriever([
+            CandidateTable(table_name="customers", similarity=0.9, rank=1),
         ]),
-        path_selector=path_selector,
+        guardrail=MockGuardrail(GuardrailDecision.READ_QUERY),
+        semantic=MockSemantic(),
+        selector=selector,
         planner=planner,
         postgres_gen=MockPostgresGen(),
         validator=MockValidator(),
@@ -697,42 +807,30 @@ async def test_pipeline_gives_planner_the_connector_tables(transitive_schema):
         descriptions_client=MockDescriptionsClient(),
     )
     orchestrator._schemas[DatabaseType.POSTGRESQL] = transitive_schema
+    orchestrator._schemas["postgres"] = transitive_schema
 
-    resp = await orchestrator.execute_pipeline(
-        "Which products do customers buy?", database="postgres"
-    )
+    resp = await orchestrator.execute_pipeline("How many orders per customer?", database="postgres")
 
     assert resp.error is None
-    assert path_selector.call_count == 1
-
-    # The planner saw the whole join chain, not just the two selected endpoints.
-    assert planner.seen_object_names
-    assert set(planner.seen_object_names[0]) == {"customers", "orders", "order_items", "products"}
-
-    # And the decision is on the response for inspection.
-    resolution = resp.join_path_resolution
-    assert resolution is not None
-    assert resolution.slm_invoked is True
-    assert resolution.fallback_used is False
-    assert sorted(resolution.connector_objects) == ["order_items", "orders"]
-    assert resolution.dropped_objects == []
-    assert resp.selected_objects == ["customers", "products"]
+    assert set(planner.seen_object_names[0]) == {"customers", "orders"}
+    assert [(r.from_object, r.to_object) for r in resp.selected_relationships] == [
+        ("orders", "customers")
+    ]
 
 
 @pytest.mark.asyncio
-async def test_pipeline_records_resolution_for_single_table(test_schema):
-    """A one-table question needs no path, and must not pay for a model call."""
-    path_selector = MockPathSelectorStage(chosen=[])
+async def test_pipeline_records_the_neighborhood_for_a_single_table(test_schema):
+    """A one-table question still records the walk, and needs no relationships."""
+    selector = RecordingSelector([
+        TableSelectionResult(selected_objects=["customers"], sufficient=True)
+    ])
 
     orchestrator = NL2AnyQueryOrchestrator(
         embedding_provider=MockEmbeddingProvider(),
         vector_retriever=MockVectorRetriever(),
         guardrail=MockGuardrail(GuardrailDecision.READ_QUERY),
         semantic=MockSemantic(),
-        selector=MockSelector([
-            TableSelectionResult(selected_objects=["customers"], sufficient=True)
-        ]),
-        path_selector=path_selector,
+        selector=selector,
         planner=MockPlanner(),
         postgres_gen=MockPostgresGen(),
         validator=MockValidator(),
@@ -741,10 +839,121 @@ async def test_pipeline_records_resolution_for_single_table(test_schema):
         descriptions_client=MockDescriptionsClient(),
     )
     orchestrator._schemas[DatabaseType.POSTGRESQL] = test_schema
+    orchestrator._schemas["postgres"] = test_schema
 
     resp = await orchestrator.execute_pipeline("Show customers", database="postgres")
 
     assert resp.error is None
-    assert resp.join_path_resolution is not None
-    assert resp.join_path_resolution.slm_invoked is False
-    assert resp.join_path_resolution.resolved_objects == ["customers"]
+    assert resp.table_neighborhood is not None
+    assert resp.table_neighborhood.seed_objects == ["customers"]
+    assert resp.selected_objects == ["customers"]
+    assert resp.selected_relationships == []
+
+
+@pytest.mark.asyncio
+async def test_pipeline_repairs_a_disconnected_selection(transitive_schema):
+    """The observed FinOps failure, in miniature.
+
+    The selector picks the two endpoints and omits the bridge -- it did this on
+    four runs out of four against the real schema -- so the planner would get
+    `customers` and `products` with no edge between them. The repair must close
+    that gap before the slice is built.
+    """
+    planner = RecordingPlanner()
+    selector = RecordingSelector([
+        TableSelectionResult(selected_objects=["customers", "products"], sufficient=True)
+    ])
+
+    orchestrator = NL2AnyQueryOrchestrator(
+        embedding_provider=MockEmbeddingProvider(),
+        vector_retriever=MockVectorRetriever([
+            CandidateTable(table_name="customers", similarity=0.9, rank=1),
+            CandidateTable(table_name="products", similarity=0.88, rank=2),
+        ]),
+        guardrail=MockGuardrail(GuardrailDecision.READ_QUERY),
+        semantic=MockSemantic(),
+        selector=selector,
+        planner=planner,
+        postgres_gen=MockPostgresGen(),
+        validator=MockValidator(),
+        policy=MockPolicy(),
+        executor=MockExecutor(),
+        descriptions_client=MockDescriptionsClient(),
+    )
+    orchestrator._schemas[DatabaseType.POSTGRESQL] = transitive_schema
+    orchestrator._schemas["postgres"] = transitive_schema
+
+    resp = await orchestrator.execute_pipeline(
+        "Which products do customers buy?", database="postgres"
+    )
+
+    assert resp.error is None
+    assert sorted(resp.connector_objects) == ["order_items", "orders"]
+    assert set(resp.selected_objects) == {"customers", "orders", "order_items", "products"}
+    # Every selected table now has a way in: three edges across four tables.
+    assert len(resp.selected_relationships) == 3
+    assert set(planner.seen_object_names[0]) == {
+        "customers",
+        "orders",
+        "order_items",
+        "products",
+    }
+    assert resp.unjoinable_objects == []
+
+
+@pytest.mark.asyncio
+async def test_pipeline_drops_a_table_nothing_can_join_to(test_schema):
+    """A table with no path to the rest would force an invented join."""
+    from backend.src.data.models.schema import Relationship
+
+    schema = DatabaseSchema(
+        database_type=DatabaseType.POSTGRESQL,
+        database_name="test_shop",
+        objects=list(test_schema.objects)
+        + [
+            SchemaObject(
+                name="audit_log",
+                kind=SchemaObjectKind.TABLE,
+                fields=[Field(name="id", type="integer")],
+            )
+        ],
+        relationships=[
+            Relationship(
+                from_object="orders",
+                from_field="customer_id",
+                to_object="customers",
+                to_field="id",
+            )
+        ],
+    )
+    planner = RecordingPlanner()
+    selector = RecordingSelector([
+        TableSelectionResult(
+            selected_objects=["customers", "orders", "audit_log"], sufficient=True
+        )
+    ])
+
+    orchestrator = NL2AnyQueryOrchestrator(
+        embedding_provider=MockEmbeddingProvider(),
+        vector_retriever=MockVectorRetriever([
+            CandidateTable(table_name="customers", similarity=0.9, rank=1),
+        ]),
+        guardrail=MockGuardrail(GuardrailDecision.READ_QUERY),
+        semantic=MockSemantic(),
+        selector=selector,
+        planner=planner,
+        postgres_gen=MockPostgresGen(),
+        validator=MockValidator(),
+        policy=MockPolicy(),
+        executor=MockExecutor(),
+        descriptions_client=MockDescriptionsClient(),
+    )
+    orchestrator._schemas[DatabaseType.POSTGRESQL] = schema
+    orchestrator._schemas["postgres"] = schema
+
+    resp = await orchestrator.execute_pipeline("Show customer orders", database="postgres")
+
+    assert resp.error is None
+    assert resp.unjoinable_objects == ["audit_log"]
+    assert set(resp.selected_objects) == {"customers", "orders"}
+    assert "audit_log" not in planner.seen_object_names[0]

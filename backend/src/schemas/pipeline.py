@@ -71,51 +71,61 @@ class EmbeddingRetrievalResult(BaseModel):
     candidates: list[CandidateTable] = PydanticField(default_factory=list)
 
 
+class NeighborhoodTable(BaseModel):
+    """One schema object in the table neighborhood handed to the table selector.
+
+    `level` is how many foreign-key hops away from the nearest embedding match
+    the object sits: 0 means it *is* an embedding match, 1 a direct neighbor of
+    one, and so on up to the traversal limit. `reached_from` names the embedding
+    matches whose breadth-first walk discovered it, which is what explains to
+    the selector why a table it never searched for is on the list at all.
+    """
+
+    name: str
+    description: str = ""
+    kind: str = "table"
+    level: int = 0
+    similarity: float | None = None
+    rank: int | None = None
+    reached_from: list[str] = PydanticField(default_factory=list)
+
+
+class TableNeighborhood(BaseModel):
+    """Embedding matches plus every table reachable from them within N hops.
+
+    This is the whole candidate space the table selector chooses from: the
+    embedding matches are the seeds, and breadth-first traversal of the
+    foreign-key graph supplies the tables a question needs but never names --
+    the bridge tables, and the entity tables one hop past them.
+    """
+
+    seed_objects: list[str] = PydanticField(default_factory=list)
+    tables: list[NeighborhoodTable] = PydanticField(default_factory=list)
+    relationships: list[Relationship] = PydanticField(default_factory=list)
+    max_levels: int = 0
+    max_tables: int = 0
+    truncated: bool = False
+    discarded_objects: list[str] = PydanticField(default_factory=list)
+
+    def table_names(self) -> list[str]:
+        """Names of every table in the neighborhood, seeds first."""
+        return [t.name for t in self.tables]
+
+
 class TableSelectionResult(BaseModel):
-    """Result of Table Selector SLM."""
+    """Result of Table Selector SLM.
+
+    `selected_relationships` is derived in Python from the neighborhood's edges
+    rather than read from the model: the model chooses tables, and which
+    foreign keys connect them is a fact of the schema, not an opinion.
+    """
 
     selected_objects: list[str] = PydanticField(default_factory=list)
+    selected_relationships: list[Relationship] = PydanticField(default_factory=list)
     sufficient: bool = True
     missing_objects: list[str] = PydanticField(default_factory=list)
     reason: str = ""
     retrieval_hint: str | None = None
-
-
-class JoinPathCandidate(BaseModel):
-    """One candidate way of connecting selected schema objects.
-
-    A connected candidate is a simple foreign-key path between two selected
-    objects, carrying the ordered tables it walks through and the exact edges
-    to join on. A candidate with `connected=False` is a selected object that
-    has no path to any other selected object within the hop limit -- it is
-    offered as a candidate in its own right so the path selector can decide
-    whether the question really is about that standalone object, or whether it
-    was picked up in error and should be dropped.
-    """
-
-    path_id: str
-    endpoints: list[str] = PydanticField(default_factory=list)
-    tables: list[str] = PydanticField(default_factory=list)
-    edges: list[Relationship] = PydanticField(default_factory=list)
-    hops: int = 0
-    connected: bool = True
-    component_id: int = 0
-    note: str = ""
-
-
-class JoinPathResolution(BaseModel):
-    """Outcome of join-path resolution between table selection and expansion."""
-
-    selected_objects: list[str] = PydanticField(default_factory=list)
-    candidates: list[JoinPathCandidate] = PydanticField(default_factory=list)
-    chosen_path_ids: list[str] = PydanticField(default_factory=list)
-    resolved_objects: list[str] = PydanticField(default_factory=list)
-    connector_objects: list[str] = PydanticField(default_factory=list)
-    dropped_objects: list[str] = PydanticField(default_factory=list)
-    unjoinable_objects: list[str] = PydanticField(default_factory=list)
-    slm_invoked: bool = False
-    fallback_used: bool = False
-    reason: str = ""
 
 
 class RelevantSchema(BaseModel):
@@ -246,7 +256,11 @@ class PipelineResponse(BaseModel):
     candidate_objects: list[str] = PydanticField(default_factory=list)
     candidate_tables: list[CandidateTable] = PydanticField(default_factory=list)
     selected_objects: list[str] = PydanticField(default_factory=list)
-    join_path_resolution: JoinPathResolution | None = None
+    selected_relationships: list[Relationship] = PydanticField(default_factory=list)
+    connector_objects: list[str] = PydanticField(default_factory=list)
+    unjoinable_objects: list[str] = PydanticField(default_factory=list)
+    selection_notice: str | None = None
+    table_neighborhood: TableNeighborhood | None = None
     relevant_schema: dict[str, Any] | None = None
     query_plan: QueryPlan | None = None
     generated_query: str | dict[str, Any] | None = None
