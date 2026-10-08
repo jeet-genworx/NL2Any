@@ -65,14 +65,16 @@ def list_databases_endpoint() -> dict[str, Any]:
 async def select_database_endpoint(
     database_type: str,
     background_tasks: BackgroundTasks,
+    stage1_provider: str = "koboldcpp",
 ) -> dict[str, Any]:
     """Notify backend that a database was selected in the frontend.
 
     Triggers non-blocking Stage 1 KV cache warm-up as a background task.
     """
     target = resolve_db_target(database_type)
+    normalized = (stage1_provider or "koboldcpp").strip().lower()
     slot = None
-    if settings.koboldcpp_admin_enabled:
+    if normalized in ("koboldcpp", "slm") and settings.koboldcpp_admin_enabled:
         try:
             cache_mgr = get_cache_manager()
             slot = cache_mgr.get_or_allocate_slot(target.key)
@@ -82,10 +84,17 @@ async def select_database_endpoint(
             schema = orc.get_or_load_schema(target)
             selector = TableSelector(cache_manager=cache_mgr)
             background_tasks.add_task(cache_mgr.trigger_warmup, target, selector, schema)
-            return {"status": "warming", "database": target.key, "slot": slot}
+            return {"status": "warming", "database": target.key, "slot": slot, "provider": normalized}
         except Exception as err:
             logger.debug("Failed to schedule background warm-up for %s: %s", target.key, err)
-    return {"status": "ok", "database": target.key, "slot": slot}
+            return {"status": "ok", "database": target.key, "slot": slot, "provider": normalized}
+    return {
+        "status": "skipped",
+        "database": target.key,
+        "slot": None,
+        "provider": normalized,
+        "reason": "KV cache warm-up is only enabled for koboldcpp provider",
+    }
 
 
 

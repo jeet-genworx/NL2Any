@@ -8,6 +8,7 @@ from typing import Any
 from backend.src.config import settings
 from backend.src.utils.text_utils import (
     clean_unreadable_characters,
+    estimate_token_count,
     extract_json_block,
     strip_ansi_escapes,
     strip_think_tags,
@@ -72,6 +73,7 @@ class PostgresQueryGenerator(QueryGenerator):
     ) -> None:
         self.provider = provider or KoboldCppProvider()
         self.prompt_path = Path(prompt_path or DEFAULT_POSTGRES_PROMPT)
+        self.last_prompt_tokens: int = 0
 
     def _load_prompt_template(self) -> str:
         if self.prompt_path.exists():
@@ -90,6 +92,7 @@ class PostgresQueryGenerator(QueryGenerator):
         **kwargs: Any,
     ) -> GeneratedQuery | GeneratorMissingInfo:
         """Generate PostgreSQL query or return missing-information feedback."""
+        self.last_prompt_tokens = 0
         # Detect whether arguments were passed as (question, schema) or (question, plan, schema)
         if isinstance(schema, RelevantSchema):
             active_schema = schema
@@ -118,6 +121,7 @@ class PostgresQueryGenerator(QueryGenerator):
             schema_context=schema_context,
             feedback_section=feedback_section,
         )
+        self.last_prompt_tokens = estimate_token_count(prompt)
 
         raw_response = await self.provider.generate(
             prompt=prompt,

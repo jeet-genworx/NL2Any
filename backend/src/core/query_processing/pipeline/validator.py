@@ -168,6 +168,13 @@ class QueryValidator(BaseQueryValidator):
             provider=self.provider, prompt_path=prompt_path
         )
 
+    @property
+    def last_prompt_tokens(self) -> int:
+        return max(
+            getattr(self.postgres_validator, "last_prompt_tokens", 0),
+            getattr(self.mongo_validator, "last_prompt_tokens", 0),
+        )
+
     async def validate(
         self,
         question: str,

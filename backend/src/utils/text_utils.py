@@ -5,6 +5,16 @@ import re
 from typing import Any
 
 
+def estimate_token_count(text: str) -> int:
+    """Provide a reliable heuristic estimate of LLM token count for a text prompt.
+
+    Uses standard industry heuristic: ~3.8 characters per token for English & code/SQL/JSON.
+    """
+    if not text:
+        return 0
+    return max(1, round(len(text) / 3.8))
+
+
 def strip_think_tags(text: str) -> str:
     """Strip <think>...</think> reasoning blocks from model output.
 

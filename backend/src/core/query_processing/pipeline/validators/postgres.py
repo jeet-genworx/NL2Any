@@ -8,6 +8,7 @@ from typing import Any
 from backend.src.config import settings
 from backend.src.utils.text_utils import (
     clean_unreadable_characters,
+    estimate_token_count,
     extract_json_block,
     strip_ansi_escapes,
 )
@@ -54,6 +55,7 @@ class PostgresQueryValidator(QueryValidator):
     ) -> None:
         self.provider = provider or KoboldCppProvider()
         self.prompt_path = Path(prompt_path or DEFAULT_POSTGRES_VALIDATOR_PROMPT)
+        self.last_prompt_tokens: int = 0
 
     def _load_prompt_template(self) -> str:
         if self.prompt_path.exists():
@@ -72,6 +74,7 @@ class PostgresQueryValidator(QueryValidator):
         **kwargs: Any,
     ) -> ValidationResult:
         """Validate generated PostgreSQL query using safety checks and SLM verification."""
+        self.last_prompt_tokens = 0
         if isinstance(generated_query, GeneratedQuery):
             active_query = generated_query
             active_schema = schema if isinstance(schema, RelevantSchema) else kwargs.get("schema", RelevantSchema())
@@ -116,6 +119,7 @@ class PostgresQueryValidator(QueryValidator):
             schema_context=schema_context,
             query_context=active_query.formatted_query,
         )
+        self.last_prompt_tokens = estimate_token_count(prompt)
 
         try:
             raw_response = await self.provider.generate(
@@ -152,6 +156,8 @@ class PostgresQueryValidator(QueryValidator):
             return ValidationResult.model_validate(data)
 
         except Exception as err:
+            if kwargs.get("fail_fast", False):
+                raise
             logger.warning("Postgres validation SLM call failed: %s. Lenient fallback: accepting query.", err)
             return ValidationResult(
                 valid=True,

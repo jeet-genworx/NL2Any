@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from backend.src.config import settings
-from backend.src.utils.text_utils import extract_json_block
+from backend.src.utils.text_utils import estimate_token_count, extract_json_block
 from backend.src.schemas.pipeline import GeneratedQuery, GeneratorMissingInfo, MongoQuery, RelevantSchema
 from backend.src.data.models.schema import DatabaseType
 from backend.src.core.query_processing.pipeline.generators.base import QueryGenerator
@@ -40,6 +40,7 @@ class MongoQueryGenerator(QueryGenerator):
     ) -> None:
         self.provider = provider or KoboldCppProvider()
         self.prompt_path = Path(prompt_path or DEFAULT_MONGO_PROMPT)
+        self.last_prompt_tokens: int = 0
 
     def _load_prompt_template(self) -> str:
         if self.prompt_path.exists():
@@ -58,6 +59,7 @@ class MongoQueryGenerator(QueryGenerator):
         **kwargs: Any,
     ) -> GeneratedQuery | GeneratorMissingInfo:
         """Generate typed MongoQuery or return missing-information feedback."""
+        self.last_prompt_tokens = 0
         # Detect whether arguments were passed as (question, schema) or (question, plan, schema)
         if isinstance(schema, RelevantSchema):
             active_schema = schema
@@ -85,6 +87,7 @@ class MongoQueryGenerator(QueryGenerator):
             schema_context=schema_context,
             feedback_section=feedback_section,
         )
+        self.last_prompt_tokens = estimate_token_count(prompt)
 
         raw_response = await self.provider.generate(
             prompt=prompt,

@@ -18,13 +18,36 @@ class GeminiProvider:
         self,
         api_key: str | None = None,
         model: str | None = None,
+        base_url: str | None = None,
         temperature: float | None = None,
         max_tokens: int | None = None,
         timeout: float | None = None,
         client: genai.Client | None = None,
     ) -> None:
         self.api_key = api_key if api_key is not None else settings.gemini_api_key
-        self.model = model if model is not None else settings.gemini_model
+        raw_model = model if model is not None else settings.gemini_model
+
+        # Base URL: either explicitly passed, or None if client injected, or from settings
+        if base_url is not None:
+            self.base_url = base_url.strip() if base_url.strip() else None
+        elif client is not None:
+            self.base_url = None
+        else:
+            self.base_url = (
+                settings.gemini_base_url.strip()
+                if settings.gemini_base_url and settings.gemini_base_url.strip()
+                else None
+            )
+
+        # Handle LiteLLM vs direct Google API model naming convention:
+        # LiteLLM routing requires the "gemini/" prefix, whereas direct Google API uses bare model name.
+        if self.base_url and raw_model and not raw_model.startswith("gemini/"):
+            self.model = f"gemini/{raw_model}"
+        elif not self.base_url and raw_model and raw_model.startswith("gemini/"):
+            self.model = raw_model.replace("gemini/", "", 1)
+        else:
+            self.model = raw_model
+
         self.default_temperature = (
             temperature if temperature is not None else settings.model_temperature
         )
@@ -54,6 +77,11 @@ class GeminiProvider:
     def _get_client(self) -> genai.Client:
         if self._client is not None:
             return self._client
+        http_options: dict[str, Any] = {}
+        if self.base_url:
+            http_options["base_url"] = self.base_url
+        if http_options:
+            return genai.Client(api_key=self.api_key, http_options=http_options)
         return genai.Client(api_key=self.api_key)
 
     async def generate(

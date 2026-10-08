@@ -2,7 +2,7 @@
 type = "postgresql"
 name = "nl2anyquery_db"
 schema_version = "1.0"
-last_updated = "2026-10-07T12:50:57.931752+00:00"
+last_updated = "2026-10-08T09:15:57.888046+00:00"
 description_generated_at = ""
 
 [tables.customers]

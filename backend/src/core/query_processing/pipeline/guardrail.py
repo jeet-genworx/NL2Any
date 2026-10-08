@@ -3,7 +3,7 @@
 import logging
 from pathlib import Path
 from pydantic import BaseModel
-from backend.src.utils.text_utils import extract_json_block
+from backend.src.utils.text_utils import estimate_token_count, extract_json_block
 from backend.src.schemas.pipeline import GuardrailDecision, GuardrailResult
 from backend.src.control.providers.model.base import ModelProvider
 from backend.src.control.providers.model.koboldcpp import KoboldCppProvider
@@ -46,6 +46,7 @@ class GuardrailClassifier:
     ) -> None:
         self.provider = provider or KoboldCppProvider()
         self.prompt_path = Path(prompt_path or DEFAULT_GUARDRAIL_PROMPT)
+        self.last_prompt_tokens: int = 0
 
     def _load_prompt_template(self) -> str:
         if self.prompt_path.exists():
@@ -58,6 +59,7 @@ class GuardrailClassifier:
 
     async def classify(self, question: str) -> GuardrailResult:
         """Classify input query into READ_QUERY, BASIC, or REJECT."""
+        self.last_prompt_tokens = 0
         cleaned_question = question.strip().lower()
 
         # Deterministic fast check for obvious destructive keywords
@@ -70,6 +72,7 @@ class GuardrailClassifier:
 
         template = self._load_prompt_template()
         prompt = template.format(question=question)
+        self.last_prompt_tokens = estimate_token_count(prompt)
 
         try:
             raw_response = await self.provider.generate(

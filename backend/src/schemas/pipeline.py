@@ -225,6 +225,14 @@ class PipelineResponse(BaseModel):
     database: str
     question: str
     provider: str | None = None
+    stage_providers: dict[str, str] | None = PydanticField(
+        default=None,
+        description="Resolved model provider for each stage: table_selection, query_generation, validation",
+    )
+    stage_tokens: dict[str, int] | None = PydanticField(
+        default=None,
+        description="Estimated token consumption per stage and total",
+    )
     guardrail: GuardrailResult
     spelling_correction: SpellingCorrectionResult | None = None
     basic_answer: str | None = None

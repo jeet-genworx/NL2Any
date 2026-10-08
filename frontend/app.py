@@ -25,6 +25,23 @@ DEFAULT_DATABASES = [
     {"key": "finops", "label": "FinOps (PostgreSQL)", "database_type": "postgresql"},
 ]
 
+DEFAULT_PROVIDERS = [
+    {"id": "koboldcpp", "name": "KoboldCpp (Local SLM)", "configured": True},
+    {"id": "huggingface", "name": "Hugging Face", "configured": False},
+    {"id": "gemini", "name": "Google Gemini", "configured": False},
+]
+
+
+@st.cache_data(ttl=60)
+def fetch_providers(api_url: str) -> list[dict]:
+    """Fetch available model providers and configuration status from API."""
+    try:
+        resp = httpx.get(f"{api_url}/providers", timeout=5.0)
+        resp.raise_for_status()
+        return resp.json()
+    except Exception:
+        return list(DEFAULT_PROVIDERS)
+
 
 @st.cache_data(ttl=60)
 def fetch_databases(api_url: str) -> list[dict]:
@@ -211,26 +228,58 @@ with st.sidebar:
     )
     db_type = db_types.get(db_choice, "postgresql")
 
-    # When active database changes, notify backend to trigger background KV cache warm-up
-    if db_choice and st.session_state.get("_last_selected_db") != db_choice:
+    providers = fetch_providers(api_url)
+    provider_ids = [p["id"] for p in providers]
+    provider_labels = {
+        p["id"]: p["name"] if p.get("configured", True) else f"{p['name']} (unconfigured)"
+        for p in providers
+    }
+
+    st.markdown("#### Model Providers (Per-Stage)")
+    stage1_choice = st.selectbox(
+        "Stage 1: Table Selection & Guardrail",
+        options=provider_ids,
+        format_func=lambda key: provider_labels.get(key, key),
+        index=0,
+        help="Select model provider for Guardrail classification and Table Selection.",
+        key="stage1_choice",
+    )
+    stage2_choice = st.selectbox(
+        "Stage 2: Query Generation",
+        options=provider_ids,
+        format_func=lambda key: provider_labels.get(key, key),
+        index=0,
+        help="Select model provider for generating queries (PostgreSQL / MongoDB).",
+        key="stage2_choice",
+    )
+    stage3_choice = st.selectbox(
+        "Stage 3: Validation",
+        options=provider_ids,
+        format_func=lambda key: provider_labels.get(key, key),
+        index=0,
+        help="Select model provider for query syntax and safety validation.",
+        key="stage3_choice",
+    )
+
+    # Trigger KV cache warm-up ONLY when Stage 1 table selection provider is koboldcpp:
+    # Triggers when database changes (while on koboldcpp) OR when stage 1 is switched to koboldcpp.
+    s1_is_kobold = stage1_choice == "koboldcpp"
+    db_changed = bool(db_choice and st.session_state.get("_last_selected_db") != db_choice)
+    s1_changed_to_kobold = (
+        s1_is_kobold
+        and st.session_state.get("_last_stage1_provider") != "koboldcpp"
+    )
+    if s1_is_kobold and (db_changed or s1_changed_to_kobold):
         st.session_state["_last_selected_db"] = db_choice
+        st.session_state["_last_stage1_provider"] = stage1_choice
         try:
-            httpx.post(f"{api_url}/databases/{db_choice}/select", timeout=1.0)
+            httpx.post(f"{api_url}/databases/{db_choice}/select?stage1_provider={stage1_choice}", timeout=1.0)
         except Exception:
             pass
-
-    PROVIDER_OPTIONS = {
-        "koboldcpp": "SLM (KoboldCpp)",
-        "huggingface": "Hugging Face",
-        "gemini": "Gemini",
-    }
-    provider_choice = st.selectbox(
-        "LLM Provider",
-        options=list(PROVIDER_OPTIONS.keys()),
-        format_func=lambda key: PROVIDER_OPTIONS[key],
-        index=0,
-        help="Select the language model provider for query generation.",
-    )
+    else:
+        if db_changed:
+            st.session_state["_last_selected_db"] = db_choice
+        st.session_state["_last_stage1_provider"] = stage1_choice
 
     st.divider()
     st.markdown("### Database Ingestion")
@@ -389,7 +438,10 @@ if is_executing:
         st.warning("⚠️ Please enter a question before running.")
         st.session_state["is_executing_query"] = False
     else:
-        spinner_label = f"Executing pipeline through {PROVIDER_OPTIONS.get(provider_choice, provider_choice)}..."
+        spinner_label = (
+            f"Executing pipeline (Stage 1: {stage1_choice}, "
+            f"Stage 2: {stage2_choice}, Stage 3: {stage3_choice})..."
+        )
         with st.spinner(spinner_label):
             start_time = time.perf_counter()
             try:
@@ -399,7 +451,12 @@ if is_executing:
                     json={
                         "database": db_choice,
                         "question": question.strip(),
-                        "provider": provider_choice,
+                        "provider": stage1_choice,
+                        "stages": {
+                            "table_selection": stage1_choice,
+                            "query_generation": stage2_choice,
+                            "validation": stage3_choice,
+                        },
                         "jargons": jargon_list,
                     },
                     timeout=None,
@@ -426,7 +483,7 @@ if is_executing:
                 if err.response.status_code >= 500:
                     err_msg = f"❌ Backend Server Error (HTTP {err.response.status_code}): {detail}"
                 else:
-                    err_msg = f"❌ Provider Error ({PROVIDER_OPTIONS.get(provider_choice, provider_choice)}): {detail}"
+                    err_msg = f"❌ Pipeline Error: {detail}"
                 st.session_state["query_data"] = None
                 st.session_state["query_execution_time"] = elapsed_time
                 st.session_state["query_error"] = err_msg
@@ -446,6 +503,48 @@ data = st.session_state.get("query_data")
 execution_time = st.session_state.get("query_execution_time")
 
 if data:
+    stage_provs = data.get("stage_providers")
+    if stage_provs:
+        st.caption(
+            f"🧩 **Stage Providers:** Stage 1 (Table Selection): `{stage_provs.get('table_selection')}` | "
+            f"Stage 2 (Generation): `{stage_provs.get('query_generation')}` | "
+            f"Stage 3 (Validation): `{stage_provs.get('validation')}`"
+        )
+
+    stage_tokens = data.get("stage_tokens")
+    if stage_tokens:
+        s1_tok = stage_tokens.get("stage_1", 0)
+        s2_tok = stage_tokens.get("stage_2", 0)
+        s3_tok = stage_tokens.get("stage_3", 0)
+        tot_tok = stage_tokens.get("total", 0)
+        g_tok = stage_tokens.get("guardrail", 0)
+        sel_tok = stage_tokens.get("table_selection", 0)
+
+        st.markdown("##### 🪙 Estimated Prompt Token Consumption")
+        mcol1, mcol2, mcol3, mcol4 = st.columns(4)
+        with mcol1:
+            st.metric(
+                label="Stage 1: Selection",
+                value=f"{s1_tok:,} tokens",
+                help=f"Guardrail: {g_tok:,} | Table Selector: {sel_tok:,}",
+            )
+        with mcol2:
+            st.metric(
+                label="Stage 2: Generation",
+                value=f"{s2_tok:,} tokens",
+            )
+        with mcol3:
+            st.metric(
+                label="Stage 3: Validation",
+                value=f"{s3_tok:,} tokens",
+            )
+        with mcol4:
+            st.metric(
+                label="Total Tokens Sent",
+                value=f"{tot_tok:,} tokens",
+                help="Sum of prompt tokens sent across all executed pipeline stages.",
+            )
+
     # Check for basic answers or errors
     if data.get("basic_answer"):
         st.info(f"ℹ️ **System Response:** {data['basic_answer']}")
@@ -522,9 +621,13 @@ if data:
             st.info("Spelling check was not executed for this query.")
 
     with st.expander("2. Guardrail", expanded=False):
+        if stage_tokens and stage_tokens.get("guardrail") is not None:
+            st.caption(f"🪙 **Prompt Tokens Sent:** `{stage_tokens.get('guardrail', 0):,}` tokens")
         st.json(data.get("guardrail", {}))
 
     with st.expander("3. Table Selection & Grounded Schema", expanded=False):
+        if stage_tokens and stage_tokens.get("table_selection") is not None:
+            st.caption(f"🪙 **Prompt Tokens Sent:** `{stage_tokens.get('table_selection', 0):,}` tokens")
         st.markdown(f"**Selected Tables / Objects:** `{data.get('selected_objects', [])}`")
         st.markdown(f"**Selection Retries:** {data.get('selection_retries', 0)}")
         if data.get("relevant_schema"):
@@ -532,6 +635,8 @@ if data:
             st.json(data.get("relevant_schema", {}))
 
     with st.expander("4. Generated Query", expanded=True):
+        if stage_tokens and stage_tokens.get("query_generation") is not None:
+            st.caption(f"🪙 **Prompt Tokens Sent:** `{stage_tokens.get('query_generation', 0):,}` tokens")
         gen_q = data.get("generated_query")
         if gen_q:
             if db_type == "postgresql":
@@ -545,6 +650,8 @@ if data:
             st.write("No query generated.")
 
     with st.expander("5. Validation", expanded=False):
+        if stage_tokens and stage_tokens.get("validation") is not None:
+            st.caption(f"🪙 **Prompt Tokens Sent:** `{stage_tokens.get('validation', 0):,}` tokens")
         val_data = data.get("validation", {}) or {}
         st.markdown(f"**Validation Retries:** {data.get('validation_retries', 0)}")
         st.markdown(f"**Valid:** `{val_data.get('valid')}`")

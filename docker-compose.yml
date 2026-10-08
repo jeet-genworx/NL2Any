@@ -94,6 +94,7 @@ services:
       HF_BASE_URL: ${HF_BASE_URL:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-}
+      GEMINI_BASE_URL: ${GEMINI_BASE_URL:-}
     env_file:
       - path: .env
         required: false

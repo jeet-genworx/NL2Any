@@ -6,7 +6,7 @@ import time
 from typing import Any
 
 from backend.src.config import settings
-from backend.src.utils.text_utils import extract_json_block
+from backend.src.utils.text_utils import estimate_token_count, extract_json_block
 from backend.src.schemas.pipeline import (
     CandidateTable,
     QuestionAnalysis,
@@ -149,6 +149,7 @@ class TableSelector:
         self.cache_manager = cache_manager if cache_manager is not None else (
             get_cache_manager() if settings.koboldcpp_admin_enabled else None
         )
+        self.last_prompt_tokens: int = 0
 
     def _load_prompt_template(self) -> str:
         if self.prompt_path.exists():
@@ -292,7 +293,9 @@ class TableSelector:
         else:
             prefix = self.build_static_prefix(schema)
 
+        self.last_prompt_tokens = 0
         prompt = f"{prefix}{feedback_context}User Question:\n{q_text}\n"
+        self.last_prompt_tokens = estimate_token_count(prompt)
         max_toks = max_tokens if max_tokens is not None else settings.table_selector_max_tokens
 
         try:

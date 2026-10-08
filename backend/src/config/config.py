@@ -1,6 +1,6 @@
-"""Core configuration and settings."""
-
-from pydantic import Field
+import os
+from typing import Any
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -49,7 +49,12 @@ class Settings(BaseSettings):
     gemini_model: str = Field(
         default="",
         alias="GEMINI_MODEL",
-        description="Google Gemini Model ID (e.g. gemini-2.5-flash)",
+        description="Google Gemini Model ID (e.g. gemini/gemini-3.5-flash or gemini-2.5-flash)",
+    )
+    gemini_base_url: str | None = Field(
+        default=None,
+        alias="GEMINI_BASE_URL",
+        description="Optional custom base URL for LiteLLM proxy or private gateway (e.g. https://litellm.genworx.ai/)",
     )
 
     postgres_dsn: str = Field(
@@ -267,6 +272,22 @@ class Settings(BaseSettings):
             return base[:-3]
         return base
 
+
+    @model_validator(mode="before")
+    @classmethod
+    def _apply_env_fallbacks(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            # Allow LITELLM_API_KEY as fallback for GEMINI_API_KEY
+            if not data.get("gemini_api_key") and not data.get("GEMINI_API_KEY"):
+                litellm_key = os.getenv("LITELLM_API_KEY")
+                if litellm_key:
+                    data["GEMINI_API_KEY"] = litellm_key
+            # Allow LITELLM_BASE_URL as fallback for GEMINI_BASE_URL
+            if not data.get("gemini_base_url") and not data.get("GEMINI_BASE_URL"):
+                litellm_url = os.getenv("LITELLM_BASE_URL")
+                if litellm_url:
+                    data["GEMINI_BASE_URL"] = litellm_url
+        return data
 
     model_config = SettingsConfigDict(
         env_file=".env",

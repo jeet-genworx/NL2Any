@@ -25,6 +25,7 @@ from backend.src.schemas.pipeline import (
     ValidationResult,
 )
 from backend.src.data.models.schema import DatabaseSchema, DatabaseType
+from backend.src.schemas.request import StageProviders
 from backend.src.core.query_processing.pipeline.executor import QueryExecutor
 from backend.src.core.query_processing.pipeline.generators.mongo import MongoQueryGenerator
 from backend.src.core.query_processing.pipeline.generators.postgres import PostgresQueryGenerator
@@ -89,42 +90,61 @@ class NL2AnyQueryOrchestrator:
 
         self._schemas: dict[Any, DatabaseSchema] = {}
 
-    def _get_stages_for_provider(self, active_provider: ModelProvider):
-        """Return stage instances bound to the active provider for this execution."""
-        if active_provider is self.provider:
-            return (
-                self.guardrail,
-                self.selector,
-                self.postgres_gen,
-                self.mongo_gen,
-                self.validator,
-            )
+    def _resolve_stage_provider(
+        self,
+        stage_provider_spec: str | ModelProvider | None,
+        fallback_provider: ModelProvider,
+        fallback_name: str,
+        stage_label: str,
+    ) -> tuple[ModelProvider, str]:
+        """Resolve a model provider for a pipeline stage with clear configuration attribution."""
+        if stage_provider_spec is None:
+            return fallback_provider, fallback_name
+        if isinstance(stage_provider_spec, str):
+            try:
+                p = resolve_model_provider(stage_provider_spec)
+                return p, stage_provider_spec.strip().lower()
+            except Exception as err:
+                raise ValueError(f"{stage_label} provider configuration error: {err}") from err
+        return stage_provider_spec, getattr(stage_provider_spec, "model", "custom")
+
+    def _get_stages_for_providers(
+        self,
+        s1_provider: ModelProvider,
+        s2_provider: ModelProvider,
+        s3_provider: ModelProvider,
+    ):
+        """Return stage instances bound to the respective stage providers."""
         guardrail = (
             self.guardrail
-            if self._custom_guardrail
-            else GuardrailClassifier(provider=active_provider)
+            if self._custom_guardrail or s1_provider is self.provider
+            else GuardrailClassifier(provider=s1_provider)
         )
         selector = (
             self.selector
-            if self._custom_selector
-            else TableSelector(provider=active_provider, cache_manager=self.cache_manager)
+            if self._custom_selector or s1_provider is self.provider
+            else TableSelector(provider=s1_provider, cache_manager=self.cache_manager)
         )
         postgres_gen = (
             self.postgres_gen
-            if self._custom_postgres_gen
-            else PostgresQueryGenerator(provider=active_provider)
+            if self._custom_postgres_gen or s2_provider is self.provider
+            else PostgresQueryGenerator(provider=s2_provider)
         )
         mongo_gen = (
             self.mongo_gen
-            if self._custom_mongo_gen
-            else MongoQueryGenerator(provider=active_provider)
+            if self._custom_mongo_gen or s2_provider is self.provider
+            else MongoQueryGenerator(provider=s2_provider)
         )
         validator = (
             self.validator
-            if self._custom_validator
-            else QueryValidator(provider=active_provider)
+            if self._custom_validator or s3_provider is self.provider
+            else QueryValidator(provider=s3_provider)
         )
         return guardrail, selector, postgres_gen, mongo_gen, validator
+
+    def _get_stages_for_provider(self, active_provider: ModelProvider):
+        """Return stage instances bound to the active provider for this execution."""
+        return self._get_stages_for_providers(active_provider, active_provider, active_provider)
 
     def get_or_load_schema(self, database: DatabaseTarget | DatabaseType | str) -> DatabaseSchema:
         """Load and cache canonical schema from TOML file, enriched with table/column descriptions."""
@@ -182,6 +202,8 @@ class NL2AnyQueryOrchestrator:
         error: str | None = None,
         target_name: str | None = None,
         provider: str | None = None,
+        stage_providers: dict[str, str] | None = None,
+        stage_tokens: dict[str, int] | None = None,
         spelling_correction: SpellingCorrectionResult | None = None,
     ) -> PipelineResponse:
         cand_list = candidates or []
@@ -201,6 +223,8 @@ class NL2AnyQueryOrchestrator:
             database=db_label,
             question=question,
             provider=provider,
+            stage_providers=stage_providers,
+            stage_tokens=stage_tokens,
             guardrail=guardrail,
             spelling_correction=spelling_correction,
             basic_answer=basic_answer,
@@ -226,21 +250,57 @@ class NL2AnyQueryOrchestrator:
         question: str,
         database: str | DatabaseType | DatabaseTarget = "postgres",
         provider: str | ModelProvider | None = None,
+        stages: StageProviders | dict[str, str] | None = None,
         jargons: list[str] | None = None,
     ) -> PipelineResponse:
         """Run complete V2 natural-language-to-query pipeline with clean stages and bounded retries."""
+        # Resolve active fallback provider
+        if isinstance(provider, str):
+            fallback_name = provider.strip().lower()
+            active_fallback = resolve_model_provider(provider)
+        elif provider is not None:
+            fallback_name = getattr(provider, "model", "custom")
+            active_fallback = provider
+        else:
+            fallback_name = "koboldcpp"
+            active_fallback = self.provider
+
+        s1_spec = None
+        s2_spec = None
+        s3_spec = None
+        if stages is not None:
+            if isinstance(stages, dict):
+                s1_spec = stages.get("table_selection")
+                s2_spec = stages.get("query_generation")
+                s3_spec = stages.get("validation")
+            else:
+                s1_spec = stages.table_selection
+                s2_spec = stages.query_generation
+                s3_spec = stages.validation
+
+        s1_provider, s1_name = self._resolve_stage_provider(
+            s1_spec, active_fallback, fallback_name, "Stage 1 (Table Selection)"
+        )
+        s2_provider, s2_name = self._resolve_stage_provider(
+            s2_spec, active_fallback, fallback_name, "Stage 2 (Query Generation)"
+        )
+        s3_provider, s3_name = self._resolve_stage_provider(
+            s3_spec, active_fallback, fallback_name, "Stage 3 (Validation)"
+        )
+
+        stage_providers_map = {
+            "table_selection": s1_name,
+            "query_generation": s2_name,
+            "validation": s3_name,
+        }
         provider_name = (
-            provider.strip().lower()
-            if isinstance(provider, str)
-            else (getattr(provider, "model", "custom") if provider is not None else "koboldcpp")
+            s1_name
+            if (s1_name == s2_name == s3_name)
+            else f"{s1_name}/{s2_name}/{s3_name}"
         )
-        active_provider = (
-            resolve_model_provider(provider)
-            if isinstance(provider, str)
-            else (provider or self.provider)
-        )
+
         guardrail, selector, postgres_gen, mongo_gen, validator = (
-            self._get_stages_for_provider(active_provider)
+            self._get_stages_for_providers(s1_provider, s2_provider, s3_provider)
         )
 
         # 1. Resolve database target & type
@@ -263,6 +323,30 @@ class NL2AnyQueryOrchestrator:
 
         active_generator = postgres_gen if db_type == DatabaseType.POSTGRESQL else mongo_gen
 
+        accum_guardrail_tokens = 0
+        accum_selector_tokens = 0
+        accum_generator_tokens = 0
+        accum_validator_tokens = 0
+
+        def _get_stage_tokens() -> dict[str, int]:
+            g_tok = accum_guardrail_tokens + getattr(guardrail, "last_prompt_tokens", 0)
+            sel_tok = accum_selector_tokens + getattr(selector, "last_prompt_tokens", 0)
+            gen_tok = accum_generator_tokens + getattr(active_generator, "last_prompt_tokens", 0)
+            val_tok = accum_validator_tokens + getattr(validator, "last_prompt_tokens", 0)
+            s1_tok = g_tok + sel_tok
+            s2_tok = gen_tok
+            s3_tok = val_tok
+            return {
+                "stage_1": s1_tok,
+                "stage_2": s2_tok,
+                "stage_3": s3_tok,
+                "guardrail": g_tok,
+                "table_selection": sel_tok,
+                "query_generation": gen_tok,
+                "validation": val_tok,
+                "total": s1_tok + s2_tok + s3_tok,
+            }
+
         try:
             schema = self.get_or_load_schema(target)
         except Exception as err:
@@ -271,6 +355,8 @@ class NL2AnyQueryOrchestrator:
                 target_name=target.key,
                 question=question,
                 provider=provider_name,
+                stage_providers=stage_providers_map,
+                stage_tokens=_get_stage_tokens(),
                 guardrail=GuardrailResult(decision=GuardrailDecision.REJECT, reason=str(err)),
                 error=str(err),
             )
@@ -279,14 +365,32 @@ class NL2AnyQueryOrchestrator:
         spelling_res = self.spelling_checker.check(question=question, jargons=jargons)
         processed_question = spelling_res.corrected_question
 
-        # 3. Stage 2: Guardrail (runs SECOND on corrected question)
-        guardrail_result = await guardrail.classify(processed_question)
+        # 3. Stage 1 (Guardrail): Guardrail Classifier (runs on corrected question)
+        try:
+            guardrail_result = await guardrail.classify(processed_question)
+        except Exception as err:
+            err_msg = f"Stage 1 (Guardrail) failed using provider '{s1_name}': {err}"
+            logger.error(err_msg)
+            return self._build_response(
+                db_type=db_type,
+                target_name=target.key,
+                question=question,
+                provider=provider_name,
+                stage_providers=stage_providers_map,
+                stage_tokens=_get_stage_tokens(),
+                guardrail=GuardrailResult(decision=GuardrailDecision.REJECT, reason=err_msg),
+                spelling_correction=spelling_res,
+                error=err_msg,
+            )
+
         if guardrail_result.decision == GuardrailDecision.REJECT:
             return self._build_response(
                 db_type=db_type,
                 target_name=target.key,
                 question=question,
                 provider=provider_name,
+                stage_providers=stage_providers_map,
+                stage_tokens=_get_stage_tokens(),
                 guardrail=guardrail_result,
                 spelling_correction=spelling_res,
                 error="Sorry, I can't help with this.",
@@ -303,6 +407,8 @@ class NL2AnyQueryOrchestrator:
                 target_name=target.key,
                 question=question,
                 provider=provider_name,
+                stage_providers=stage_providers_map,
+                stage_tokens=_get_stage_tokens(),
                 guardrail=guardrail_result,
                 spelling_correction=spelling_res,
                 basic_answer=basic_ans,
@@ -320,21 +426,56 @@ class NL2AnyQueryOrchestrator:
         last_val: ValidationResult | None = None
 
         while selector_retries <= self.max_retries:
-            # Stage 3: Table Selector SLM (evaluates complete schema description)
-            selection = await selector.select(
-                question=processed_question,
-                schema=schema,
-                feedback=selector_feedback,
-                target_key=target.key,
-            )
+            # Stage 1: Table Selector (evaluates complete schema description)
+            try:
+                selection = await selector.select(
+                    question=processed_question,
+                    schema=schema,
+                    feedback=selector_feedback,
+                    target_key=target.key,
+                )
+            except Exception as err:
+                err_msg = f"Stage 1 (Table Selection) failed using provider '{s1_name}': {err}"
+                logger.error(err_msg)
+                return self._build_response(
+                    db_type=db_type,
+                    target_name=target.key,
+                    question=question,
+                    provider=provider_name,
+                    stage_providers=stage_providers_map,
+                    stage_tokens=_get_stage_tokens(),
+                    guardrail=guardrail_result,
+                    spelling_correction=spelling_res,
+                    selection_retries=selector_retries,
+                    error=err_msg,
+                )
 
             if not selection.selected_objects:
+                if selection.reason and selection.reason.startswith("Table selection failed due to error:"):
+                    err_detail = selection.reason.replace("Table selection failed due to error:", "").strip()
+                    err_msg = f"Stage 1 (Table Selection) failed using provider '{s1_name}': {err_detail}"
+                    logger.error(err_msg)
+                    return self._build_response(
+                        db_type=db_type,
+                        target_name=target.key,
+                        question=question,
+                        provider=provider_name,
+                        stage_providers=stage_providers_map,
+                        stage_tokens=_get_stage_tokens(),
+                        guardrail=guardrail_result,
+                        spelling_correction=spelling_res,
+                        selected=[],
+                        selection_retries=selector_retries,
+                        error=err_msg,
+                    )
                 if selector_retries >= self.max_retries:
                     return self._build_response(
                         db_type=db_type,
                         target_name=target.key,
                         question=question,
                         provider=provider_name,
+                        stage_providers=stage_providers_map,
+                        stage_tokens=_get_stage_tokens(),
                         guardrail=guardrail_result,
                         spelling_correction=spelling_res,
                         selected=[],
@@ -342,6 +483,8 @@ class NL2AnyQueryOrchestrator:
                         error=selection.reason or "I could not find any relevant tables or collections in the database schema matching your question.",
                     )
                 selector_retries += 1
+                accum_selector_tokens += getattr(selector, "last_prompt_tokens", 0)
+                selector.last_prompt_tokens = 0
                 selector_feedback = (
                     "No tables were selected. Please select all required tables from the database schema to answer the question."
                 )
@@ -350,7 +493,7 @@ class NL2AnyQueryOrchestrator:
             selected_objs = selection.selected_objects
             relevant_schema = package_selected_schema(schema, selected_objs)
 
-            # Stage 4 & 5: Query Generator & Validator Loop
+            # Stage 2 & 3: Query Generator & Validator Loop
             gen_needed_more_schema = False
 
             while validator_retries <= self.max_retries:
@@ -361,24 +504,24 @@ class NL2AnyQueryOrchestrator:
                         feedback=gen_feedback,
                     )
                 except Exception as gen_err:
-                    if validator_retries >= self.max_retries:
-                        return self._build_response(
-                            db_type=db_type,
-                            target_name=target.key,
-                            question=question,
-                            provider=provider_name,
-                            guardrail=guardrail_result,
-                            spelling_correction=spelling_res,
-                            selected=selected_objs,
-                            selection_retries=selector_retries,
-                            schema=relevant_schema,
-                            validation_retries=validator_retries,
-                            attempts=validator_retries + 1,
-                            error=f"Query generation failed after maximum retries: {gen_err}",
-                        )
-                    validator_retries += 1
-                    gen_feedback = f"Generation error: {gen_err}"
-                    continue
+                    err_msg = f"Stage 2 (Query Generation) failed using provider '{s2_name}': {gen_err}"
+                    logger.error(err_msg)
+                    return self._build_response(
+                        db_type=db_type,
+                        target_name=target.key,
+                        question=question,
+                        provider=provider_name,
+                        stage_providers=stage_providers_map,
+                        stage_tokens=_get_stage_tokens(),
+                        guardrail=guardrail_result,
+                        spelling_correction=spelling_res,
+                        selected=selected_objs,
+                        selection_retries=selector_retries,
+                        schema=relevant_schema,
+                        validation_retries=validator_retries,
+                        attempts=validator_retries + 1,
+                        error=err_msg,
+                    )
 
                 # Check if Query Generator detected missing schema information
                 if isinstance(gen_result, GeneratorMissingInfo):
@@ -388,6 +531,8 @@ class NL2AnyQueryOrchestrator:
                             target_name=target.key,
                             question=question,
                             provider=provider_name,
+                            stage_providers=stage_providers_map,
+                            stage_tokens=_get_stage_tokens(),
                             guardrail=guardrail_result,
                             spelling_correction=spelling_res,
                             selected=selected_objs,
@@ -396,6 +541,8 @@ class NL2AnyQueryOrchestrator:
                             error=f"Required schema information could not be identified after maximum retries: {gen_result.reason}",
                         )
                     selector_retries += 1
+                    accum_generator_tokens += getattr(active_generator, "last_prompt_tokens", 0)
+                    active_generator.last_prompt_tokens = 0
                     missing_str = ", ".join(gen_result.missing_tables) if gen_result.missing_tables else "additional tables"
                     selector_feedback = (
                         f"The query generator determined that the previous selection of tables {selected_objs} "
@@ -407,12 +554,34 @@ class NL2AnyQueryOrchestrator:
 
                 last_query = gen_result
 
-                # Stage 5: Query Validator
-                last_val = await validator.validate(
-                    question=processed_question,
-                    generated_query=last_query,
-                    schema=relevant_schema,
-                )
+                # Stage 3: Query Validator
+                try:
+                    last_val = await validator.validate(
+                        question=processed_question,
+                        generated_query=last_query,
+                        schema=relevant_schema,
+                        fail_fast=True,
+                    )
+                except Exception as val_err:
+                    err_msg = f"Stage 3 (Validation) failed using provider '{s3_name}': {val_err}"
+                    logger.error(err_msg)
+                    return self._build_response(
+                        db_type=db_type,
+                        target_name=target.key,
+                        question=question,
+                        provider=provider_name,
+                        stage_providers=stage_providers_map,
+                        stage_tokens=_get_stage_tokens(),
+                        guardrail=guardrail_result,
+                        spelling_correction=spelling_res,
+                        selected=selected_objs,
+                        selection_retries=selector_retries,
+                        schema=relevant_schema,
+                        query=last_query,
+                        validation_retries=validator_retries,
+                        attempts=validator_retries + 1,
+                        error=err_msg,
+                    )
 
                 if last_val.valid:
                     break
@@ -423,6 +592,8 @@ class NL2AnyQueryOrchestrator:
                         target_name=target.key,
                         question=question,
                         provider=provider_name,
+                        stage_providers=stage_providers_map,
+                        stage_tokens=_get_stage_tokens(),
                         guardrail=guardrail_result,
                         spelling_correction=spelling_res,
                         selected=selected_objs,
@@ -439,6 +610,14 @@ class NL2AnyQueryOrchestrator:
                     break
 
                 validator_retries += 1
+                accum_generator_tokens += getattr(active_generator, "last_prompt_tokens", 0)
+                active_generator.last_prompt_tokens = 0
+                accum_validator_tokens += getattr(validator, "last_prompt_tokens", 0)
+                if hasattr(validator, "postgres_validator"):
+                    validator.postgres_validator.last_prompt_tokens = 0
+                if hasattr(validator, "mongo_validator"):
+                    validator.mongo_validator.last_prompt_tokens = 0
+
                 clean_issues = [
                     clean_unreadable_characters(strip_ansi_escapes(str(i)))
                     for i in last_val.issues
@@ -461,6 +640,8 @@ class NL2AnyQueryOrchestrator:
             "target_name": target.key,
             "question": question,
             "provider": provider_name,
+            "stage_providers": stage_providers_map,
+            "stage_tokens": _get_stage_tokens(),
             "guardrail": guardrail_result,
             "spelling_correction": spelling_res,
             "selected": selected_objs,
