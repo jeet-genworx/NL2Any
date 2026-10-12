@@ -129,9 +129,26 @@ class PostgresQueryValidator(QueryValidator):
             )
             data = extract_json_block(raw_response)
 
+            raw_verdict = data.get("verdict")
+            if isinstance(raw_verdict, str):
+                v_clean = raw_verdict.lower().strip()
+                data["verdict"] = v_clean
+                if v_clean in ("correct", "correct_with_caveats"):
+                    data["valid"] = True
+                    data["error_type"] = ValidationErrorType.VALID
+                elif v_clean in ("incorrect", "failed"):
+                    data["valid"] = False
+                    current_err = str(data.get("error_type", "")).upper().strip()
+                    if current_err in ValidationErrorType.__members__ and current_err != ValidationErrorType.VALID.value:
+                        data["error_type"] = ValidationErrorType[current_err]
+                    else:
+                        data["error_type"] = ValidationErrorType.SEMANTIC_ERROR
+
             raw_err_type = data.get("error_type", "VALID")
+            if isinstance(raw_err_type, ValidationErrorType):
+                raw_err_type = raw_err_type.value
             if not isinstance(raw_err_type, str) or raw_err_type not in ValidationErrorType.__members__:
-                raw_err_type = "VALID" if data.get("valid", True) else "GENERATION_ERROR"
+                raw_err_type = "VALID" if data.get("valid", True) else "SEMANTIC_ERROR"
 
             raw_issues = data.get("issues", [])
             if isinstance(raw_issues, list):
@@ -142,12 +159,12 @@ class PostgresQueryValidator(QueryValidator):
                 ]
                 data["issues"] = cleaned_issues
 
-            if raw_err_type != ValidationErrorType.VALID:
+            if raw_err_type != ValidationErrorType.VALID.value:
                 data["valid"] = False
             elif not data.get("valid", True):
-                raw_err_type = ValidationErrorType.GENERATION_ERROR
+                raw_err_type = ValidationErrorType.SEMANTIC_ERROR.value
 
-            data["error_type"] = raw_err_type
+            data["error_type"] = ValidationErrorType[raw_err_type] if isinstance(raw_err_type, str) else raw_err_type
 
             raw_suggestion = data.get("suggestion")
             if raw_suggestion:

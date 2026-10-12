@@ -136,9 +136,13 @@ class PostgresQueryGenerator(QueryGenerator):
                 missing = data.get("missing_tables") or data.get("missing_objects") or []
                 if isinstance(missing, str):
                     missing = [missing]
+                missing_cols = data.get("missing_columns") or []
+                if isinstance(missing_cols, str):
+                    missing_cols = [missing_cols]
                 return GeneratorMissingInfo(
                     status="missing_information",
                     missing_tables=missing,
+                    missing_columns=missing_cols,
                     reason=str(data.get("reason", "Required schema information is missing.")),
                 )
         except Exception:

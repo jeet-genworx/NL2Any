@@ -40,6 +40,7 @@ def test_resolve_huggingface_missing_config(monkeypatch):
 def test_resolve_gemini(monkeypatch):
     monkeypatch.setattr(settings, "gemini_api_key", "test-key")
     monkeypatch.setattr(settings, "gemini_model", "gemini-2.5-flash")
+    monkeypatch.setattr(settings, "gemini_base_url", None)
 
     provider = resolve_model_provider("gemini")
     assert isinstance(provider, GeminiProvider)

@@ -1,8 +1,10 @@
 """Streamlit frontend for NL2AnyQuery."""
 
+import html
 import json
 import os
 import time
+import uuid
 import httpx
 import pandas as pd
 import streamlit as st
@@ -127,6 +129,167 @@ def run_ingestion(database: str, use_mst: bool, api_url: str, force: bool = Fals
         return False, f"Ingestion failed: {detail}"
     except Exception as err:
         return False, f"Ingestion failed: {err}"
+
+
+def format_schema_dict_as_text(schema_dict: dict | None) -> str:
+    """Format schema dictionary into human-readable text."""
+    if not schema_dict or not isinstance(schema_dict, dict):
+        return ""
+    lines: list[str] = []
+    for obj in schema_dict.get("objects", []):
+        name = obj.get("name", "")
+        kind = obj.get("kind", "table")
+        desc = f": {obj.get('description')}" if obj.get("description") else ""
+        lines.append(f"• {name} ({kind}){desc}")
+        for f in obj.get("fields", []):
+            f_name = f.get("name", "")
+            f_type = f.get("type", "")
+            f_desc = f" - {f.get('description')}" if f.get("description") else ""
+            samples = f" (samples: {f.get('sample_values')})" if f.get("sample_values") else ""
+            lines.append(f"    - {f_name} ({f_type}){f_desc}{samples}")
+            for nested in f.get("nested", []):
+                n_name = nested.get("name", "")
+                n_type = nested.get("type", "")
+                n_desc = f" - {nested.get('description')}" if nested.get("description") else ""
+                lines.append(f"      - {f_name}.{n_name} ({n_type}){n_desc}")
+    rels = schema_dict.get("relationships", [])
+    if rels:
+        lines.append("\nKnown Relationships:")
+        for r in rels:
+            lines.append(
+                f"• {r.get('from_object')}.{r.get('from_field')} -> {r.get('to_object')}.{r.get('to_field')} ({r.get('relationship_type', 'fk')})"
+            )
+    return "\n".join(lines)
+
+
+def render_clipboard_copy_buttons(
+    json_payload: str,
+    text_payload: str | None = None,
+    json_label: str = "📋 Copy Table Selection & Grounded Schema",
+    text_label: str = "📄 Copy as Plain Text",
+) -> None:
+    """Render client-side clipboard copy button(s) with instant visual confirmation."""
+    unique_id = uuid.uuid4().hex[:8]
+    json_data_id = f"copy-data-json-{unique_id}"
+    json_btn_id = f"copy-btn-json-{unique_id}"
+    status_id = f"copy-status-{unique_id}"
+
+    escaped_json = html.escape(json_payload)
+
+    text_btn_html = ""
+    if text_payload:
+        text_data_id = f"copy-data-text-{unique_id}"
+        text_btn_id = f"copy-btn-text-{unique_id}"
+        escaped_text = html.escape(text_payload)
+        text_btn_html = f"""
+        <button id="{text_btn_id}"
+            onclick="copyText_{unique_id}('{text_data_id}', '{text_btn_id}', '{html.escape(text_label)}')"
+            style="
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                padding: 6px 14px;
+                font-size: 13.5px;
+                font-weight: 500;
+                font-family: inherit;
+                color: inherit;
+                background-color: transparent;
+                border: 1px solid rgba(128, 128, 128, 0.35);
+                border-radius: 8px;
+                cursor: pointer;
+                transition: all 0.2s ease;
+            "
+            onmouseover="this.style.borderColor='#ff4b4b'; this.style.color='#ff4b4b'; this.style.backgroundColor='rgba(255, 75, 75, 0.08)';"
+            onmouseout="this.style.borderColor='rgba(128, 128, 128, 0.35)'; this.style.color='inherit'; this.style.backgroundColor='transparent';"
+        >
+            {html.escape(text_label)}
+        </button>
+        <textarea id="{text_data_id}" style="display: none;">{escaped_text}</textarea>
+        """
+
+    html_code = f"""
+    <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 8px 0 14px 0;">
+        <button id="{json_btn_id}"
+            onclick="copyText_{unique_id}('{json_data_id}', '{json_btn_id}', '{html.escape(json_label)}')"
+            style="
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                padding: 6px 14px;
+                font-size: 13.5px;
+                font-weight: 500;
+                font-family: inherit;
+                color: inherit;
+                background-color: transparent;
+                border: 1px solid rgba(128, 128, 128, 0.35);
+                border-radius: 8px;
+                cursor: pointer;
+                transition: all 0.2s ease;
+            "
+            onmouseover="this.style.borderColor='#ff4b4b'; this.style.color='#ff4b4b'; this.style.backgroundColor='rgba(255, 75, 75, 0.08)';"
+            onmouseout="this.style.borderColor='rgba(128, 128, 128, 0.35)'; this.style.color='inherit'; this.style.backgroundColor='transparent';"
+        >
+            {html.escape(json_label)}
+        </button>
+        <textarea id="{json_data_id}" style="display: none;">{escaped_json}</textarea>
+        {text_btn_html}
+        <span id="{status_id}" style="display: none; font-size: 13px; color: #10b981; font-weight: 600;">
+            ✓ Copied to clipboard!
+        </span>
+    </div>
+    <script>
+    function copyText_{unique_id}(dataId, btnId, defaultLabel) {{
+        const text = document.getElementById(dataId).value;
+        const btn = document.getElementById(btnId);
+        const status = document.getElementById('{status_id}');
+
+        function onCopied() {{
+            if (btn) {{
+                btn.innerHTML = '✓ Copied!';
+                btn.style.borderColor = '#10b981';
+                btn.style.color = '#10b981';
+            }}
+            if (status) status.style.display = 'inline';
+            setTimeout(() => {{
+                if (btn) {{
+                    btn.innerHTML = defaultLabel;
+                    btn.style.borderColor = 'rgba(128, 128, 128, 0.35)';
+                    btn.style.color = 'inherit';
+                }}
+                if (status) status.style.display = 'none';
+            }}, 2500);
+        }}
+
+        if (navigator.clipboard && window.isSecureContext) {{
+            navigator.clipboard.writeText(text).then(onCopied).catch(err => {{
+                fallbackCopy(text);
+            }});
+        }} else {{
+            fallbackCopy(text);
+        }}
+
+        function fallbackCopy(str) {{
+            const temp = document.createElement('textarea');
+            temp.value = str;
+            temp.style.position = 'fixed';
+            temp.style.opacity = '0';
+            temp.style.top = '0';
+            document.body.appendChild(temp);
+            temp.focus();
+            temp.select();
+            try {{
+                document.execCommand('copy');
+                onCopied();
+            }} catch (e) {{
+                console.error('Clipboard copy failed:', e);
+            }}
+            document.body.removeChild(temp);
+        }}
+    }}
+    </script>
+    """
+    st.html(html_code, unsafe_allow_javascript=True)
+
 
 # Sidebar
 with st.sidebar:
@@ -628,11 +791,42 @@ if data:
     with st.expander("3. Table Selection & Grounded Schema", expanded=False):
         if stage_tokens and stage_tokens.get("table_selection") is not None:
             st.caption(f"🪙 **Prompt Tokens Sent:** `{stage_tokens.get('table_selection', 0):,}` tokens")
+
+        table_selection_payload = {
+            "selected_objects": data.get("selected_objects", []),
+            "selection_retries": data.get("selection_retries", 0),
+            "relevant_schema": data.get("relevant_schema", {}),
+        }
+        if stage_tokens and stage_tokens.get("table_selection") is not None:
+            table_selection_payload["tokens_sent"] = stage_tokens.get("table_selection")
+
+        json_copy_payload = json.dumps(table_selection_payload, indent=2, default=str)
+
+        text_schema = format_schema_dict_as_text(data.get("relevant_schema"))
+        text_copy_payload = (
+            f"=== Table Selection ===\n"
+            f"Selected Tables / Objects: {data.get('selected_objects', [])}\n"
+            f"Selection Retries: {data.get('selection_retries', 0)}\n\n"
+            f"=== Grounded Schema ===\n"
+            f"{text_schema if text_schema else 'No schema available.'}"
+        )
+
+        render_clipboard_copy_buttons(
+            json_payload=json_copy_payload,
+            text_payload=text_copy_payload,
+            json_label="📋 Copy Table Selection & Grounded Schema",
+            text_label="📄 Copy as Plain Text",
+        )
+
         st.markdown(f"**Selected Tables / Objects:** `{data.get('selected_objects', [])}`")
         st.markdown(f"**Selection Retries:** {data.get('selection_retries', 0)}")
         if data.get("relevant_schema"):
             st.markdown("**Grounded Schema for Selected Tables:**")
-            st.json(data.get("relevant_schema", {}))
+            tab_tree, tab_raw = st.tabs(["🌳 Interactive Tree View", "📝 Raw JSON View"])
+            with tab_tree:
+                st.json(data.get("relevant_schema", {}))
+            with tab_raw:
+                st.code(json.dumps(data.get("relevant_schema", {}), indent=2, default=str), language="json")
 
     with st.expander("4. Generated Query", expanded=True):
         if stage_tokens and stage_tokens.get("query_generation") is not None:
@@ -655,6 +849,8 @@ if data:
         val_data = data.get("validation", {}) or {}
         st.markdown(f"**Validation Retries:** {data.get('validation_retries', 0)}")
         st.markdown(f"**Valid:** `{val_data.get('valid')}`")
+        if val_data.get("verdict"):
+            st.markdown(f"**Verdict:** `{val_data.get('verdict')}`")
         st.markdown(f"**Error Classification:** `{val_data.get('error_type', 'VALID')}`")
         if val_data.get("issues"):
             st.markdown(f"**Issues:** {val_data.get('issues')}")

@@ -461,6 +461,53 @@ async def test_postgres_query_validator_direct():
 
 
 @pytest.mark.asyncio
+async def test_postgres_query_validator_verdicts():
+    """PostgresQueryValidator handles verdict-based structured responses."""
+    from backend.src.core.query_processing.pipeline.validators import PostgresQueryValidator
+
+    query = GeneratedQuery(
+        database_type=DatabaseType.POSTGRESQL,
+        raw_query="SELECT vendor_id, SUM(amount_usd) FROM finopsiq.invoices GROUP BY vendor_id;",
+        formatted_query="SELECT vendor_id, SUM(amount_usd) FROM finopsiq.invoices GROUP BY vendor_id;",
+    )
+
+    # 1. Verdict: correct
+    resp_correct = '{"verdict": "correct", "valid": true, "error_type": "VALID", "issues": [], "suggestion": null}'
+    v_correct = PostgresQueryValidator(provider=MockValidatorProvider(resp_correct))
+    res = await v_correct.validate("Show spend per vendor", query)
+    assert res.valid is True
+    assert res.verdict == "correct"
+    assert res.error_type == ValidationErrorType.VALID
+
+    # 2. Verdict: correct_with_caveats
+    resp_caveats = '{"verdict": "correct_with_caveats", "valid": true, "error_type": "VALID", "issues": ["Assumed invoice_type=\'AP\' for spend"], "suggestion": null}'
+    v_caveats = PostgresQueryValidator(provider=MockValidatorProvider(resp_caveats))
+    res = await v_caveats.validate("Show spend per vendor", query)
+    assert res.valid is True
+    assert res.verdict == "correct_with_caveats"
+    assert res.error_type == ValidationErrorType.VALID
+    assert "invoice_type='AP'" in res.issues[0]
+
+    # 3. Verdict: incorrect with SEMANTIC_ERROR
+    resp_incorrect = '{"verdict": "incorrect", "valid": false, "error_type": "SEMANTIC_ERROR", "issues": ["[BLOCKING] JOIN clause: causes fan-out multiplication of amounts"], "suggestion": "```sql\\nSELECT vendor_id, SUM(amount_usd) FROM finopsiq.invoices GROUP BY vendor_id;\\n```"}'
+    v_incorrect = PostgresQueryValidator(provider=MockValidatorProvider(resp_incorrect))
+    res = await v_incorrect.validate("Show spend per vendor", query)
+    assert res.valid is False
+    assert res.verdict == "incorrect"
+    assert res.error_type == ValidationErrorType.SEMANTIC_ERROR
+    assert "fan-out" in res.issues[0]
+    assert "```sql" in res.suggestion
+
+    # 4. Verdict: incorrect with SCHEMA_ERROR
+    resp_schema_err = '{"verdict": "incorrect", "valid": false, "error_type": "SCHEMA_ERROR", "issues": ["[BLOCKING] SELECT list: Table non_existent_table not in Selected Schema"], "suggestion": "Use only selected tables."}'
+    v_schema_err = PostgresQueryValidator(provider=MockValidatorProvider(resp_schema_err))
+    res_schema = await v_schema_err.validate("Show spend per vendor", query)
+    assert res_schema.valid is False
+    assert res_schema.verdict == "incorrect"
+    assert res_schema.error_type == ValidationErrorType.SCHEMA_ERROR
+
+
+@pytest.mark.asyncio
 async def test_mongo_query_validator_bare_stage_syntax_error():
     """MongoQueryValidator immediately flags bare stage operators missing $ prefix."""
     from backend.src.core.query_processing.pipeline.validators import MongoQueryValidator

@@ -102,6 +102,7 @@ class GeneratorMissingInfo(BaseModel):
 
     status: Literal["missing_information"] = "missing_information"
     missing_tables: list[str] = PydanticField(default_factory=list)
+    missing_columns: list[str] = PydanticField(default_factory=list)
     reason: str = ""
 
 
@@ -191,12 +192,15 @@ class ValidationErrorType(str, Enum):
     PLANNER_ERROR = "PLANNER_ERROR"
     UNSAFE = "UNSAFE"
     GENERATION_ERROR = "GENERATION_ERROR"
+    SEMANTIC_ERROR = "SEMANTIC_ERROR"
+    SCHEMA_ERROR = "SCHEMA_ERROR"
 
 
 class ValidationResult(BaseModel):
     """Result of query validation stage."""
 
     valid: bool
+    verdict: str | None = None
     error_type: ValidationErrorType = ValidationErrorType.VALID
     issues: list[str] = PydanticField(default_factory=list)
     suggestion: str | None = None
