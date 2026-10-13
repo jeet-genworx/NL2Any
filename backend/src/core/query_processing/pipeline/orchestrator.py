@@ -7,16 +7,14 @@ from typing import Any
 
 from backend.src.data.clients.detector import detect_database_type
 from backend.src.data.models.targets import DatabaseTarget, as_target, resolve_target
-from backend.src.data.repositories import description_repository, paths, schema_repository
 from backend.src.data.repositories.run_repository import (
     cleanup_old_runs,
     load_run_state,
     save_run_state,
     validate_run_id,
 )
+from backend.src.data.repositories.schema_cache import SchemaCache
 from backend.src.core.query_processing.pipeline.feedback_guardrail import FeedbackGuardrailClassifier
-from backend.src.core.ingestion.schema.describe import apply_descriptions
-from backend.src.core.ingestion.schema.manager import get_default_schema_path
 from backend.src.config import settings
 from backend.src.schemas.pipeline import (
     CandidateTable,
@@ -59,48 +57,12 @@ from backend.src.utils.text_utils import clean_unreadable_characters, strip_ansi
 logger = logging.getLogger(__name__)
 
 
-def _get_stage_feedback_items(
-    feedback_history: list[dict[str, Any]],
-    current_feedback: str | None,
-    stage: str,
-) -> list[str]:
-    """Extract a sliding window of at most 1 previous feedback item + current feedback item for a stage."""
-    items: list[str] = []
-    prior_for_stage = [
-        str(h["feedback"]).strip()
-        for h in feedback_history
-        if isinstance(h, dict) and h.get("stage") == stage and h.get("feedback")
-    ]
-    if prior_for_stage:
-        items.append(prior_for_stage[-1])
-    if current_feedback and current_feedback.strip():
-        cf = current_feedback.strip()
-        if not items or items[-1] != cf:
-            items.append(cf)
-    return items
-
-
-def _format_stage_user_guidance(
-    feedback_history: list[dict[str, Any]],
-    current_feedback: str | None,
-    stage: str,
-) -> str | None:
-    """Format user guidance with a sliding window of at most 1 previous feedback item + current feedback item."""
-    items = _get_stage_feedback_items(feedback_history, current_feedback, stage)
-    if not items:
-        return None
-
-    joined_items = "\n".join(f"- {item}" for item in items)
-    if stage == "table_selection":
-        note = "(Note: User guidance is an advisory hint. You must strictly ground table selection in the canonical schema and adhere to all relationship rules.)"
-    elif stage == "query_generation":
-        note = "(Note: User guidance provides domain/intent clarification. All generated queries must strictly adhere to the Selected Schema and read-only safety rules.)"
-    elif stage == "validation":
-        note = "(Note: User validation guidance clarifies user intent or acceptable caveats. Ensure the query remains strictly read-only and free of syntax errors.)"
-    else:
-        note = "(Note: User guidance is an advisory hint.)"
-
-    return f"[USER GUIDANCE / HINT]:\n{joined_items}\n{note}"
+from backend.src.core.query_processing.pipeline.feedback import (
+    _format_stage_user_guidance,
+    _get_stage_feedback_items,
+    build_cascading_guidance,
+    compose_feedback_prompt,
+)
 
 
 class NL2AnyQueryOrchestrator:
@@ -141,7 +103,8 @@ class NL2AnyQueryOrchestrator:
         self._custom_mongo_gen = mongo_gen is not None
         self._custom_validator = validator is not None
 
-        self._schemas: dict[Any, DatabaseSchema] = {}
+        self.schema_cache = SchemaCache()
+        self._schemas: dict[Any, DatabaseSchema] = self.schema_cache._schemas
 
     def _resolve_stage_provider(
         self,
@@ -209,37 +172,7 @@ class NL2AnyQueryOrchestrator:
 
     def get_or_load_schema(self, database: DatabaseTarget | DatabaseType | str) -> DatabaseSchema:
         """Load and cache canonical schema from TOML file, enriched with table/column descriptions."""
-        if database in self._schemas:
-            return self._schemas[database]
-
-        try:
-            target = as_target(database) if not isinstance(database, str) else resolve_target(database)
-            if target.key in self._schemas:
-                return self._schemas[target.key]
-            schema_path = paths.schema_path(target)
-            desc_path = paths.descriptions_path(target)
-            key = target.key
-        except Exception:
-            schema_path = get_default_schema_path(database)
-            desc_path = None
-            key = database
-
-        if not schema_path.exists():
-            raise FileNotFoundError(
-                f"Canonical schema not found at {schema_path}. Run 'init-schema' first."
-            )
-        schema = schema_repository.load_schema(schema_path)
-
-        # Merge descriptions directly into schema in-memory
-        if desc_path and desc_path.exists():
-            try:
-                descriptions = description_repository.load_descriptions(desc_path)
-                apply_descriptions(schema, descriptions)
-            except Exception as err:
-                logger.warning("Failed to load descriptions from %s: %s", desc_path, err)
-
-        self._schemas[key] = schema
-        return schema
+        return self.schema_cache.get_or_load(database)
 
     def _build_response(
         self,
@@ -1070,64 +1003,9 @@ class NL2AnyQueryOrchestrator:
         last_val: ValidationResult | None = None
 
         # Build cascading user guidance blocks per stage
-        s1_items = _get_stage_feedback_items(
-            feedback_history, applicable_feedback.get("table_selection"), "table_selection"
+        s1_user_guidance, s2_user_guidance, s3_val_guidance = build_cascading_guidance(
+            feedback_history, applicable_feedback
         )
-        s2_items = _get_stage_feedback_items(
-            feedback_history, applicable_feedback.get("query_generation"), "query_generation"
-        )
-        s3_items = _get_stage_feedback_items(
-            feedback_history, applicable_feedback.get("validation"), "validation"
-        )
-
-        # Stage 1: Table Selection guidance
-        if s1_items:
-            joined_s1 = "\n".join(f"- {it}" for it in s1_items)
-            s1_user_guidance = (
-                f"[USER GUIDANCE / HINT]:\n{joined_s1}\n"
-                "(Note: User guidance is an advisory hint. You must strictly ground table selection in the canonical schema and adhere to all relationship rules.)"
-            )
-        else:
-            s1_user_guidance = None
-
-        # Stage 2: Query Generation guidance (receives Stage 2 feedback plus active Stage 1 context)
-        gen_guidance_items: list[str] = []
-        if s1_items:
-            gen_guidance_items.extend([f"Context from table selection: {it}" for it in s1_items])
-        if s2_items:
-            gen_guidance_items.extend(s2_items)
-
-        if gen_guidance_items:
-            joined_s2 = "\n".join(f"- {it}" for it in gen_guidance_items)
-            s2_user_guidance = (
-                f"[USER GUIDANCE / HINT]:\n{joined_s2}\n"
-                "(Note: User guidance provides domain/intent clarification. All generated queries must strictly adhere to the Selected Schema and read-only safety rules.)"
-            )
-        else:
-            s2_user_guidance = None
-
-        # Stage 3: Validation guidance (receives Stage 3 feedback plus all applied query guidance)
-        val_sections: list[str] = []
-        applied_query_items: list[str] = []
-        if s1_items:
-            applied_query_items.extend([f"Context from table selection: {it}" for it in s1_items])
-        if s2_items:
-            applied_query_items.extend(s2_items)
-
-        if applied_query_items:
-            joined_applied = "\n".join(f"- {it}" for it in applied_query_items)
-            val_sections.append(
-                f"[APPLIED QUERY GUIDANCE]:\n{joined_applied}\n"
-                "(Note: The above user guidance was explicitly requested by the user to scope query generation. All requested filters, status codes, grains, and constraints are authorized user refinements and MUST be accepted as correct.)"
-            )
-        if s3_items:
-            joined_s3 = "\n".join(f"- {it}" for it in s3_items)
-            val_sections.append(
-                f"[USER VALIDATION GUIDANCE]:\n{joined_s3}\n"
-                "(Note: User validation guidance clarifies user intent or acceptable caveats. Ensure the query remains strictly read-only and free of syntax errors.)"
-            )
-
-        s3_val_guidance = "\n\n".join(val_sections) if val_sections else None
 
         # ----------------------------------------------------
         # Stage 1: Table Selection (if actual_start == "table_selection")
@@ -1179,7 +1057,9 @@ class NL2AnyQueryOrchestrator:
                     accum_selector_tokens += getattr(selector, "last_prompt_tokens", 0)
                     selector.last_prompt_tokens = 0
                     retry_msg = "No tables were selected. Please select all required tables from the database schema to answer the question."
-                    selector_feedback = f"{s1_user_guidance}\n\n[SYSTEM RETRY FEEDBACK]:\n{retry_msg}" if s1_user_guidance else retry_msg
+                    selector_feedback = compose_feedback_prompt(
+                        s1_user_guidance, f"[SYSTEM RETRY FEEDBACK]:\n{retry_msg}"
+                    )
                     continue
 
                 selected_objs = selection.selected_objects
@@ -1291,7 +1171,9 @@ class NL2AnyQueryOrchestrator:
                             f"lacks required schema information: {gen_result.reason}. "
                             f"Missing tables/concepts: [{missing_str}]. Please re-evaluate the full schema and select ALL necessary tables."
                         )
-                        selector_feedback = f"{s1_user_guidance}\n\n[SYSTEM RETRY FEEDBACK]:\n{sys_fb}" if s1_user_guidance else sys_fb
+                        selector_feedback = compose_feedback_prompt(
+                            s1_user_guidance, f"[SYSTEM RETRY FEEDBACK]:\n{sys_fb}"
+                        )
                         selection = await selector.select(
                             question=processed_question,
                             schema=schema,
@@ -1394,7 +1276,7 @@ class NL2AnyQueryOrchestrator:
                     feedback_msg += f". Suggestion: {clean_sugg}"
                 clean_fb = clean_unreadable_characters(strip_ansi_escapes(feedback_msg))
                 system_retry_part = f"[SYSTEM VALIDATOR FEEDBACK (RETRY)]:\n{clean_fb}"
-                gen_feedback = f"{s2_user_guidance}\n\n{system_retry_part}" if s2_user_guidance else system_retry_part
+                gen_feedback = compose_feedback_prompt(s2_user_guidance, system_retry_part)
 
         attempts = validator_retries + 1
         ctx: dict[str, Any] = {
