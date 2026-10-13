@@ -6,7 +6,12 @@ from pathlib import Path
 from typing import Any
 
 from backend.src.config import settings
-from backend.src.utils.text_utils import estimate_token_count, extract_json_block
+from backend.src.utils.text_utils import (
+    clean_unreadable_characters,
+    estimate_token_count,
+    extract_json_block,
+    strip_ansi_escapes,
+)
 from backend.src.schemas.pipeline import GeneratedQuery, GeneratorMissingInfo, MongoQuery, RelevantSchema
 from backend.src.data.models.schema import DatabaseType
 from backend.src.core.query_processing.pipeline.generators.base import QueryGenerator
@@ -77,10 +82,14 @@ class MongoQueryGenerator(QueryGenerator):
 
         feedback_section = ""
         if active_feedback:
-            feedback_section = (
-                f"ATTENTION - PREVIOUS ATTEMPT FAILED WITH FEEDBACK:\n{active_feedback}\n"
-                "Please fix the above issue in the generated query."
-            )
+            cleaned_fb = clean_unreadable_characters(strip_ansi_escapes(active_feedback)).strip()
+            if cleaned_fb.startswith("["):
+                feedback_section = cleaned_fb
+            else:
+                feedback_section = (
+                    f"ATTENTION - PREVIOUS ATTEMPT FAILED WITH FEEDBACK:\n{cleaned_fb}\n"
+                    "Please fix the above issue in the generated query."
+                )
 
         prompt = template.format(
             question=question,

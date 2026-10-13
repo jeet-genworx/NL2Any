@@ -9,7 +9,7 @@ from backend.src.control.providers.model.factory import get_available_providers
 from backend.src.core.ingestion.pipeline import run_ingestion_pipeline
 from backend.src.core.query_processing.pipeline.orchestrator import NL2AnyQueryOrchestrator
 from backend.src.schemas.pipeline import PipelineResponse
-from backend.src.schemas.request import QueryRequest
+from backend.src.schemas.request import QueryRequest, RerunRequest
 
 logger = logging.getLogger(__name__)
 
@@ -71,4 +71,29 @@ async def query_endpoint(
         raise HTTPException(status_code=502, detail=str(err))
     except Exception as err:
         logger.exception("Unexpected error executing query: %s", err)
+        raise HTTPException(status_code=500, detail=str(err))
+
+
+@router.post("/rerun", response_model=PipelineResponse)
+async def rerun_endpoint(
+    request: RerunRequest,
+    orchestrator: NL2AnyQueryOrchestrator = Depends(get_orchestrator),
+) -> PipelineResponse:
+    """Execute partial pipeline rerun from a specified stage using saved run state."""
+    try:
+        response = await orchestrator.rerun_pipeline(
+            run_id=request.run_id,
+            starting_stage=request.starting_stage,
+            feedback=request.feedback,
+        )
+        return response
+    except FileNotFoundError as err:
+        raise HTTPException(status_code=404, detail=str(err))
+    except ValueError as err:
+        raise HTTPException(status_code=400, detail=str(err))
+    except RuntimeError as err:
+        logger.error("Provider execution failed during rerun: %s", err)
+        raise HTTPException(status_code=502, detail=str(err))
+    except Exception as err:
+        logger.exception("Unexpected error executing rerun: %s", err)
         raise HTTPException(status_code=500, detail=str(err))

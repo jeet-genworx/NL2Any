@@ -195,4 +195,35 @@ async def test_mongo_generator_aggregate_output():
     assert "$match" in sub_pipeline[0]
 
 
+@pytest.mark.asyncio
+async def test_mongo_generator_with_feedback():
+    """Mongo generator processes feedback without NameError."""
+    generator = MongoQueryGenerator(provider=MockMongoProvider())
+    schema = RelevantSchema(
+        objects=[
+            SchemaObject(
+                name="customers",
+                kind=SchemaObjectKind.COLLECTION,
+                fields=[Field(name="address", type="object")],
+            )
+        ]
+    )
+    # Test with structured feedback
+    res1 = await generator.generate_query(
+        "Find customers",
+        schema,
+        feedback="[USER GUIDANCE / HINT]:\n- filter by active status",
+    )
+    assert res1.database_type == DatabaseType.MONGODB
+
+    # Test with regular retry feedback
+    res2 = await generator.generate_query(
+        "Find customers",
+        schema,
+        feedback="Stage 0: Missing filter for active customers",
+    )
+    assert res2.database_type == DatabaseType.MONGODB
+
+
+
 

@@ -106,6 +106,13 @@ VALIDATION CRITERIA:
      * Do NOT use vague hedges like "valid only if", "semantically correct only if", or "however". If something is fine, do NOT mention it.
      * Keep issues and suggestions short, clean, and directly actionable.
 
+7. User Guidance Precedence (MANDATORY & OVERRIDING):
+   - User guidance in [USER VALIDATION GUIDANCE] or [APPLIED QUERY GUIDANCE] represents explicit user instructions that refine, narrow, or modify the original question.
+   - The user has full authority to narrow or constrain the query scope (e.g. requesting a specific status, condition, date range, collection, or subset).
+   - You MUST evaluate semantic correctness against the question AS CONSTRAINED by user guidance.
+   - NEVER judge whether user guidance is "too narrow", "incomplete", or "omits other records/statuses".
+   - Any filter, condition, or stage matching user guidance is an intentional user constraint, NOT an undercount or semantic error. You must ACCEPT user-guided filters, statuses, and scopes; NEVER flag them as unauthorized, unrequested, or blocking filters.
+
 ERROR CLASSIFICATION RULES:
 - If completely correct, safe, and read-only:
   "valid": true, "error_type": "VALID", "issues": [], "suggestion": null
@@ -140,6 +147,8 @@ When the query correctly answers the user question, matches the Selected Schema,
 
 User Question:
 {question}
+
+{feedback_section}
 
 Selected Schema:
 {schema_context}

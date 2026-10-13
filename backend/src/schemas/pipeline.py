@@ -226,6 +226,10 @@ class ExecutionResult(BaseModel):
 class PipelineResponse(BaseModel):
     """Comprehensive trace and response of the NL2AnyQuery pipeline."""
 
+    run_id: str | None = PydanticField(
+        default=None,
+        description="Unique 32-char hex identifier for the pipeline run",
+    )
     database: str
     question: str
     provider: str | None = None

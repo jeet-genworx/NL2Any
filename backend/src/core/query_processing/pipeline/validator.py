@@ -181,6 +181,7 @@ class QueryValidator(BaseQueryValidator):
         generated_query: Any = None,
         schema: Any = None,
         plan: Any = None,
+        feedback: str | None = None,
         **kwargs: Any,
     ) -> ValidationResult:
         """Route query validation to specialized validator based on database type."""
@@ -198,12 +199,15 @@ class QueryValidator(BaseQueryValidator):
                 suggestion="Provide a valid GeneratedQuery.",
             )
 
+        active_feedback = feedback if isinstance(feedback, str) else kwargs.get("feedback")
+
         if active_query.database_type == DatabaseType.POSTGRESQL:
             return await self.postgres_validator.validate(
                 question=question,
                 generated_query=generated_query,
                 schema=schema,
                 plan=plan,
+                feedback=active_feedback,
                 **kwargs,
             )
         elif active_query.database_type == DatabaseType.MONGODB:
@@ -212,6 +216,7 @@ class QueryValidator(BaseQueryValidator):
                 generated_query=generated_query,
                 schema=schema,
                 plan=plan,
+                feedback=active_feedback,
                 **kwargs,
             )
         else:

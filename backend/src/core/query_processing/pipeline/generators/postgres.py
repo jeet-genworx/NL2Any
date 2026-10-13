@@ -110,11 +110,14 @@ class PostgresQueryGenerator(QueryGenerator):
 
         feedback_section = ""
         if active_feedback:
-            cleaned_feedback = clean_unreadable_characters(strip_ansi_escapes(active_feedback))
-            feedback_section = (
-                f"ATTENTION - PREVIOUS ATTEMPT FAILED WITH FEEDBACK:\n{cleaned_feedback}\n"
-                "Please fix the above issue in the generated query."
-            )
+            cleaned_feedback = clean_unreadable_characters(strip_ansi_escapes(active_feedback)).strip()
+            if cleaned_feedback.startswith("["):
+                feedback_section = cleaned_feedback
+            else:
+                feedback_section = (
+                    f"ATTENTION - PREVIOUS ATTEMPT FAILED WITH FEEDBACK:\n{cleaned_feedback}\n"
+                    "Please fix the above issue in the generated query."
+                )
 
         prompt = template.format(
             question=question,

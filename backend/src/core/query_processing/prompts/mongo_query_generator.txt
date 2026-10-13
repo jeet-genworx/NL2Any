@@ -53,6 +53,9 @@ RULES
 12. If the schema lacks a needed field, or the collections share no key, return:
 {{"status": "missing_information", "missing_tables": ["<needed>"], "reason": "<short reason>"}}
 Otherwise always generate the query.
+13. User Guidance Precedence:
+    - User guidance in [USER GUIDANCE / HINT] directly refines, updates, or overrides filters, status codes, date ranges, or grains from the original question.
+    - If user guidance specifies a particular status (e.g., status = 'pending', status = 'void') or condition, apply that filter directly; user guidance takes absolute priority over default lifecycle assumptions.
 
 QUESTION TYPE -> PATTERN MAPPING (MATCH YOUR QUESTION TO EXACTLY ONE PATTERN):
 - "count/total/number of <records> for <named entity>" (e.g. "total unhealthy logs for agent Test-Agent-Langgraph")
@@ -282,9 +285,10 @@ WRONG $sort/$limit after {{"_id": null}} group                      RIGHT: omit
 User Question:
 {question}
 
+{feedback_section}
+
 Selected Schema:
 {schema_context}
 
-{feedback_section}
 
 Output strictly ONE valid JSON object starting with {{ and ending with }}. Do NOT include "Output:", conversational text, or markdown code blocks.

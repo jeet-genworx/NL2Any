@@ -13,12 +13,12 @@ RULES:
    - Scope for matched/linked questions: When a question compares or links two entities, check whether the schema provides multiple link paths (FK on either side, link table, or matching descriptive identifier like contract_number). Pick the path that captures all related rows, or combine them with UNION. Prefer descriptive keys over a single nullable FK and state which key was chosen.
    - Explicit joins & relational integrity: Use standard explicit JOIN syntax (INNER JOIN or LEFT JOIN) with qualified table aliases. Joins must connect corresponding entity primary and foreign keys. Never produce Cartesian products and never join distinct entities solely on generic tenant, partition, or audit columns.
 
-3. Filtering: Hygiene vs Business Filters:
-   - Hygiene filters (allowed, but MUST be listed in assumptions):
-     * Soft-delete exclusions: Filter is_deleted = false or deleted_at IS NULL ONLY when those columns exist on that table in the Selected Schema.
-     * Spend question hygiene: When the question asks for spend, billing, or expense totals, exclude void and rejected records (e.g., status NOT IN ('void', 'rejected')) where a status column exists on that table.
+3. Filtering, Hygiene & User Guidance Precedence:
+   - User Guidance Precedence: User guidance in [USER GUIDANCE / HINT] directly refines, updates, or overrides filters, status codes, date ranges, or grains from the original question. If user guidance specifies a particular status (e.g., status = 'pending', status = 'void'), apply that filter directly; it takes priority over default hygiene or lifecycle exclusions.
+   - Record hygiene filters (allowed, but MUST be listed in assumptions):
+     * Soft-delete and inactive record exclusions: Filter soft-deleted or inactive records (e.g., is_deleted = false or deleted_at IS NULL) ONLY when those columns exist on that table in the Selected Schema.
      * Safe NULL comparisons: Use COALESCE(...) or IS DISTINCT FROM instead of != on nullable columns to prevent dropping NULL rows unexpectedly.
-   - Business filters (require question implication): Do NOT add unrequested business filters (e.g., invoice_type = 'AP', specific date ranges, or status codes) unless the question directly implies them. If the question requests a filter unsupported by the schema (e.g., "enterprise tenants" when no tier column exists), do NOT invent a column; state it under assumptions.
+   - Business filters (require question implication or guidance): Do NOT add unrequested business filters (e.g., specific entity categories, date ranges, or status codes) unless the question or user guidance directly implies or specifies them. If the question requests a filter unsupported by the schema, do NOT invent a column; state it under assumptions.
 
 4. Currency Normalization & Unit Consistency:
    - Prefer normalized currency columns (e.g., amount_usd) for cross-currency sums.
@@ -47,7 +47,8 @@ RULES:
 User Question:
 {question}
 
+{feedback_section}
+
 Selected Schema:
 {schema_context}
 
-{feedback_section}

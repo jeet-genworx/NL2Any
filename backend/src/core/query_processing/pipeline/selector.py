@@ -272,10 +272,14 @@ class TableSelector:
 
         feedback_context = ""
         if feedback:
-            feedback_context = (
-                f"\nATTENTION - PREVIOUS ATTEMPT FEEDBACK (RETRY):\n{feedback}\n"
-                "Please reconsider table selection to address this feedback.\n"
-            )
+            cleaned_fb = feedback.strip()
+            if cleaned_fb.startswith("["):
+                feedback_context = f"\n{cleaned_fb}\n\n"
+            else:
+                feedback_context = (
+                    f"\nATTENTION - PREVIOUS ATTEMPT FEEDBACK (RETRY):\n{cleaned_fb}\n"
+                    "Please reconsider table selection to address this feedback.\n"
+                )
 
         db_key = target_key or getattr(schema, "database_name", "default")
         use_cache = (

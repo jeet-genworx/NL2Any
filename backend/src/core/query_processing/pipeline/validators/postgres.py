@@ -4,6 +4,7 @@ import logging
 from pathlib import Path
 import re
 from typing import Any
+import sqlglot
 
 from backend.src.config import settings
 from backend.src.utils.text_utils import (
@@ -71,6 +72,7 @@ class PostgresQueryValidator(QueryValidator):
         generated_query: Any = None,
         schema: Any = None,
         plan: Any = None,
+        feedback: str | None = None,
         **kwargs: Any,
     ) -> ValidationResult:
         """Validate generated PostgreSQL query using safety checks and SLM verification."""
@@ -114,10 +116,24 @@ class PostgresQueryValidator(QueryValidator):
         template = self._load_prompt_template()
         schema_context = format_relevant_schema(active_schema)
 
+        active_feedback = feedback if isinstance(feedback, str) else kwargs.get("feedback")
+        feedback_section = ""
+        if active_feedback:
+            cleaned_feedback = clean_unreadable_characters(strip_ansi_escapes(active_feedback))
+            if cleaned_feedback.startswith("["):
+                feedback_section = cleaned_feedback
+            else:
+                feedback_section = (
+                    f"[USER VALIDATION GUIDANCE]:\n{cleaned_feedback}\n"
+                    "Note: User guidance clarifies user intent or acceptable caveats. "
+                    "Ensure the query remains strictly read-only and free of SQL syntax errors."
+                )
+
         prompt = template.format(
             question=question,
             schema_context=schema_context,
             query_context=active_query.formatted_query,
+            feedback_section=feedback_section,
         )
         self.last_prompt_tokens = estimate_token_count(prompt)
 
@@ -165,6 +181,23 @@ class PostgresQueryValidator(QueryValidator):
                 raw_err_type = ValidationErrorType.SEMANTIC_ERROR.value
 
             data["error_type"] = ValidationErrorType[raw_err_type] if isinstance(raw_err_type, str) else raw_err_type
+
+            # AST syntax check enforcement: user guidance can influence LLM, but cannot bypass syntax validity
+            if data.get("valid", False):
+                try:
+                    sqlglot.parse_one(sql_str, read="postgres")
+                except Exception as parse_err:
+                    clean_err = clean_unreadable_characters(strip_ansi_escapes(str(parse_err)))
+                    data["valid"] = False
+                    data["verdict"] = "incorrect"
+                    data["error_type"] = ValidationErrorType.SYNTAX_ERROR
+                    issues_list = data.get("issues", [])
+                    if not isinstance(issues_list, list):
+                        issues_list = [str(issues_list)]
+                    issues_list.append(f"SQL syntax error: {clean_err}")
+                    data["issues"] = issues_list
+                    if not data.get("suggestion"):
+                        data["suggestion"] = "Fix the syntax of the generated PostgreSQL query."
 
             raw_suggestion = data.get("suggestion")
             if raw_suggestion:

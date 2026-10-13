@@ -44,6 +44,23 @@ class QueryRequest(BaseModel):
     )
 
 
+class RerunRequest(BaseModel):
+    """Request model for partial pipeline rerun with per-stage feedback."""
+
+    run_id: str = Field(
+        ...,
+        description="32-character hexadecimal ID of the original run to rerun from",
+    )
+    starting_stage: Literal["table_selection", "query_generation", "validation"] | None = Field(
+        default=None,
+        description="Stage to rerun from onward. If omitted, earliest stage with feedback is selected.",
+    )
+    feedback: dict[str, str] = Field(
+        default_factory=dict,
+        description="Mapping of stage name to user feedback text",
+    )
+
+
 class ConnectionRequest(BaseModel):
     """A connection string supplied through the frontend."""
 

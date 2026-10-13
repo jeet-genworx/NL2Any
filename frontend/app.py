@@ -131,6 +131,80 @@ def run_ingestion(database: str, use_mst: bool, api_url: str, force: bool = Fals
         return False, f"Ingestion failed: {err}"
 
 
+def execute_rerun(
+    api_url: str,
+    run_id: str,
+    starting_stage: str,
+    feedback_payload: dict[str, str],
+) -> None:
+    """Execute partial pipeline rerun from a specified stage."""
+    spinner_label = f"Rerunning pipeline from {starting_stage.replace('_', ' ').title()}..."
+    with st.spinner(spinner_label):
+        start_time = time.perf_counter()
+        try:
+            resp = httpx.post(
+                f"{api_url}/rerun",
+                json={
+                    "run_id": run_id,
+                    "starting_stage": starting_stage,
+                    "feedback": feedback_payload,
+                },
+                timeout=None,
+            )
+            elapsed_time = time.perf_counter() - start_time
+            if resp.status_code == 404:
+                st.session_state["query_data"] = None
+                st.session_state["query_execution_time"] = None
+                st.session_state["query_error"] = (
+                    "This run has expired or does not exist. Please ask your question again."
+                )
+                st.session_state["feedback_warning"] = None
+                st.rerun()
+                return
+
+            if resp.status_code == 400:
+                try:
+                    detail = resp.json().get("detail", resp.text)
+                except Exception:
+                    detail = resp.text
+                st.session_state["feedback_warning"] = f"🛡️ {detail}"
+                st.rerun()
+                return
+
+            resp.raise_for_status()
+            st.session_state["query_data"] = resp.json()
+            st.session_state["query_execution_time"] = elapsed_time
+            st.session_state["query_error"] = None
+            st.session_state["feedback_warning"] = None
+        except httpx.HTTPStatusError as err:
+            elapsed_time = time.perf_counter() - start_time
+            try:
+                detail = err.response.json().get("detail", err.response.text)
+            except Exception:
+                detail = err.response.text
+            if err.response.status_code == 404:
+                st.session_state["query_data"] = None
+                st.session_state["query_execution_time"] = None
+                st.session_state["query_error"] = (
+                    "This run has expired or does not exist. Please ask your question again."
+                )
+                st.session_state["feedback_warning"] = None
+            elif err.response.status_code == 400:
+                st.session_state["feedback_warning"] = f"🛡️ {detail}"
+            elif err.response.status_code >= 500:
+                st.session_state["query_error"] = f"❌ Backend Server Error (HTTP {err.response.status_code}): {detail}"
+            else:
+                st.session_state["query_error"] = f"❌ Pipeline Error: {detail}"
+        except httpx.ConnectError:
+            st.session_state["query_error"] = (
+                f"Could not connect to FastAPI backend at {api_url}. "
+                "Please make sure it is running via `uv run run-api`."
+            )
+        except Exception as err:
+            st.session_state["query_error"] = f"Error during rerun: {err}"
+        st.rerun()
+
+
 def format_schema_dict_as_text(schema_dict: dict | None) -> str:
     """Format schema dictionary into human-readable text."""
     if not schema_dict or not isinstance(schema_dict, dict):
@@ -543,6 +617,7 @@ with st.sidebar:
                 st.session_state["query_data"] = None
                 st.session_state["query_execution_time"] = None
                 st.session_state["query_error"] = None
+                st.session_state["feedback_warning"] = None
     else:
         st.caption(
             "No canned questions for this database — ask anything about its own "
@@ -570,10 +645,13 @@ if "query_execution_time" not in st.session_state:
     st.session_state["query_execution_time"] = None
 if "query_error" not in st.session_state:
     st.session_state["query_error"] = None
+if "feedback_warning" not in st.session_state:
+    st.session_state["feedback_warning"] = None
 
 
 def on_run_query_click() -> None:
     st.session_state["is_executing_query"] = True
+    st.session_state["feedback_warning"] = None
 
 
 is_executing = st.session_state["is_executing_query"]
@@ -661,6 +739,8 @@ if is_executing:
 
 if st.session_state.get("query_error"):
     st.error(st.session_state["query_error"])
+if st.session_state.get("feedback_warning"):
+    st.warning(st.session_state["feedback_warning"])
 
 data = st.session_state.get("query_data")
 execution_time = st.session_state.get("query_execution_time")
@@ -828,6 +908,29 @@ if data:
             with tab_raw:
                 st.code(json.dumps(data.get("relevant_schema", {}), indent=2, default=str), language="json")
 
+        run_id = data.get("run_id")
+        if run_id:
+            st.divider()
+            st.markdown("##### 💬 Feedback & Rerun from Stage 1")
+            st.caption("Provide domain guidance or table suggestions to rerun from Table Selection.")
+            st.text_area(
+                "Feedback for Table Selection:",
+                placeholder="e.g. Include contracts table as well",
+                key="feedback_stage_1",
+            )
+            if st.button("🔄 Rerun from Table Selection", key="rerun_btn_stage_1", type="primary", disabled=is_executing):
+                fb_payload = {}
+                s1_val = st.session_state.get("feedback_stage_1", "").strip()
+                s2_val = st.session_state.get("feedback_stage_2", "").strip()
+                s3_val = st.session_state.get("feedback_stage_3", "").strip()
+                if s1_val:
+                    fb_payload["table_selection"] = s1_val
+                if s2_val:
+                    fb_payload["query_generation"] = s2_val
+                if s3_val:
+                    fb_payload["validation"] = s3_val
+                execute_rerun(api_url, run_id, "table_selection", fb_payload)
+
     with st.expander("4. Generated Query", expanded=True):
         if stage_tokens and stage_tokens.get("query_generation") is not None:
             st.caption(f"🪙 **Prompt Tokens Sent:** `{stage_tokens.get('query_generation', 0):,}` tokens")
@@ -843,6 +946,26 @@ if data:
         else:
             st.write("No query generated.")
 
+        run_id = data.get("run_id")
+        if run_id:
+            st.divider()
+            st.markdown("##### 💬 Feedback & Rerun from Stage 2")
+            st.caption("Clarify query intent, metrics, or filters to rerun from Query Generation (reuses selected tables).")
+            st.text_area(
+                "Feedback for Query Generation:",
+                placeholder="e.g. Group by vendor_id instead of vendor_name",
+                key="feedback_stage_2",
+            )
+            if st.button("🔄 Rerun from Query Generation", key="rerun_btn_stage_2", type="primary", disabled=is_executing):
+                fb_payload = {}
+                s2_val = st.session_state.get("feedback_stage_2", "").strip()
+                s3_val = st.session_state.get("feedback_stage_3", "").strip()
+                if s2_val:
+                    fb_payload["query_generation"] = s2_val
+                if s3_val:
+                    fb_payload["validation"] = s3_val
+                execute_rerun(api_url, run_id, "query_generation", fb_payload)
+
     with st.expander("5. Validation", expanded=False):
         if stage_tokens and stage_tokens.get("validation") is not None:
             st.caption(f"🪙 **Prompt Tokens Sent:** `{stage_tokens.get('validation', 0):,}` tokens")
@@ -857,6 +980,23 @@ if data:
         if val_data.get("suggestion"):
             st.markdown(f"**Suggestion:** {val_data.get('suggestion')}")
         st.json(val_data)
+
+        run_id = data.get("run_id")
+        if run_id:
+            st.divider()
+            st.markdown("##### 💬 Feedback & Rerun from Stage 3")
+            st.caption("Provide validation guidance or acceptable caveats to re-validate the generated query.")
+            st.text_area(
+                "Feedback for Validation:",
+                placeholder="e.g. The query is valid; NULL handling on invoice_id is intended",
+                key="feedback_stage_3",
+            )
+            if st.button("🔄 Rerun from Validation", key="rerun_btn_stage_3", type="primary", disabled=is_executing):
+                fb_payload = {}
+                s3_val = st.session_state.get("feedback_stage_3", "").strip()
+                if s3_val:
+                    fb_payload["validation"] = s3_val
+                execute_rerun(api_url, run_id, "validation", fb_payload)
 
     with st.expander("6. Safety Policy", expanded=False):
         pol_data = data.get("policy", {}) or {}

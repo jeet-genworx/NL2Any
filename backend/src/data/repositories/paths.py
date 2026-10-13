@@ -85,3 +85,10 @@ def embeddings_path(database: TargetLike) -> Path:
 def describe_prompt_path() -> Path:
     """Prompt template driving the description stage."""
     return _resolve("core/query_processing/prompts/table_description.txt")
+
+
+def runs_dir() -> Path:
+    """Directory holding persisted run state files for partial reruns."""
+    d = _resolve("data/runs")
+    d.mkdir(parents=True, exist_ok=True)
+    return d

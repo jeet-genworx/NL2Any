@@ -65,6 +65,7 @@ class MongoQueryValidator(QueryValidator):
         generated_query: Any = None,
         schema: Any = None,
         plan: Any = None,
+        feedback: str | None = None,
         **kwargs: Any,
     ) -> ValidationResult:
         """Validate generated MongoDB query using safety checks and SLM verification."""
@@ -181,10 +182,24 @@ class MongoQueryValidator(QueryValidator):
         template = self._load_prompt_template()
         schema_context = format_relevant_schema(active_schema)
 
+        active_feedback = feedback if isinstance(feedback, str) else kwargs.get("feedback")
+        feedback_section = ""
+        if active_feedback:
+            cleaned_feedback = clean_unreadable_characters(strip_ansi_escapes(active_feedback))
+            if cleaned_feedback.startswith("["):
+                feedback_section = cleaned_feedback
+            else:
+                feedback_section = (
+                    f"[USER VALIDATION GUIDANCE]:\n{cleaned_feedback}\n"
+                    "Note: User guidance clarifies user intent or acceptable caveats. "
+                    "Ensure the query remains strictly read-only and free of MongoDB syntax errors."
+                )
+
         prompt = template.format(
             question=question,
             schema_context=schema_context,
             query_context=active_query.formatted_query,
+            feedback_section=feedback_section,
         )
         self.last_prompt_tokens = estimate_token_count(prompt)
 
