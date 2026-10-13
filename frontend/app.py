@@ -18,6 +18,35 @@ st.title("🔍 NL2AnyQuery")
 st.caption("Proof-of-Concept: Natural Language to Safe Database Query Pipeline")
 
 
+PROVIDER_OPTIONS = {
+    "koboldcpp": "SLM (KoboldCpp)",
+    "huggingface": "Hugging Face",
+    "gemini": "Gemini",
+}
+
+# Sentinel for a stage that follows the default provider rather than naming one.
+# Empty rather than None so Streamlit keeps it as a stable selectbox option, and
+# so it is falsy -- the request simply omits the override.
+SAME_AS_DEFAULT = ""
+
+
+def provider_label(key: str) -> str:
+    """Display name for a provider key, unknown keys shown as they came."""
+    return PROVIDER_OPTIONS.get(key, key)
+
+
+def stage_provider_label(key: str, default_key: str) -> str:
+    """Label for one stage's provider option.
+
+    The "same as default" option names the provider it would follow, so the
+    picker says what the stage will actually run on without being read against
+    the default picker above it.
+    """
+    if key == SAME_AS_DEFAULT:
+        return f"Same as default ({provider_label(default_key)})"
+    return provider_label(key)
+
+
 DEFAULT_DATABASES = [
     {"key": "postgres", "label": "PostgreSQL (Relational)", "database_type": "postgresql"},
     {"key": "mongo", "label": "MongoDB (Document)", "database_type": "mongodb"},
@@ -298,18 +327,44 @@ with st.sidebar:
     )
     db_type = db_types.get(db_choice, "postgresql")
 
-    PROVIDER_OPTIONS = {
-        "koboldcpp": "SLM (KoboldCpp)",
-        "huggingface": "Hugging Face",
-        "gemini": "Gemini",
-    }
     provider_choice = st.selectbox(
         "LLM Provider",
         options=list(PROVIDER_OPTIONS.keys()),
         format_func=lambda key: PROVIDER_OPTIONS[key],
         index=0,
-        help="Select the language model provider for query generation.",
+        key="provider_choice",
+        help="The default provider. Every stage uses it unless overridden below.",
     )
+
+    # Table selection and query generation are different jobs -- one reads a
+    # whole schema neighborhood and answers with a table list, the other writes
+    # a single query and reacts to validation feedback -- so a model that is
+    # good at one is not necessarily the right choice for the other. Each can
+    # be pointed somewhere else; left on "Same as default" they follow the
+    # picker above, which is the behaviour this app had before.
+    with st.expander("Per-stage providers"):
+        st.caption(
+            "Override the default for either half of the pipeline. Guardrail, "
+            "spelling and semantic analysis always run on the default provider."
+        )
+        selector_provider_choice = st.selectbox(
+            "Table Selection",
+            options=[SAME_AS_DEFAULT, *PROVIDER_OPTIONS],
+            format_func=lambda key: stage_provider_label(key, provider_choice),
+            key="selector_provider_choice",
+            help="Model that picks which tables the question needs.",
+        )
+        generator_provider_choice = st.selectbox(
+            "Query Generation",
+            options=[SAME_AS_DEFAULT, *PROVIDER_OPTIONS],
+            format_func=lambda key: stage_provider_label(key, provider_choice),
+            key="generator_provider_choice",
+            help=(
+                "Model that plans, writes and validates the query. Planning and "
+                "validation ride with generation because they feed back into it "
+                "on each retry."
+            ),
+        )
 
     st.divider()
     st.markdown("### Database Ingestion")
@@ -427,40 +482,76 @@ col1, col2 = st.columns([1, 5])
 with col1:
     run_btn = st.button("🚀 Run Query", type="primary", use_container_width=True)
 
-if run_btn and question.strip():
-    spinner_label = f"Executing pipeline through {PROVIDER_OPTIONS.get(provider_choice, provider_choice)}..."
-    with st.spinner(spinner_label):
+
+def render_table_gate(data: dict, api_url: str) -> None:
+    """The human-in-the-loop stop: settle which tables the query may use.
+
+    Reached only when the selector could not be trusted on its own -- it never
+    became confident, its call failed outright, or it named tables that do not
+    exist or cannot be joined. Everything after table selection is scoped by
+    this list, so a wrong one produces a confident answer to a different
+    question rather than an error, which is why it is worth a human's look.
+    """
+    approval = data.get("approval") or {}
+    run_id = approval.get("run_id")
+    uncertainty = approval.get("uncertainty") or {}
+    proposed = approval.get("proposed_objects") or []
+    selectable = approval.get("selectable_objects") or []
+
+    st.warning(
+        "**Table selection needs your approval.** "
+        + (uncertainty.get("detail") or "The table selector was not certain.")
+    )
+    reasons = uncertainty.get("reasons") or []
+    if reasons:
+        st.caption("Signals: " + ", ".join(f"`{r}`" for r in reasons))
+
+    chosen = st.multiselect(
+        "Tables this query may use:",
+        options=selectable,
+        default=[t for t in proposed if t in selectable],
+        format_func=_short,
+        key=f"approve_{run_id}",
+        help=(
+            "Pick from the candidate set only. Bridge tables needed to join your "
+            "choice are added automatically -- see the BFS neighborhood below for "
+            "how each candidate relates to the question."
+        ),
+    )
+
+    col_go, _ = st.columns([1, 3])
+    with col_go:
+        go = st.button("✅ Continue with these tables", type="primary", use_container_width=True)
+    if not go:
+        return
+    if not chosen:
+        st.error("Select at least one table.")
+        return
+
+    with st.spinner("Resuming the pipeline with your tables..."):
         try:
-            jargon_list = [j.strip() for j in jargons_input.split(",") if j.strip()]
             resp = httpx.post(
-                f"{api_url}/query",
-                json={
-                    "database": db_choice,
-                    "question": question.strip(),
-                    "provider": provider_choice,
-                    "jargons": jargon_list,
-                },
+                f"{api_url}/query/{run_id}/tables",
+                json={"approved_objects": chosen},
                 timeout=None,
             )
             resp.raise_for_status()
-            data = resp.json()
-        except httpx.ConnectError:
-            st.error(
-                f"Could not connect to FastAPI backend at {api_url}. "
-                "Please make sure it is running via `uv run run-api`."
-            )
-            st.stop()
+            st.session_state["response"] = resp.json()
         except httpx.HTTPStatusError as err:
             try:
                 detail = err.response.json().get("detail", err.response.text)
             except Exception:
                 detail = err.response.text
-            st.error(f"❌ Provider Error ({PROVIDER_OPTIONS.get(provider_choice, provider_choice)}): {detail}")
-            st.stop()
+            st.error(f"❌ Could not resume: {detail}")
+            return
         except Exception as err:
-            st.error(f"Error querying API: {err}")
-            st.stop()
+            st.error(f"Error resuming query: {err}")
+            return
+    st.rerun()
 
+
+def render_response(data: dict, db_type: str) -> None:
+    """Render a pipeline response: its answer, then its whole trace."""
     # Check for basic answers or errors
     if data.get("basic_answer"):
         st.info(f"ℹ️ **System Response:** {data['basic_answer']}")
@@ -515,6 +606,25 @@ if run_btn and question.strip():
     st.divider()
     st.markdown("### 🔍 Pipeline Tracing & Inspection")
 
+    # Reported by the backend rather than read back off the picker, so the
+    # trace describes the run in front of you even after the sidebar moved on.
+    providers_used = data.get("providers") or {}
+    if providers_used:
+        st.caption(
+            "Providers: "
+            + " · ".join(
+                f"{label} `{provider_label(providers_used[key])}`"
+                for key, label in (
+                    ("default", "default"),
+                    ("selector", "table selection"),
+                    ("generator", "query generation"),
+                )
+                if providers_used.get(key)
+            )
+        )
+    elif data.get("provider"):
+        st.caption(f"Provider: `{provider_label(data['provider'])}`")
+
     with st.expander("Guardrail"):
         st.json(data.get("guardrail", {}))
 
@@ -561,6 +671,17 @@ if run_btn and question.strip():
         notice = data.get("selection_notice")
         if notice:
             st.warning(notice)
+        approved = data.get("table_approval")
+        if approved:
+            if approved.get("changed"):
+                st.info(
+                    "**Settled by a human.** Proposed: "
+                    + ", ".join(f"`{_short(t)}`" for t in approved.get("proposed_objects", []))
+                    + " → approved: "
+                    + ", ".join(f"`{_short(t)}`" for t in approved.get("approved_objects", []))
+                )
+            else:
+                st.info("**Settled by a human:** the proposed tables were approved unchanged.")
         connectors = data.get("connector_objects") or []
         if connectors:
             st.markdown(
@@ -625,3 +746,78 @@ if run_btn and question.strip():
 
     with st.expander("Results"):
         st.json(data.get("results", {}))
+
+
+if run_btn and question.strip():
+    # Named individually only where a stage was pointed somewhere else, so the
+    # usual single-provider run reads the way it always did.
+    stage_overrides = {
+        "selector_provider": selector_provider_choice or None,
+        "generator_provider": generator_provider_choice or None,
+    }
+    active_stages = [
+        f"{label} on {provider_label(key)}"
+        for label, key in (
+            ("selection", stage_overrides["selector_provider"]),
+            ("generation", stage_overrides["generator_provider"]),
+        )
+        if key
+    ]
+    spinner_label = f"Executing pipeline through {provider_label(provider_choice)}"
+    spinner_label += f" ({', '.join(active_stages)})..." if active_stages else "..."
+    with st.spinner(spinner_label):
+        try:
+            jargon_list = [j.strip() for j in jargons_input.split(",") if j.strip()]
+            resp = httpx.post(
+                f"{api_url}/query",
+                json={
+                    "database": db_choice,
+                    "question": question.strip(),
+                    "provider": provider_choice,
+                    **{k: v for k, v in stage_overrides.items() if v},
+                    "jargons": jargon_list,
+                    # This client can stop and ask, so a run the selector is not
+                    # sure about should wait for an answer rather than guess.
+                    "allow_table_approval": True,
+                },
+                timeout=None,
+            )
+            resp.raise_for_status()
+            st.session_state["response"] = resp.json()
+            st.session_state["response_db_type"] = db_type
+        except httpx.ConnectError:
+            st.session_state.pop("response", None)
+            st.error(
+                f"Could not connect to FastAPI backend at {api_url}. "
+                "Please make sure it is running via `uv run run-api`."
+            )
+            st.stop()
+        except httpx.HTTPStatusError as err:
+            st.session_state.pop("response", None)
+            try:
+                detail = err.response.json().get("detail", err.response.text)
+            except Exception:
+                detail = err.response.text
+            # Names every provider the run was pointed at, not just the
+            # default: with a stage overridden, the failure may well be its.
+            blamed = " / ".join(
+                dict.fromkeys(
+                    [provider_label(provider_choice)]
+                    + [provider_label(k) for k in stage_overrides.values() if k]
+                )
+            )
+            st.error(f"❌ Provider Error ({blamed}): {detail}")
+            st.stop()
+        except Exception as err:
+            st.session_state.pop("response", None)
+            st.error(f"Error querying API: {err}")
+            st.stop()
+
+# Rendered from session state rather than straight from the response, because a
+# run paused for table approval is answered on a later rerun and has to survive
+# until then.
+_data = st.session_state.get("response")
+if _data:
+    if _data.get("status") == "awaiting_table_approval":
+        render_table_gate(_data, api_url)
+    render_response(_data, st.session_state.get("response_db_type", db_type))

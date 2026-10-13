@@ -159,6 +159,7 @@ nl-anyql/
 │       │       ├── nlp/
 │       │       │   └── linguistic.py
 │       │       ├── pipeline/
+│       │       │   ├── approval.py
 │       │       │   ├── executor.py
 │       │       │   ├── expansion.py
 │       │       │   ├── guardrail.py
@@ -331,6 +332,7 @@ uv run run-api
 * Health Check: `http://127.0.0.1:8000/health`
 * Schema Inspection: `http://127.0.0.1:8000/schema/postgres`
 * Ingestion (metadata → graph/MST → descriptions → embeddings): `POST /ingest/postgres` or `POST /ingest/mongo`
+* Querying: `POST /query`. Send `"allow_table_approval": true` to have an uncertain table selection stop for a human instead of proceeding: the response comes back with `"status": "awaiting_table_approval"` and an `approval` block holding the proposed tables and the candidate set, and `POST /query/{run_id}/tables` with `{"approved_objects": [...]}` finishes the run. Left out, such a run proceeds as before and reports its doubt on `selection_notice`.
 
 ### Option B: Run Streamlit Frontend
 ```bash

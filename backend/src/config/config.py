@@ -49,7 +49,23 @@ class Settings(BaseSettings):
     gemini_model: str = Field(
         default="",
         alias="GEMINI_MODEL",
-        description="Google Gemini Model ID (e.g. gemini-2.5-flash)",
+        description=(
+            "Gemini model ID. Bare (e.g. 'gemini-2.5-flash') when talking to "
+            "Google directly; whatever name the gateway exposes when "
+            "GEMINI_BASE_URL is set, which for LiteLLM means the provider "
+            "prefix too (e.g. 'gemini/gemini-2.5-flash')"
+        ),
+    )
+    gemini_base_url: str | None = Field(
+        default=None,
+        alias="GEMINI_BASE_URL",
+        description=(
+            "Optional OpenAI-compatible gateway to reach Gemini through, such as "
+            "a LiteLLM proxy. Set it and GEMINI_API_KEY becomes the gateway's "
+            "key (LiteLLM issues 'sk-...' virtual keys) rather than a Google "
+            "'AIza...' key. Left unset, the provider calls Google directly, so "
+            "the presence of this URL is the only switch between the two."
+        ),
     )
 
     postgres_dsn: str = Field(
@@ -153,6 +169,20 @@ class Settings(BaseSettings):
     )
 
     @property
+    def soft_delete_column_names(self) -> tuple[str, ...]:
+        """Configured deletion-marker column names, lowercased, in priority order."""
+        return tuple(
+            part.strip().lower() for part in self.soft_delete_columns.split(",") if part.strip()
+        )
+
+    @property
+    def row_scope_column_names(self) -> tuple[str, ...]:
+        """Configured tenant/organisation scope column names, lowercased."""
+        return tuple(
+            part.strip().lower() for part in self.row_scope_columns.split(",") if part.strip()
+        )
+
+    @property
     def effective_similarity_top_k(self) -> int:
         """Effective top-K limit for candidate table similarity matching from settings."""
         if self.similarity_top_k != 10:
@@ -162,6 +192,52 @@ class Settings(BaseSettings):
         default=3,
         alias="MAX_RETRIES",
         description="Maximum retry attempts for table selection and query generation",
+    )
+    table_approval_enabled: bool = Field(
+        default=True,
+        alias="TABLE_APPROVAL_ENABLED",
+        description=(
+            "Whether a run may pause for a human to settle its tables when the "
+            "selector is not certain. A request still has to ask for the gate "
+            "with allow_table_approval, so this is the deployment-wide switch "
+            "that turns the pause off for every caller at once -- useful when "
+            "the API is being driven by something that cannot answer."
+        ),
+    )
+    table_approval_ttl_seconds: int = Field(
+        default=900,
+        alias="TABLE_APPROVAL_TTL_SECONDS",
+        description=(
+            "How long a run paused for table approval is kept before it is "
+            "discarded. A paused run holds its neighborhood and analysis in "
+            "memory, and a human who closes the tab never comes back, so it "
+            "expires rather than waiting forever."
+        ),
+    )
+    soft_delete_columns: str = Field(
+        default="is_deleted,deleted_at,is_archived,archived_at",
+        alias="SOFT_DELETE_COLUMNS",
+        description=(
+            "Comma-separated column names, in priority order, that a database "
+            "uses to mark a row deleted rather than removing it. Which name a "
+            "schema uses is a house convention, not a standard -- is_deleted, "
+            "deleted_at and is_archived are all common, and plenty of schemas "
+            "have none. The generator is told which of these each table in the "
+            "slice actually has, so it never has to guess: told merely to "
+            "'exclude deleted rows', a small model adds is_deleted to tables "
+            "that do not have the column. Set empty to disable the hint."
+        ),
+    )
+    row_scope_columns: str = Field(
+        default="tenant_id,org_id,organisation_id,organization_id,account_id,workspace_id",
+        alias="ROW_SCOPE_COLUMNS",
+        description=(
+            "Comma-separated column names that partition rows between tenants, "
+            "organisations or accounts. When both sides of a join carry one, it "
+            "belongs in the ON clause: joining on the key alone can pair rows "
+            "from different tenants. Single-tenant databases should set this "
+            "empty."
+        ),
     )
     table_neighborhood_max_levels: int = Field(
         default=3,

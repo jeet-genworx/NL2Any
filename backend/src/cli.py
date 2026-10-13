@@ -62,6 +62,16 @@ def seed_mongo_cli() -> None:
     seed_mongo()
 
 
+def seed_finops_cli() -> None:
+    """CLI handler for seed-finops: fills the FinOpsIQ core tables.
+
+    Inserts only. The FinOpsIQ schema is Alembic-managed and already exists;
+    unlike the demo seeders this one never creates or drops a table.
+    """
+    from backend.src.data.seed.finops import seed_finops
+    seed_finops()
+
+
 def test_model_cli() -> None:
     """CLI handler for test-model: verifies KoboldCpp connectivity."""
     from backend.src.utils.text_utils import strip_think_tags

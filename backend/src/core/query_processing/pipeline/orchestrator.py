@@ -21,14 +21,22 @@ from backend.src.schemas.pipeline import (
     PolicyResult,
     QuestionAnalysis,
     RelevantSchema,
+    SelectionUncertainty,
     SemanticAnalysisResult,
     SpellingCorrectionResult,
+    TableApprovalRecord,
+    TableApprovalRequest,
     ValidationErrorType,
     ValidationResult,
 )
 from backend.src.schemas.pipeline import QueryPlan, TableNeighborhood
 from backend.src.data.models.schema import DatabaseSchema, DatabaseType, Relationship
 from backend.src.core.query_processing.nlp.linguistic import LinguisticAnalyzer
+from backend.src.core.query_processing.pipeline.approval import (
+    PendingRun,
+    PendingRunStore,
+    assess_selection,
+)
 from backend.src.core.query_processing.pipeline.executor import QueryExecutor
 from backend.src.core.query_processing.pipeline.expansion import SchemaExpander
 from backend.src.core.query_processing.pipeline.generators.mongo import MongoQueryGenerator
@@ -75,6 +83,7 @@ class _SelectionOutcome:
     retries: int = 0
     notice: str | None = None
     error: str | None = None
+    uncertainty: SelectionUncertainty | None = None
 
 
 class NL2AnyQueryOrchestrator:
@@ -121,6 +130,10 @@ class NL2AnyQueryOrchestrator:
         self.executor = executor or QueryExecutor()
         self.results = results or ResultProcessor()
         self.max_retries = max_retries if max_retries is not None else settings.max_retries
+        # Runs parked at the table-approval gate, waiting on a human. Held here
+        # because the API keeps one orchestrator per process, so the resume call
+        # finds the run the first call parked.
+        self.pending_runs = PendingRunStore()
 
         self._custom_guardrail = guardrail is not None
         self._custom_semantic = semantic is not None
@@ -138,62 +151,69 @@ class NL2AnyQueryOrchestrator:
         # built from a different schema.
         self._join_graphs: dict[int, tuple[DatabaseSchema, JoinGraph]] = {}
 
-    def _get_stages_for_provider(self, active_provider: ModelProvider):
-        """Return stage instances bound to the active provider for this execution."""
-        if active_provider is self.provider:
-            return (
-                self.guardrail,
-                self.semantic,
-                self.selector,
-                self.planner,
-                self.postgres_gen,
-                self.mongo_gen,
-                self.validator,
-            )
-        guardrail = (
-            self.guardrail
-            if self._custom_guardrail
-            else GuardrailClassifier(provider=active_provider)
-        )
-        semantic = (
-            self.semantic
-            if self._custom_semantic
-            else SemanticAnalyzer(provider=active_provider)
-        )
-        selector = (
-            self.selector
-            if self._custom_selector
-            else TableSelector(provider=active_provider)
-        )
-        planner = (
-            self.planner
-            if self._custom_planner
-            else QueryPlanner(provider=active_provider)
-        )
-        postgres_gen = (
-            self.postgres_gen
-            if self._custom_postgres_gen
-            else PostgresQueryGenerator(provider=active_provider)
-        )
-        mongo_gen = (
-            self.mongo_gen
-            if self._custom_mongo_gen
-            else MongoQueryGenerator(provider=active_provider)
-        )
-        validator = (
-            self.validator
-            if self._custom_validator
-            else QueryValidator(provider=active_provider)
-        )
+    def _get_stages_for_provider(
+        self,
+        active_provider: ModelProvider,
+        selector_provider: ModelProvider | None = None,
+        generator_provider: ModelProvider | None = None,
+    ):
+        """Return stage instances, each bound to the provider chosen for its stage.
+
+        `active_provider` is the default and runs the stages that read the
+        question -- guardrail and semantic analysis. Table selection and the
+        generation loop (planner, generators, validator) can be pointed at a
+        different provider each, because they are different jobs: selection
+        reads a whole schema neighborhood and answers with a table list, while
+        generation writes one query and reacts to validation feedback. Either
+        may be left unset, which means "use the default".
+
+        A stage that was injected into the constructor is always that instance,
+        whatever the request asked for: an explicitly supplied stage is a
+        deliberate override, and tests rely on it.
+        """
+        sel_provider = selector_provider or active_provider
+        gen_provider = generator_provider or active_provider
+
+        def bind(stage, is_custom, factory, provider):
+            # The default instances are already bound to self.provider, so they
+            # are reused rather than rebuilt whenever that is the stage's provider.
+            if is_custom or provider is self.provider:
+                return stage
+            return factory(provider=provider)
+
         return (
-            guardrail,
-            semantic,
-            selector,
-            planner,
-            postgres_gen,
-            mongo_gen,
-            validator,
+            bind(self.guardrail, self._custom_guardrail, GuardrailClassifier, active_provider),
+            bind(self.semantic, self._custom_semantic, SemanticAnalyzer, active_provider),
+            bind(self.selector, self._custom_selector, TableSelector, sel_provider),
+            bind(self.planner, self._custom_planner, QueryPlanner, gen_provider),
+            bind(
+                self.postgres_gen,
+                self._custom_postgres_gen,
+                PostgresQueryGenerator,
+                gen_provider,
+            ),
+            bind(self.mongo_gen, self._custom_mongo_gen, MongoQueryGenerator, gen_provider),
+            bind(self.validator, self._custom_validator, QueryValidator, gen_provider),
         )
+
+    def _resolve_provider(
+        self,
+        provider: "str | ModelProvider | None",
+        default_name: str = "koboldcpp",
+    ) -> tuple[str, ModelProvider] | tuple[None, None]:
+        """Turn a request's provider argument into (name, instance).
+
+        Returns (None, None) when nothing was asked for, which is how a
+        stage-specific override says "fall back to the default".
+        """
+        if provider is None:
+            return (None, None)
+        if isinstance(provider, str):
+            name = provider.strip().lower()
+            if not name:
+                return (None, None)
+            return (name, resolve_model_provider(name))
+        return (getattr(provider, "model", "custom"), provider)
 
     def get_or_load_schema(self, database: DatabaseTarget | DatabaseType | str) -> DatabaseSchema:
         """Load and cache canonical schema from TOML file."""
@@ -262,6 +282,9 @@ class NL2AnyQueryOrchestrator:
         unjoinable_objects: list[str] | None = None,
         selection_notice: str | None = None,
         table_neighborhood: TableNeighborhood | None = None,
+        status: str = "complete",
+        approval: TableApprovalRequest | None = None,
+        table_approval: TableApprovalRecord | None = None,
         schema: RelevantSchema | None = None,
         plan: Any = None,
         query: GeneratedQuery | None = None,
@@ -274,6 +297,7 @@ class NL2AnyQueryOrchestrator:
         error: str | None = None,
         target_name: str | None = None,
         provider: str | None = None,
+        providers: dict[str, str] | None = None,
         spelling_correction: SpellingCorrectionResult | None = None,
     ) -> PipelineResponse:
         cand_list = candidates or []
@@ -298,6 +322,7 @@ class NL2AnyQueryOrchestrator:
             database=db_label,
             question=question,
             provider=provider,
+            providers=providers,
             guardrail=guardrail,
             spelling_correction=spelling_correction,
             basic_answer=basic_answer,
@@ -312,6 +337,9 @@ class NL2AnyQueryOrchestrator:
             unjoinable_objects=unjoinable_objects or [],
             selection_notice=selection_notice,
             table_neighborhood=table_neighborhood,
+            status=status,
+            approval=approval,
+            table_approval=table_approval,
             relevant_schema=schema.model_dump() if schema else None,
             query_plan=plan,
             generated_query=query.formatted_query if query else None,
@@ -465,6 +493,12 @@ class NL2AnyQueryOrchestrator:
                 selection.selected_objects, neighborhood, schema
             )
             if selection.sufficient and resolved:
+                # A selection the model is happy with can still have been
+                # salvaged -- a name it invented was dropped, or the stage
+                # failed and the top embedding match stood in for an answer.
+                uncertainty = assess_selection(
+                    selection, unjoinable, exhausted_retries=False
+                )
                 return _SelectionOutcome(
                     selected_objects=resolved,
                     relationships=relationships,
@@ -473,6 +507,8 @@ class NL2AnyQueryOrchestrator:
                     candidates=current_candidates,
                     neighborhood=neighborhood,
                     retries=attempt,
+                    notice=uncertainty.detail if uncertainty else None,
+                    uncertainty=uncertainty,
                 )
 
             if attempt >= self.max_retries:
@@ -492,7 +528,11 @@ class NL2AnyQueryOrchestrator:
                 # doubts it: the usual reason it reports insufficiency is a join
                 # it could not see, which the repair above has already settled.
                 # Failing here instead would discard a usable answer, so the
-                # doubt is carried on the response rather than ending the run.
+                # doubt is carried on the outcome rather than ending the run --
+                # and it is what a caller willing to ask a human stops on.
+                uncertainty = assess_selection(
+                    selection, unjoinable, exhausted_retries=True
+                )
                 return _SelectionOutcome(
                     selected_objects=resolved,
                     relationships=relationships,
@@ -501,11 +541,8 @@ class NL2AnyQueryOrchestrator:
                     candidates=current_candidates,
                     neighborhood=neighborhood,
                     retries=attempt,
-                    notice=(
-                        "The table selector was not confident the schema covers this "
-                        f"question: {selection.reason or 'no reason given'}"
-                        + (f" Missing: {', '.join(selection.missing_objects)}." if selection.missing_objects else "")
-                    ),
+                    notice=uncertainty.detail if uncertainty else None,
+                    uncertainty=uncertainty,
                 )
 
             attempt += 1
@@ -691,18 +728,39 @@ class NL2AnyQueryOrchestrator:
         database: str | DatabaseType | DatabaseTarget = "postgres",
         provider: str | ModelProvider | None = None,
         jargons: list[str] | None = None,
+        allow_table_approval: bool = False,
+        selector_provider: str | ModelProvider | None = None,
+        generator_provider: str | ModelProvider | None = None,
     ) -> PipelineResponse:
-        """Run complete NL-to-query pipeline with clean stages and bounded retries."""
-        provider_name = (
-            provider.strip().lower()
-            if isinstance(provider, str)
-            else (getattr(provider, "model", "custom") if provider is not None else "koboldcpp")
-        )
-        active_provider = (
-            resolve_model_provider(provider)
-            if isinstance(provider, str)
-            else (provider or self.provider)
-        )
+        """Run complete NL-to-query pipeline with clean stages and bounded retries.
+
+        `provider` is the default for every stage. `selector_provider` and
+        `generator_provider` override it for table selection and for the
+        planning/generation/validation loop, so the two halves of the pipeline
+        can run on different models -- a local SLM for one and a hosted model
+        for the other, say. Left unset, they follow `provider` and the run
+        behaves exactly as a single-provider run always did.
+
+        With `allow_table_approval`, a run whose table selection carries
+        uncertainty stops at the gate instead of proceeding: the response comes
+        back with `status="awaiting_table_approval"` and a run id, and
+        `resume_pipeline` finishes it once a human has settled the tables. The
+        caller has to ask for that, because a caller that cannot answer the
+        question is better served by today's behaviour -- carry on, and say so
+        on `selection_notice`.
+        """
+        default_name, resolved_default = self._resolve_provider(provider)
+        provider_name = default_name or "koboldcpp"
+        active_provider = resolved_default or self.provider
+        sel_name, sel_provider_obj = self._resolve_provider(selector_provider)
+        gen_name, gen_provider_obj = self._resolve_provider(generator_provider)
+        # Reported rather than inferred by the caller, so a response says which
+        # model wrote the query it is carrying even when the stages differ.
+        provider_map = {
+            "default": provider_name,
+            "selector": sel_name or provider_name,
+            "generator": gen_name or provider_name,
+        }
         (
             guardrail,
             semantic,
@@ -711,7 +769,11 @@ class NL2AnyQueryOrchestrator:
             postgres_gen,
             mongo_gen,
             validator,
-        ) = self._get_stages_for_provider(active_provider)
+        ) = self._get_stages_for_provider(
+            active_provider,
+            selector_provider=sel_provider_obj,
+            generator_provider=gen_provider_obj,
+        )
 
         # 1. Resolve database target & type
         if isinstance(database, DatabaseTarget):
@@ -741,6 +803,7 @@ class NL2AnyQueryOrchestrator:
                 target_name=target.key,
                 question=question,
                 provider=provider_name,
+                providers=provider_map,
                 guardrail=GuardrailResult(decision=GuardrailDecision.REJECT, reason=str(err)),
                 error=str(err),
             )
@@ -753,6 +816,7 @@ class NL2AnyQueryOrchestrator:
                 target_name=target.key,
                 question=question,
                 provider=provider_name,
+                providers=provider_map,
                 guardrail=guardrail_result,
                 error="Sorry, I can't help with this.",
             )
@@ -768,6 +832,7 @@ class NL2AnyQueryOrchestrator:
                 target_name=target.key,
                 question=question,
                 provider=provider_name,
+                providers=provider_map,
                 guardrail=guardrail_result,
                 basic_answer=basic_ans,
             )
@@ -789,6 +854,7 @@ class NL2AnyQueryOrchestrator:
                 target_name=target.key,
                 question=question,
                 provider=provider_name,
+                providers=provider_map,
                 guardrail=guardrail_result,
                 spelling_correction=spelling_res,
                 error=f"Failed to analyze query: {err}",
@@ -830,6 +896,7 @@ class NL2AnyQueryOrchestrator:
                 target_name=target.key,
                 question=question,
                 provider=provider_name,
+                providers=provider_map,
                 guardrail=guardrail_result,
                 spelling_correction=spelling_res,
                 semantic=semantic_res,
@@ -844,6 +911,225 @@ class NL2AnyQueryOrchestrator:
                 selection_retries=sel_retries,
                 error=sel_err or "I could not find any relevant tables or collections in the database schema matching your question.",
             )
+
+        # 6. The table gate. Everything after this point is scoped by the tables
+        #    chosen above, so a wrong choice does not fail, it answers a
+        #    different question. When the selection carries uncertainty and the
+        #    caller can ask a human, the run stops here instead.
+        if (
+            allow_table_approval
+            and settings.table_approval_enabled
+            and outcome.uncertainty is not None
+        ):
+            pending = PendingRun(
+                target=target,
+                db_type=db_type,
+                provider_name=provider_name,
+                provider_arg=provider,
+                provider_map=dict(provider_map),
+                selector_provider_arg=selector_provider,
+                generator_provider_arg=generator_provider,
+                question=question,
+                processed_question=processed_question,
+                schema=schema,
+                guardrail_result=guardrail_result,
+                spelling_res=spelling_res,
+                semantic_res=semantic_res,
+                linguistic_res=linguistic_res,
+                analysis=analysis,
+                outcome=outcome,
+                uncertainty=outcome.uncertainty,
+            )
+            run_id = self.pending_runs.put(pending)
+            logger.info(
+                "Pausing for table approval (run %s): %s", run_id, outcome.uncertainty.reasons
+            )
+            return self._build_response(
+                db_type=db_type,
+                target_name=target.key,
+                question=question,
+                provider=provider_name,
+                providers=provider_map,
+                guardrail=guardrail_result,
+                spelling_correction=spelling_res,
+                semantic=semantic_res,
+                linguistic=linguistic_res.model_dump(),
+                candidates=candidates,
+                selected=selected_objs,
+                selected_relationships=selected_rels,
+                connector_objects=connector_objs,
+                unjoinable_objects=unjoinable_objs,
+                selection_notice=sel_notice,
+                table_neighborhood=neighborhood,
+                selection_retries=sel_retries,
+                status="awaiting_table_approval",
+                approval=TableApprovalRequest(
+                    run_id=run_id,
+                    proposed_objects=selected_objs,
+                    selectable_objects=neighborhood.table_names() if neighborhood else [],
+                    uncertainty=outcome.uncertainty,
+                    expires_at=pending.expires_at(),
+                ),
+            )
+
+        return await self._finish_pipeline(
+            target=target,
+            db_type=db_type,
+            provider_name=provider_name,
+            provider_map=provider_map,
+            question=question,
+            processed_question=processed_question,
+            schema=schema,
+            analysis=analysis,
+            outcome=outcome,
+            guardrail_result=guardrail_result,
+            spelling_res=spelling_res,
+            semantic_res=semantic_res,
+            linguistic_res=linguistic_res,
+            selector=selector,
+            planner=planner,
+            generator=active_generator,
+            validator=validator,
+        )
+
+    async def resume_pipeline(
+        self,
+        run_id: str,
+        approved_objects: list[str],
+    ) -> PipelineResponse:
+        """Finish a run a human stopped at the table gate.
+
+        The approved names are not taken as given. They are checked against the
+        neighborhood -- a table the selector was never shown is not one a human
+        may add either, because nothing says it can be joined -- and then put
+        through the same deterministic repair the model's answer goes through,
+        so a hand-picked set gets its bridge tables and loses its unreachable
+        ones exactly as the automatic path would. A human chooses the query's
+        subject; whether two tables join is still a fact about the schema.
+        """
+        run = self.pending_runs.get(run_id)
+        outcome = run.outcome
+        neighborhood = outcome.neighborhood
+
+        allowed = {name.lower(): name for name in (neighborhood.table_names() if neighborhood else [])}
+        chosen: list[str] = []
+        unknown: list[str] = []
+        for name in approved_objects:
+            key = name.strip().lower()
+            if key in allowed:
+                canonical = allowed[key]
+                if canonical not in chosen:
+                    chosen.append(canonical)
+            else:
+                unknown.append(name)
+        if unknown:
+            raise ValueError(
+                "Table(s) not in this run's candidate set: " + ", ".join(unknown)
+            )
+        if not chosen:
+            raise ValueError("At least one table must be approved.")
+
+        resolved, relationships, added, unjoinable = self._resolve_selection(
+            chosen, neighborhood, run.schema
+        )
+        if not resolved:
+            raise ValueError("The approved tables could not be resolved into a joinable set.")
+
+        # Answered, so the run is spent: it may not be resumed twice.
+        self.pending_runs.pop(run_id)
+        proposed = list(outcome.selected_objects)
+        outcome.selected_objects = resolved
+        outcome.relationships = relationships
+        outcome.connector_objects = added
+        outcome.unjoinable_objects = unjoinable
+        logger.info(
+            "Resuming run %s with human-approved tables %s (proposed %s).",
+            run_id,
+            resolved,
+            proposed,
+        )
+
+        _default_name, resolved_default = self._resolve_provider(run.provider_arg)
+        active_provider = resolved_default or self.provider
+        _sel_name, sel_provider_obj = self._resolve_provider(run.selector_provider_arg)
+        _gen_name, gen_provider_obj = self._resolve_provider(run.generator_provider_arg)
+        (
+            _guardrail,
+            _semantic,
+            selector,
+            planner,
+            postgres_gen,
+            mongo_gen,
+            validator,
+        ) = self._get_stages_for_provider(
+            active_provider,
+            selector_provider=sel_provider_obj,
+            generator_provider=gen_provider_obj,
+        )
+        generator = postgres_gen if run.db_type == DatabaseType.POSTGRESQL else mongo_gen
+
+        return await self._finish_pipeline(
+            target=run.target,
+            db_type=run.db_type,
+            provider_name=run.provider_name,
+            provider_map=run.provider_map or None,
+            question=run.question,
+            processed_question=run.processed_question,
+            schema=run.schema,
+            analysis=run.analysis,
+            outcome=outcome,
+            guardrail_result=run.guardrail_result,
+            spelling_res=run.spelling_res,
+            semantic_res=run.semantic_res,
+            linguistic_res=run.linguistic_res,
+            selector=selector,
+            planner=planner,
+            generator=generator,
+            validator=validator,
+            approval_record=TableApprovalRecord(
+                proposed_objects=proposed,
+                approved_objects=resolved,
+                changed=set(proposed) != set(resolved),
+                uncertainty=run.uncertainty,
+            ),
+        )
+
+    async def _finish_pipeline(
+        self,
+        *,
+        target: DatabaseTarget,
+        db_type: DatabaseType,
+        provider_name: str,
+        provider_map: dict[str, str] | None = None,
+        question: str,
+        processed_question: str,
+        schema: DatabaseSchema,
+        analysis: QuestionAnalysis,
+        outcome: "_SelectionOutcome",
+        guardrail_result: GuardrailResult,
+        spelling_res: SpellingCorrectionResult | None,
+        semantic_res: SemanticAnalysisResult | None,
+        linguistic_res: Any,
+        selector: TableSelector,
+        planner: QueryPlanner,
+        generator: Any,
+        validator: QueryValidator,
+        approval_record: TableApprovalRecord | None = None,
+    ) -> PipelineResponse:
+        """Everything downstream of a settled table selection.
+
+        Split out so the run can be interrupted at the gate and picked up again
+        from exactly here, whether the tables were settled by the selector or by
+        a human.
+        """
+        selected_objs = outcome.selected_objects
+        selected_rels = outcome.relationships
+        connector_objs = outcome.connector_objects
+        unjoinable_objs = outcome.unjoinable_objects
+        candidates = outcome.candidates
+        neighborhood = outcome.neighborhood
+        sel_retries = outcome.retries
+        sel_notice = outcome.notice
 
         # 6. Deterministic materialization of the selected tables and their
         #    relationships, plus description enrichment via the Descriptions API.
@@ -865,6 +1151,17 @@ class NL2AnyQueryOrchestrator:
                 database_type=db_type,
             )
             if not query_plan.missing_tables:
+                break
+
+            if approval_record is not None:
+                # A human settled this list. Widening it here would put tables
+                # into the query behind their back, which is the whole thing the
+                # gate exists to prevent, so the gap is reported instead.
+                logger.warning(
+                    "Planner identified missing tables %s, but the tables were "
+                    "approved by a human and are not re-selected.",
+                    query_plan.missing_tables,
+                )
                 break
 
             if planner_retries >= self.max_retries:
@@ -917,7 +1214,7 @@ class NL2AnyQueryOrchestrator:
             db_type=db_type,
             initial_plan=query_plan,
             planner=planner,
-            generator=active_generator,
+            generator=generator,
             validator=validator,
         )
 
@@ -927,6 +1224,7 @@ class NL2AnyQueryOrchestrator:
             "target_name": target.key,
             "question": question,
             "provider": provider_name,
+            "providers": provider_map,
             "guardrail": guardrail_result,
             "spelling_correction": spelling_res,
             "semantic": semantic_res,
@@ -938,6 +1236,7 @@ class NL2AnyQueryOrchestrator:
             "unjoinable_objects": unjoinable_objs,
             "selection_notice": sel_notice,
             "table_neighborhood": neighborhood,
+            "table_approval": approval_record,
             "selection_retries": total_sel_retries,
             "schema": relevant_schema,
             "plan": query_plan,

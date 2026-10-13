@@ -15,7 +15,7 @@ VALIDATION CRITERIA:
    - Is the query 100% read-only? Any writes or modifications (INSERT, UPDATE, DELETE, DROP, ALTER, TRUNCATE, CREATE, GRANT, REVOKE) are strictly UNSAFE.
 3. Column Scoping & Multi-Table Selection:
    - Inspect every column in the outer SELECT list. Every selected column MUST belong to a table or alias present in the outer FROM or JOIN clauses.
-   - Tables referenced ONLY inside a nested subquery (e.g. inside "WHERE invoice_id = (SELECT invoice_id FROM finopsiq.invoices ...)") DO NOT make their columns accessible to the outer SELECT clause.
+   - Tables referenced ONLY inside a nested subquery (pattern: "WHERE order_id = (SELECT order_id FROM <schema>.orders ...)") DO NOT make their columns accessible to the outer SELECT clause.
    - If columns from a secondary table are selected, that table MUST be explicitly joined using JOIN in the FROM clause.
 4. Nested Queries & Group Handlers:
    - Inspect all subqueries in WHERE or HAVING clauses.
@@ -33,15 +33,39 @@ VALIDATION CRITERIA:
    - Judge the query against the USER QUESTION. The plan is an intermediate
      sketch; a query that answers the question is correct even where it words
      things differently from the plan.
-   - A column is the SAME column however it is qualified. "products.product_id",
-     "finopsiq.products.product_id" and "p.product_id" via an alias are one
-     column, not three. NEVER report a projection as missing because its
-     spelling in the query differs from its spelling in the plan.
+   - A column is the SAME column however it is qualified. A bare name, a
+     schema-qualified name and an aliased name ("products.product_id",
+     "<schema>.products.product_id", "p.product_id") are one column, not three.
+     NEVER report a projection as missing because its spelling in the query
+     differs from its spelling in the plan.
    - Before claiming the query omits a column, find that column's name in the
      SELECT list. If the name is there under any qualifier or alias, it is NOT
      missing, and you must not report it.
    - Do not reject a query for selecting fewer or more columns than the plan
      listed, unless that actually fails to answer the question.
+
+8. Unnecessary Joins & Cartesian Products:
+   - For EVERY table or alias in FROM and JOIN, find where else in the query it
+     is used. An alias that appears ONLY in its own ON clause -- never in SELECT,
+     WHERE, HAVING, GROUP BY or ORDER BY, and not needed to bridge two tables
+     that lack a direct relationship -- is an idle join. Report it: it changes
+     the row count and therefore every aggregate, without adding information.
+   - Report as a Cartesian product, always: CROSS JOIN, a comma-separated FROM
+     list of two or more tables, a JOIN with no ON clause, ON TRUE, or an ON
+     clause that compares a column to a constant instead of equating keys.
+   - An ON clause must equate keys named by a relationship in the Relevant
+     Schema. If a join equates two columns that merely share a name or a type
+     and no such relationship exists, report it as an invented join.
+   - Composite keys: if a relationship names several column pairs and the ON
+     clause matches only some of them, report the missing pair -- the join
+     multiplies rows.
+   - Fan-out: if two DIFFERENT one-to-many child tables are joined as siblings
+     off the same parent, report it. Each inflates the other, so any COUNT or
+     SUM in the query is wrong. The fix is a scalar subquery or a pre-aggregated
+     derived table per child, not DISTINCT.
+   - Conversely, do NOT report a join that is doing a real job, and do not
+     demand a join be rewritten as EXISTS when the query displays columns from
+     the joined table. Judge by whether the table is used, not by style.
 
 ERROR CLASSIFICATION RULES:
 - If completely correct, safe, and read-only:
@@ -52,13 +76,13 @@ ERROR CLASSIFICATION RULES:
   "valid": false, "error_type": "SYNTAX_ERROR"
 - If the Query Plan itself is flawed (wrong tables, missing necessary relationships, misaligned semantic intent):
   "valid": false, "error_type": "PLANNER_ERROR"
-- If the SQL fails to implement the plan, selects columns from subquery-only tables, uses "=" instead of "IN" for a multi-row subquery, or misses required JOINs:
+- If the SQL fails to implement the plan, selects columns from subquery-only tables, uses "=" instead of "IN" for a multi-row subquery, misses required JOINs, joins a table that does no work, produces a Cartesian product (CROSS JOIN, comma FROM, missing or key-less ON clause, partially matched composite key), or fans out across two sibling one-to-many children:
   "valid": false, "error_type": "GENERATION_ERROR"
 
 RULES:
 - Do NOT rewrite or fix the query yourself.
 - Report specific, precise issues.
-- The "suggestion" field MUST be concrete and actionable. NEVER say generic phrases like "Correct the PostgreSQL SQL syntax". Explain exactly what to change (e.g. "Join finopsiq.invoices with finopsiq.invoice_line_items on invoice_id instead of using a subquery, prefix columns with table aliases, and replace '=' with 'IN' if subqueries are used.").
+- The "suggestion" field MUST be concrete and actionable. NEVER say generic phrases like "Correct the PostgreSQL SQL syntax". Name the tables, columns and operators to change, in the wording of THIS query and THIS schema (shape: "Join <parent> to <child> on <key> instead of using a subquery, qualify every selected column with its table alias, and replace '=' with 'IN' for the multi-row subquery.").
 - Do NOT include ANSI escape codes or control characters in your response.
 - Output strictly valid JSON matching this schema:
 {{

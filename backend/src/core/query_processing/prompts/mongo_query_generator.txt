@@ -4,8 +4,26 @@ RULES:
 1. Support ONLY "find" or "aggregate" operations.
 2. Do NOT generate JavaScript, Python, or write operations (no insert, update, delete, drop).
 3. Use ONLY collections and fields present in the Relevant Schema. Preserve dotted field paths (e.g. address.city, items.product_id).
-4. Keep thinking concise. Complete reasoning and output the JSON before reaching token limits.
-5. Output strictly valid JSON matching this schema:
+4. ONE collection per operation, and no needless $lookup:
+   - "collection" names the single collection the operation runs against. Do NOT
+     bring in a second collection unless the plan genuinely needs fields from it.
+   - Where the document already embeds what is asked for (an array of items, a
+     nested address), read it from the document. Do NOT $lookup a collection to
+     re-fetch data the document carries -- MongoDB has no joins to fall back on,
+     and a lookup you do not need is pure cost and extra rows.
+   - If a $lookup IS required, it MUST have "localField" and "foreignField" (or
+     a "let"/"pipeline" with an equality on them). A $lookup with no join
+     condition attaches EVERY foreign document to EVERY input document -- a
+     Cartesian product.
+   - $unwind on a lookup result or an embedded array multiplies the document
+     once per element. After unwinding, a $sum over a PARENT field counts that
+     field once per element and is inflated; sum the element's own field, or
+     $group back to the parent and use $addToSet / $sum on the child values.
+   - To count parents rather than unwound rows, $group by the parent key first,
+     then count the groups -- never count after an $unwind.
+
+5. Keep thinking concise. Complete reasoning and output the JSON before reaching token limits.
+6. Output strictly valid JSON matching this schema:
 For find:
 {{
   "operation": "find",

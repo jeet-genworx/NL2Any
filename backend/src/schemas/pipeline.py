@@ -118,6 +118,12 @@ class TableSelectionResult(BaseModel):
     `selected_relationships` is derived in Python from the neighborhood's edges
     rather than read from the model: the model chooses tables, and which
     foreign keys connect them is a fact of the schema, not an opinion.
+
+    `discarded_objects` and `fallback` report what the stage had to repair on
+    its own. Both are recoveries rather than failures -- the run continues
+    either way -- but they are the only evidence that the model did not
+    understand the schema it was shown, and a caller that cannot see them
+    cannot tell a confident selection from a salvaged one.
     """
 
     selected_objects: list[str] = PydanticField(default_factory=list)
@@ -126,6 +132,65 @@ class TableSelectionResult(BaseModel):
     missing_objects: list[str] = PydanticField(default_factory=list)
     reason: str = ""
     retrieval_hint: str | None = None
+    discarded_objects: list[str] = PydanticField(
+        default_factory=list,
+        description="Names the model returned that were not in the neighborhood it was shown",
+    )
+    fallback: bool = PydanticField(
+        default=False,
+        description="True when the SLM call or its JSON failed and the top candidate was used instead",
+    )
+
+
+class SelectionUncertainty(BaseModel):
+    """Why table selection should not be trusted without a human looking at it.
+
+    There is no confidence score to threshold on: the provider returns text,
+    not logprobs, and the stage runs once. What exists instead is evidence --
+    the selector's own `sufficient` flag, and the three repairs that would
+    otherwise be invisible to the caller -- and this is that evidence, gathered.
+    """
+
+    reasons: list[str] = PydanticField(
+        default_factory=list,
+        description=(
+            "Reason codes: insufficient_after_retries, selector_error_fallback, "
+            "hallucinated_tables, unjoinable_dropped"
+        ),
+    )
+    detail: str = ""
+    selector_reason: str = ""
+    missing_objects: list[str] = PydanticField(default_factory=list)
+    discarded_objects: list[str] = PydanticField(default_factory=list)
+    unjoinable_objects: list[str] = PydanticField(default_factory=list)
+    fallback: bool = False
+
+
+class TableApprovalRequest(BaseModel):
+    """A paused run, waiting for a human to settle which tables it may use.
+
+    `selectable_objects` is the whole neighborhood, which is also the allow-list
+    the answer is checked against: a table the selector was never shown is not
+    one a human may add either, because nothing guarantees it can be joined.
+    """
+
+    run_id: str
+    proposed_objects: list[str] = PydanticField(default_factory=list)
+    selectable_objects: list[str] = PydanticField(default_factory=list)
+    uncertainty: SelectionUncertainty
+    expires_at: float = PydanticField(
+        default=0.0,
+        description="Unix timestamp after which the paused run is discarded",
+    )
+
+
+class TableApprovalRecord(BaseModel):
+    """What a human settled on, carried through to the finished response."""
+
+    proposed_objects: list[str] = PydanticField(default_factory=list)
+    approved_objects: list[str] = PydanticField(default_factory=list)
+    changed: bool = False
+    uncertainty: SelectionUncertainty | None = None
 
 
 class RelevantSchema(BaseModel):
@@ -248,6 +313,15 @@ class PipelineResponse(BaseModel):
     database: str
     question: str
     provider: str | None = None
+    providers: dict[str, str] | None = PydanticField(
+        default=None,
+        description=(
+            "Which provider actually ran each stage group, keyed 'default', "
+            "'selector' and 'generator'. `provider` above stays the default one, "
+            "so a caller that never asked for per-stage providers reads the same "
+            "field it always did."
+        ),
+    )
     guardrail: GuardrailResult
     spelling_correction: SpellingCorrectionResult | None = None
     basic_answer: str | None = None
@@ -261,6 +335,9 @@ class PipelineResponse(BaseModel):
     unjoinable_objects: list[str] = PydanticField(default_factory=list)
     selection_notice: str | None = None
     table_neighborhood: TableNeighborhood | None = None
+    status: Literal["complete", "awaiting_table_approval"] = "complete"
+    approval: TableApprovalRequest | None = None
+    table_approval: TableApprovalRecord | None = None
     relevant_schema: dict[str, Any] | None = None
     query_plan: QueryPlan | None = None
     generated_query: str | dict[str, Any] | None = None

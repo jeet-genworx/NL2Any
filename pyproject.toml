@@ -32,6 +32,7 @@ dev = [
 [project.scripts]
 seed-postgres = "backend.src.cli:seed_postgres_cli"
 seed-mongo = "backend.src.cli:seed_mongo_cli"
+seed-finops = "backend.src.cli:seed_finops_cli"
 init-schema = "backend.src.cli:init_schema_cli"
 describe-schema = "backend.src.cli:describe_schema_cli"
 embed-schema = "backend.src.cli:embed_schema_cli"

@@ -294,6 +294,7 @@ class TableSelector:
 
             # Strict validation: the model may only select tables it was shown.
             validated: list[str] = []
+            discarded: list[str] = []
             for item in parsed.selected_objects:
                 item_lower = item.strip().lower()
                 if item_lower in allowed:
@@ -302,6 +303,8 @@ class TableSelector:
                         validated.append(canonical_name)
                 else:
                     logger.warning("Discarded hallucinated/out-of-neighborhood table: %r", item)
+                    if item not in discarded:
+                        discarded.append(item)
 
             return TableSelectionResult(
                 selected_objects=validated,
@@ -312,6 +315,7 @@ class TableSelector:
                 missing_objects=parsed.missing_objects,
                 reason=parsed.reason,
                 retrieval_hint=parsed.retrieval_hint,
+                discarded_objects=discarded,
             )
 
         except Exception as err:
@@ -326,4 +330,5 @@ class TableSelector:
                 missing_objects=[],
                 reason=f"Fallback selection due to error: {err}",
                 retrieval_hint=None,
+                fallback=True,
             )
