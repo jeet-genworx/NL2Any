@@ -182,3 +182,33 @@ def test_schema_endpoint_accepts_finops_aliases():
 def test_unknown_database_error_lists_finops():
     detail = TestClient(app).get("/schema/nope").json()["detail"]
     assert "finops" in detail
+
+
+def test_ingest_invalidates_caches_only_when_it_ran(monkeypatch):
+    """A run that re-ingested must drop the caches holding what it rewrote.
+
+    The orchestrator caches the schema and embeddings for the life of the
+    process, so without this the run reports success and every later question
+    is still answered from the artifacts that existed before it.
+    """
+    from backend.src.api.rest.dependencies import get_orchestrator
+    from backend.src.api.rest.routes import query as query_route
+
+    async def fake_ingestion(target, use_mst=True, force=False):
+        return {"database": target.key, "skipped": not force}
+
+    monkeypatch.setattr(query_route, "run_ingestion_pipeline", fake_ingestion)
+    orchestrator = get_orchestrator()
+    client = TestClient(app)
+
+    try:
+        orchestrator._schemas["postgres"] = "stale"
+
+        # Nothing was rewritten, so the cache is still good.
+        assert client.post("/ingest/postgres").json()["skipped"] is True
+        assert "postgres" in orchestrator._schemas
+
+        assert client.post("/ingest/postgres?force=true").json()["skipped"] is False
+        assert orchestrator._schemas == {}
+    finally:
+        orchestrator._schemas.clear()

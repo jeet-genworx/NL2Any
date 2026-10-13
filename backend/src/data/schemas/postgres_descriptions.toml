@@ -1,72 +1,72 @@
 [database]
 type = "postgresql"
 name = "nl2anyquery_db"
-generated_at = "2026-09-30T06:15:01.039872+00:00"
+generated_at = "2026-10-13T09:02:47.934869+00:00"
 
 [tables.customers]
-description = "The customers table stores information about all registered customers. It contains columns for customer ID, name, email, phone, city, and creation date. This table is used to look up customer details and is connected to orders and support tickets through customer_id foreign keys."
+description = "The customers table lists all customer records with their unique id, name, email, phone number, city, and creation timestamp. It is used to look up customer details such as contact information and location, and connects to orders and support tickets via customer_id."
 
 [tables.customers.columns]
-id = "Unique identifier for the customer"
-name = "Full name of the customer"
-email = "Email address of the customer"
-phone = "Phone number of the customer"
-city = "City where the customer is located"
-created_at = "Timestamp when the customer was created"
+id = "customer unique identifier"
+name = "customer full name"
+email = "customer email address"
+phone = "customer phone number"
+city = "customer city of residence"
+created_at = "when customer was created"
 
 [tables.orders]
-description = "The orders table records all customer orders. It includes order ID, customer ID, order date, status, total amount, and shipping city. This table is connected to customers through customer_id and to order_items through order_id."
+description = "The orders table tracks each order placed by a customer, including the order id, customer id, order date, status, total amount, and shipping city. It is used to find order history, financial details, and shipping information, and links to customers via customer_id and to order_items via order_id."
 
 [tables.orders.columns]
-id = "Unique identifier for the order"
+id = "order unique identifier"
 customer_id = "FK to customers"
-order_date = "Timestamp when the order was placed"
-status = "Current status of the order"
-total_amount = "Total monetary value of the order"
-shipping_city = "City where the order is shipped to"
+order_date = "when order was placed"
+status = "current order status"
+total_amount = "total cost of order"
+shipping_city = "city where order is shipped to"
 
 [tables.support_tickets]
-description = "The support_tickets table tracks customer support requests. It contains ticket ID, customer ID, employee ID, subject, status, priority, and timestamps for creation and resolution. This table is connected to customers through customer_id and to employees through employee_id."
+description = "The support_tickets table records each customer support request with a unique id, customer id, employee id, subject, status, priority, creation timestamp, and resolution timestamp. It is used to track support cases, identify open issues, and see resolution times, linking to customers and employees via customer_id and employee_id."
 
 [tables.support_tickets.columns]
-id = "Unique identifier for the support ticket"
+id = "ticket unique identifier"
 customer_id = "FK to customers"
 employee_id = "FK to employees"
-subject = "Summary of the support request"
-status = "Current status of the ticket"
-priority = "Level of urgency for the ticket"
-created_at = "Timestamp when the ticket was created"
-resolved_at = "Timestamp when the ticket was resolved"
+subject = "summary of ticket issue"
+status = "current ticket status"
+priority = "ticket priority level"
+created_at = "when ticket was opened"
+resolved_at = "when ticket was closed"
 
 [tables.order_items]
-description = "The order_items table lists the products included in each order. It contains item ID, order ID, product ID, quantity, and unit price. This table is connected to orders through order_id and to products through product_id (though products table is not in this batch)."
+description = "The order_items table details each product in an order, including the item id, order id, product id, quantity, and unit price. It is used to find what products were ordered, how many, and at what price, linking to orders via order_id and to products via product_id."
 
 [tables.order_items.columns]
-id = "Unique identifier for the order item"
+id = "item unique identifier"
 order_id = "FK to orders"
 product_id = "FK to products"
-quantity = "Number of units purchased"
-unit_price = "Price per unit of the product"
+quantity = "number of items ordered"
+unit_price = "price per item"
 
 [tables.employees]
-description = "The employees table stores information about all employees. It includes employee ID, name, email, department, role, city, and hire date. This table is connected to support_tickets through employee_id."
+description = "The employees table contains information about all employees, including their unique id, name, email, department, role, city, and hire date. It is used to identify staff members, their departments, roles, and hiring history, and connects to support_tickets via employee_id."
 
 [tables.employees.columns]
-id = "Unique identifier for the employee"
-name = "Full name of the employee"
-email = "Email address of the employee"
-department = "Department the employee belongs to"
-role = "Job title or role of the employee"
-city = "City where the employee is located"
-hire_date = "Timestamp when the employee was hired"
+id = "employee unique identifier"
+name = "employee full name"
+email = "employee email address"
+department = "employee department"
+role = "employee job title"
+city = "employee city of residence"
+hire_date = "when employee was hired"
 
 [tables.products]
-description = "The products table stores information about available items in the inventory. It contains the unique identifier, name, category, price, stock quantity, and timestamp of when the product was created. This table is used to look up product details, manage inventory levels, and track when products were added to the system."
+description = "The products table lists all available items in the inventory. It includes the product id, name, category, price, stock quantity, and creation timestamp. This table is used to look up product details such as pricing, availability, and category for sales, inventory management, and order fulfillment."
 
 [tables.products.columns]
-id = "Unique identifier for the product"
-name = "Name of the product"
-category = "Product category"
-price = "Price of the product"
-stock_quantity = "Current stock level of the product"
-created_at = "Timestamp when the product was added to the system"
+id = "unique product identifier"
+name = "product name"
+category = "product category"
+price = "product price in currency"
+stock_quantity = "current stock level"
+created_at = "when product was created"

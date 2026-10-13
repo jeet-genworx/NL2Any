@@ -2,221 +2,221 @@
 type = "postgresql"
 name = "nl2anyquery_db"
 schema_version = "1.0"
-last_updated = "2026-10-13T06:13:13.267534+00:00"
-description_generated_at = ""
+last_updated = "2026-10-13T09:02:33.117168+00:00"
+description_generated_at = "2026-10-13T09:02:47.921280+00:00"
 
 [tables.customers]
 kind = "table"
-description = ""
+description = "The customers table lists all customer records with their unique id, name, email, phone number, city, and creation timestamp. It is used to look up customer details such as contact information and location, and connects to orders and support tickets via customer_id."
 
 [tables.customers.columns.id]
 type = "integer"
-description = ""
+description = "customer unique identifier"
 nullable = false
 
 [tables.customers.columns.name]
 type = "character varying"
-description = ""
+description = "customer full name"
 nullable = false
 
 [tables.customers.columns.email]
 type = "character varying"
-description = ""
+description = "customer email address"
 nullable = false
 
 [tables.customers.columns.phone]
 type = "character varying"
-description = ""
+description = "customer phone number"
 nullable = true
 
 [tables.customers.columns.city]
 type = "character varying"
-description = ""
+description = "customer city of residence"
 nullable = true
 
 [tables.customers.columns.created_at]
 type = "timestamp with time zone"
-description = ""
+description = "when customer was created"
 nullable = false
 
 [tables.employees]
 kind = "table"
-description = ""
+description = "The employees table contains information about all employees, including their unique id, name, email, department, role, city, and hire date. It is used to identify staff members, their departments, roles, and hiring history, and connects to support_tickets via employee_id."
 
 [tables.employees.columns.id]
 type = "integer"
-description = ""
+description = "employee unique identifier"
 nullable = false
 
 [tables.employees.columns.name]
 type = "character varying"
-description = ""
+description = "employee full name"
 nullable = false
 
 [tables.employees.columns.email]
 type = "character varying"
-description = ""
+description = "employee email address"
 nullable = false
 
 [tables.employees.columns.department]
 type = "character varying"
-description = ""
+description = "employee department"
 nullable = false
 
 [tables.employees.columns.role]
 type = "character varying"
-description = ""
+description = "employee job title"
 nullable = false
 
 [tables.employees.columns.city]
 type = "character varying"
-description = ""
+description = "employee city of residence"
 nullable = true
 
 [tables.employees.columns.hire_date]
 type = "timestamp with time zone"
-description = ""
+description = "when employee was hired"
 nullable = false
 
 [tables.order_items]
 kind = "table"
-description = ""
+description = "The order_items table details each product in an order, including the item id, order id, product id, quantity, and unit price. It is used to find what products were ordered, how many, and at what price, linking to orders via order_id and to products via product_id."
 
 [tables.order_items.columns.id]
 type = "integer"
-description = ""
+description = "item unique identifier"
 nullable = false
 
 [tables.order_items.columns.order_id]
 type = "integer"
-description = ""
+description = "FK to orders"
 nullable = false
 
 [tables.order_items.columns.product_id]
 type = "integer"
-description = ""
+description = "FK to products"
 nullable = false
 
 [tables.order_items.columns.quantity]
 type = "integer"
-description = ""
+description = "number of items ordered"
 nullable = false
 
 [tables.order_items.columns.unit_price]
 type = "numeric"
-description = ""
+description = "price per item"
 nullable = false
 
 [tables.orders]
 kind = "table"
-description = ""
+description = "The orders table tracks each order placed by a customer, including the order id, customer id, order date, status, total amount, and shipping city. It is used to find order history, financial details, and shipping information, and links to customers via customer_id and to order_items via order_id."
 
 [tables.orders.columns.id]
 type = "integer"
-description = ""
+description = "order unique identifier"
 nullable = false
 
 [tables.orders.columns.customer_id]
 type = "integer"
-description = ""
+description = "FK to customers"
 nullable = false
 
 [tables.orders.columns.order_date]
 type = "timestamp with time zone"
-description = ""
+description = "when order was placed"
 nullable = false
 
 [tables.orders.columns.status]
 type = "character varying"
-description = ""
+description = "current order status"
 nullable = false
 
 [tables.orders.columns.total_amount]
 type = "numeric"
-description = ""
+description = "total cost of order"
 nullable = false
 
 [tables.orders.columns.shipping_city]
 type = "character varying"
-description = ""
+description = "city where order is shipped to"
 nullable = true
 
 [tables.products]
 kind = "table"
-description = ""
+description = "The products table lists all available items in the inventory. It includes the product id, name, category, price, stock quantity, and creation timestamp. This table is used to look up product details such as pricing, availability, and category for sales, inventory management, and order fulfillment."
 
 [tables.products.columns.id]
 type = "integer"
-description = ""
+description = "unique product identifier"
 nullable = false
 
 [tables.products.columns.name]
 type = "character varying"
-description = ""
+description = "product name"
 nullable = false
 
 [tables.products.columns.category]
 type = "character varying"
-description = ""
+description = "product category"
 nullable = false
 
 [tables.products.columns.price]
 type = "numeric"
-description = ""
+description = "product price in currency"
 nullable = false
 
 [tables.products.columns.stock_quantity]
 type = "integer"
-description = ""
+description = "current stock level"
 nullable = false
 
 [tables.products.columns.created_at]
 type = "timestamp with time zone"
-description = ""
+description = "when product was created"
 nullable = false
 
 [tables.support_tickets]
 kind = "table"
-description = ""
+description = "The support_tickets table records each customer support request with a unique id, customer id, employee id, subject, status, priority, creation timestamp, and resolution timestamp. It is used to track support cases, identify open issues, and see resolution times, linking to customers and employees via customer_id and employee_id."
 
 [tables.support_tickets.columns.id]
 type = "integer"
-description = ""
+description = "ticket unique identifier"
 nullable = false
 
 [tables.support_tickets.columns.customer_id]
 type = "integer"
-description = ""
+description = "FK to customers"
 nullable = false
 
 [tables.support_tickets.columns.employee_id]
 type = "integer"
-description = ""
+description = "FK to employees"
 nullable = false
 
 [tables.support_tickets.columns.subject]
 type = "character varying"
-description = ""
+description = "summary of ticket issue"
 nullable = false
 
 [tables.support_tickets.columns.status]
 type = "character varying"
-description = ""
+description = "current ticket status"
 nullable = false
 
 [tables.support_tickets.columns.priority]
 type = "character varying"
-description = ""
+description = "ticket priority level"
 nullable = false
 
 [tables.support_tickets.columns.created_at]
 type = "timestamp with time zone"
-description = ""
+description = "when ticket was opened"
 nullable = false
 
 [tables.support_tickets.columns.resolved_at]
 type = "timestamp with time zone"
-description = ""
+description = "when ticket was closed"
 nullable = true
 
 [[relationships]]

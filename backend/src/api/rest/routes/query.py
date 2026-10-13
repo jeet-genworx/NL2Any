@@ -18,6 +18,7 @@ async def ingest_endpoint(
     database_type: str,
     use_mst: bool = True,
     force: bool = False,
+    orchestrator: NL2AnyQueryOrchestrator = Depends(get_orchestrator),
 ) -> dict[str, Any]:
     """Run the full ingestion pipeline for a database: extract metadata, build
     the schema graph (and MST, for Postgres), generate SLM table descriptions,
@@ -28,10 +29,16 @@ async def ingest_endpoint(
 
     Returns immediately with `"skipped": true` when this database already has
     embeddings on disk. Pass `force=true` to re-ingest regardless.
+
+    A run that actually ingested invalidates the orchestrator's caches, which
+    hold the schema and embeddings read before it rewrote them.
     """
     target = resolve_db_target(database_type)
     try:
-        return await run_ingestion_pipeline(target, use_mst=use_mst, force=force)
+        summary = await run_ingestion_pipeline(target, use_mst=use_mst, force=force)
+        if not summary.get("skipped"):
+            orchestrator.invalidate_caches()
+        return summary
     except FileNotFoundError as err:
         raise HTTPException(status_code=404, detail=str(err))
     except ConnectionError as err:

@@ -215,6 +215,24 @@ class NL2AnyQueryOrchestrator:
             return (name, resolve_model_provider(name))
         return (getattr(provider, "model", "custom"), provider)
 
+    def invalidate_caches(self) -> None:
+        """Drop every cached artifact, so the next question re-reads from disk.
+
+        The schema, the embeddings and the join graph derived from them are all
+        cached for the life of the process. Ingestion rewrites the files they
+        were read from, so without this a re-ingested database keeps being
+        queried through the artifacts that existed before it ran -- the run
+        reports success and nothing it produced is ever used.
+
+        Every target is dropped rather than just the one re-ingested: the caches
+        are keyed by whatever the caller passed (a target, a bare engine type or
+        a name), so there is no single key to remove, and ingestion is rare
+        enough that the cost is one lazy reload per target still in use.
+        """
+        self._schemas.clear()
+        self._vector_retrievers.clear()
+        self._join_graphs.clear()
+
     def get_or_load_schema(self, database: DatabaseTarget | DatabaseType | str) -> DatabaseSchema:
         """Load and cache canonical schema from TOML file."""
         if database in self._schemas:
