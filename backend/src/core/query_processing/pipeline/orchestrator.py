@@ -1,89 +1,84 @@
-"""End-to-end pipeline orchestrator for NL2AnyQuery."""
+"""End-to-end pipeline orchestrator for NL2AnyQuery.
 
-import asyncio
+This module is the sequence and nothing else: which stage runs when, where a
+run can stop, and what it answers with. The stages themselves live in their own
+modules, as does everything the orchestrator used to do inline --
+`resources` for the cached schema and embeddings, `stages` for provider
+binding, `understanding` for the stages that only read the question,
+`selection` for retrieval through table choice, then `materialization`,
+`planning` and `generation` for the loops, and `response` for the one shape
+every exit returns.
+"""
+
 import logging
-from dataclasses import dataclass, field
 from typing import Any
 
-from backend.src.data.clients.detector import detect_database_type
-from backend.src.data.models.targets import DatabaseTarget, as_target, resolve_target
-from backend.src.data.repositories import paths, schema_repository
-from backend.src.core.ingestion.schema.manager import get_default_schema_path
-from backend.src.core.ingestion.schema.toml_store import load_schema_file
 from backend.src.config import settings
-from backend.src.schemas.pipeline import (
-    CandidateTable,
-    ExecutionResult,
-    GeneratedQuery,
-    GuardrailDecision,
-    GuardrailResult,
-    PipelineResponse,
-    PolicyResult,
-    QuestionAnalysis,
-    RelevantSchema,
-    SelectionUncertainty,
-    SemanticAnalysisResult,
-    SpellingCorrectionResult,
-    TableApprovalRecord,
-    TableApprovalRequest,
-    ValidationErrorType,
-    ValidationResult,
-)
-from backend.src.schemas.pipeline import QueryPlan, TableNeighborhood
-from backend.src.data.models.schema import DatabaseSchema, DatabaseType, Relationship
+from backend.src.control.providers.embedding.base import EmbeddingProvider
+from backend.src.control.providers.embedding.koboldcpp import KoboldCppEmbeddingProvider
+from backend.src.control.providers.model.base import ModelProvider
+from backend.src.control.providers.model.koboldcpp import KoboldCppProvider
 from backend.src.core.query_processing.nlp.linguistic import LinguisticAnalyzer
 from backend.src.core.query_processing.pipeline.approval import (
     PendingRun,
     PendingRunStore,
-    assess_selection,
+    normalize_approved_objects,
 )
+from backend.src.core.query_processing.pipeline.descriptions_client import DescriptionsClient
 from backend.src.core.query_processing.pipeline.executor import QueryExecutor
 from backend.src.core.query_processing.pipeline.expansion import SchemaExpander
+from backend.src.core.query_processing.pipeline.generation import plan_generate_validate
 from backend.src.core.query_processing.pipeline.generators.mongo import MongoQueryGenerator
 from backend.src.core.query_processing.pipeline.generators.postgres import PostgresQueryGenerator
 from backend.src.core.query_processing.pipeline.guardrail import GuardrailClassifier
-from backend.src.core.query_processing.pipeline.join_graph import (
-    JoinGraph,
-    build_table_neighborhood,
-    connect_selection,
-)
+from backend.src.core.query_processing.pipeline.materialization import materialize_schema
 from backend.src.core.query_processing.pipeline.planner import QueryPlanner
+from backend.src.core.query_processing.pipeline.planning import plan_with_table_feedback
 from backend.src.core.query_processing.pipeline.policy import SafetyPolicyValidator
-from backend.src.core.query_processing.pipeline.results import ResultProcessor
-from backend.src.core.query_processing.pipeline.selector import (
-    TableSelector,
-    filter_relationships,
+from backend.src.core.query_processing.pipeline.resources import (
+    SchemaResources,
+    resolve_database_target,
 )
+from backend.src.core.query_processing.pipeline.response import build_response
+from backend.src.core.query_processing.pipeline.results import ResultProcessor
+from backend.src.core.query_processing.pipeline.selection import (
+    SelectionOutcome,
+    resolve_selection,
+    retrieve_and_select,
+)
+from backend.src.core.query_processing.pipeline.selector import TableSelector
 from backend.src.core.query_processing.pipeline.semantic import SemanticAnalyzer
 from backend.src.core.query_processing.pipeline.spelling import SpellingChecker
+from backend.src.core.query_processing.pipeline.stages import (
+    StageBinder,
+    StageSet,
+    plan_providers,
+    resolve_provider,
+)
+from backend.src.core.query_processing.pipeline.understanding import understand_question
 from backend.src.core.query_processing.pipeline.validator import QueryValidator
-from backend.src.control.providers.embedding.base import EmbeddingProvider
-from backend.src.control.providers.embedding.koboldcpp import KoboldCppEmbeddingProvider
-from backend.src.control.providers.model.base import ModelProvider
-from backend.src.control.providers.model.factory import resolve_model_provider
-from backend.src.control.providers.model.koboldcpp import KoboldCppProvider
 from backend.src.core.query_processing.retrieval.store import EmbeddingStore
 from backend.src.core.query_processing.retrieval.vector import VectorRetriever
-from backend.src.core.query_processing.pipeline.descriptions_client import DescriptionsClient
-from backend.src.utils.text_utils import clean_unreadable_characters, strip_ansi_escapes
+from backend.src.data.models.schema import DatabaseSchema, DatabaseType
+from backend.src.data.models.targets import DatabaseTarget
+from backend.src.schemas.pipeline import (
+    GuardrailDecision,
+    GuardrailResult,
+    PipelineResponse,
+    QuestionAnalysis,
+    SemanticAnalysisResult,
+    SpellingCorrectionResult,
+    TableApprovalRecord,
+    TableApprovalRequest,
+)
 
 logger = logging.getLogger(__name__)
 
+# Kept importable from here: this is where the type lived before the selection
+# stage moved into its own module.
+_SelectionOutcome = SelectionOutcome
 
-@dataclass
-class _SelectionOutcome:
-    """What table selection settled on, including the trace behind it."""
-
-    selected_objects: list[str] = field(default_factory=list)
-    relationships: list[Relationship] = field(default_factory=list)
-    connector_objects: list[str] = field(default_factory=list)
-    unjoinable_objects: list[str] = field(default_factory=list)
-    candidates: list[CandidateTable] = field(default_factory=list)
-    neighborhood: TableNeighborhood | None = None
-    retries: int = 0
-    notice: str | None = None
-    error: str | None = None
-    uncertainty: SelectionUncertainty | None = None
+__all__ = ["NL2AnyQueryOrchestrator", "SelectionOutcome"]
 
 
 class NL2AnyQueryOrchestrator:
@@ -135,65 +130,67 @@ class NL2AnyQueryOrchestrator:
         # finds the run the first call parked.
         self.pending_runs = PendingRunStore()
 
-        self._custom_guardrail = guardrail is not None
-        self._custom_semantic = semantic is not None
-        self._custom_selector = selector is not None
-        self._custom_planner = planner is not None
-        self._custom_postgres_gen = postgres_gen is not None
-        self._custom_mongo_gen = mongo_gen is not None
-        self._custom_validator = validator is not None
+        self._resources = SchemaResources(
+            embedding_store=embedding_store,
+            vector_retriever=vector_retriever,
+        )
+        self._stage_binder = StageBinder(
+            provider=self.provider,
+            defaults=StageSet(
+                guardrail=self.guardrail,
+                semantic=self.semantic,
+                selector=self.selector,
+                planner=self.planner,
+                postgres_gen=self.postgres_gen,
+                mongo_gen=self.mongo_gen,
+                validator=self.validator,
+            ),
+            injected={
+                "guardrail": guardrail is not None,
+                "semantic": semantic is not None,
+                "selector": selector is not None,
+                "planner": planner is not None,
+                "postgres_gen": postgres_gen is not None,
+                "mongo_gen": mongo_gen is not None,
+                "validator": validator is not None,
+            },
+        )
 
-        self._schemas: dict[Any, DatabaseSchema] = {}
-        self._vector_retrievers: dict[Any, VectorRetriever] = {}
-        # Join graphs are derived purely from a schema, so one per schema object
-        # is reused across every question asked against that database. The
-        # schema is kept beside its graph so a recycled id cannot serve a graph
-        # built from a different schema.
-        self._join_graphs: dict[int, tuple[DatabaseSchema, JoinGraph]] = {}
+    # -- cached per-database artifacts -------------------------------------
+
+    @property
+    def _schemas(self) -> dict[Any, DatabaseSchema]:
+        return self._resources.schemas
+
+    @property
+    def _vector_retrievers(self) -> dict[Any, VectorRetriever]:
+        return self._resources.vector_retrievers
+
+    @property
+    def _join_graphs(self) -> dict[int, tuple[DatabaseSchema, Any]]:
+        return self._resources.join_graphs
+
+    def invalidate_caches(self) -> None:
+        """Drop every cached schema, embedding set and join graph."""
+        self._resources.invalidate()
+
+    def get_or_load_schema(self, database: DatabaseTarget | DatabaseType | str) -> DatabaseSchema:
+        """Load and cache canonical schema from TOML file."""
+        return self._resources.schema(database)
+
+    # -- provider and stage binding ----------------------------------------
 
     def _get_stages_for_provider(
         self,
         active_provider: ModelProvider,
         selector_provider: ModelProvider | None = None,
         generator_provider: ModelProvider | None = None,
-    ):
-        """Return stage instances, each bound to the provider chosen for its stage.
-
-        `active_provider` is the default and runs the stages that read the
-        question -- guardrail and semantic analysis. Table selection and the
-        generation loop (planner, generators, validator) can be pointed at a
-        different provider each, because they are different jobs: selection
-        reads a whole schema neighborhood and answers with a table list, while
-        generation writes one query and reacts to validation feedback. Either
-        may be left unset, which means "use the default".
-
-        A stage that was injected into the constructor is always that instance,
-        whatever the request asked for: an explicitly supplied stage is a
-        deliberate override, and tests rely on it.
-        """
-        sel_provider = selector_provider or active_provider
-        gen_provider = generator_provider or active_provider
-
-        def bind(stage, is_custom, factory, provider):
-            # The default instances are already bound to self.provider, so they
-            # are reused rather than rebuilt whenever that is the stage's provider.
-            if is_custom or provider is self.provider:
-                return stage
-            return factory(provider=provider)
-
-        return (
-            bind(self.guardrail, self._custom_guardrail, GuardrailClassifier, active_provider),
-            bind(self.semantic, self._custom_semantic, SemanticAnalyzer, active_provider),
-            bind(self.selector, self._custom_selector, TableSelector, sel_provider),
-            bind(self.planner, self._custom_planner, QueryPlanner, gen_provider),
-            bind(
-                self.postgres_gen,
-                self._custom_postgres_gen,
-                PostgresQueryGenerator,
-                gen_provider,
-            ),
-            bind(self.mongo_gen, self._custom_mongo_gen, MongoQueryGenerator, gen_provider),
-            bind(self.validator, self._custom_validator, QueryValidator, gen_provider),
+    ) -> StageSet:
+        """Stage instances, each bound to the provider chosen for its stage."""
+        return self._stage_binder.bind(
+            active_provider,
+            selector_provider=selector_provider,
+            generator_provider=generator_provider,
         )
 
     def _resolve_provider(
@@ -201,544 +198,10 @@ class NL2AnyQueryOrchestrator:
         provider: "str | ModelProvider | None",
         default_name: str = "koboldcpp",
     ) -> tuple[str, ModelProvider] | tuple[None, None]:
-        """Turn a request's provider argument into (name, instance).
+        """Turn a request's provider argument into (name, instance)."""
+        return resolve_provider(provider)
 
-        Returns (None, None) when nothing was asked for, which is how a
-        stage-specific override says "fall back to the default".
-        """
-        if provider is None:
-            return (None, None)
-        if isinstance(provider, str):
-            name = provider.strip().lower()
-            if not name:
-                return (None, None)
-            return (name, resolve_model_provider(name))
-        return (getattr(provider, "model", "custom"), provider)
-
-    def invalidate_caches(self) -> None:
-        """Drop every cached artifact, so the next question re-reads from disk.
-
-        The schema, the embeddings and the join graph derived from them are all
-        cached for the life of the process. Ingestion rewrites the files they
-        were read from, so without this a re-ingested database keeps being
-        queried through the artifacts that existed before it ran -- the run
-        reports success and nothing it produced is ever used.
-
-        Every target is dropped rather than just the one re-ingested: the caches
-        are keyed by whatever the caller passed (a target, a bare engine type or
-        a name), so there is no single key to remove, and ingestion is rare
-        enough that the cost is one lazy reload per target still in use.
-        """
-        self._schemas.clear()
-        self._vector_retrievers.clear()
-        self._join_graphs.clear()
-
-    def get_or_load_schema(self, database: DatabaseTarget | DatabaseType | str) -> DatabaseSchema:
-        """Load and cache canonical schema from TOML file."""
-        if database in self._schemas:
-            return self._schemas[database]
-
-        try:
-            target = as_target(database) if not isinstance(database, str) else resolve_target(database)
-            if target.key in self._schemas:
-                return self._schemas[target.key]
-            schema_path = paths.schema_path(target)
-        except Exception:
-            schema_path = get_default_schema_path(database)
-            target = None
-
-        if not schema_path.exists():
-            raise FileNotFoundError(
-                f"Canonical schema not found at {schema_path}. Run 'init-schema' first."
-            )
-        schema = schema_repository.load_schema(schema_path)
-        key = target.key if target else database
-        self._schemas[key] = schema
-        return schema
-
-    def _get_or_load_vector_retriever(self, database: DatabaseTarget | DatabaseType | str) -> VectorRetriever:
-        """Get or initialize the vector retriever for this database's embeddings.
-
-        An explicitly injected vector_retriever/embedding_store overrides for all
-        database types; otherwise each target lazily loads its own embeddings file.
-        """
-        if self.vector_retriever is not None:
-            return self.vector_retriever
-
-        if database in self._vector_retrievers:
-            return self._vector_retrievers[database]
-
-        try:
-            target = as_target(database) if not isinstance(database, str) else resolve_target(database)
-            key = target.key
-            emb_path = str(paths.embeddings_path(target))
-        except Exception:
-            key = database
-            emb_path = (
-                settings.postgres_embeddings_path
-                if database == DatabaseType.POSTGRESQL
-                else settings.mongo_embeddings_path
-            )
-
-        if key not in self._vector_retrievers:
-            store = self.embedding_store or EmbeddingStore(emb_path)
-            self._vector_retrievers[key] = VectorRetriever(store)
-        return self._vector_retrievers[key]
-
-    def _build_response(
-        self,
-        db_type: DatabaseType,
-        question: str,
-        guardrail: GuardrailResult,
-        semantic: SemanticAnalysisResult | None = None,
-        linguistic: dict[str, Any] | None = None,
-        candidates: list[CandidateTable] | None = None,
-        selected: list[str] | None = None,
-        selection_retries: int = 0,
-        selected_relationships: list[Relationship] | None = None,
-        connector_objects: list[str] | None = None,
-        unjoinable_objects: list[str] | None = None,
-        selection_notice: str | None = None,
-        table_neighborhood: TableNeighborhood | None = None,
-        status: str = "complete",
-        approval: TableApprovalRequest | None = None,
-        table_approval: TableApprovalRecord | None = None,
-        schema: RelevantSchema | None = None,
-        plan: Any = None,
-        query: GeneratedQuery | None = None,
-        attempts: int = 1,
-        validation_retries: int = 0,
-        validation: ValidationResult | None = None,
-        policy: PolicyResult | None = None,
-        results: ExecutionResult | None = None,
-        basic_answer: str | None = None,
-        error: str | None = None,
-        target_name: str | None = None,
-        provider: str | None = None,
-        providers: dict[str, str] | None = None,
-        spelling_correction: SpellingCorrectionResult | None = None,
-    ) -> PipelineResponse:
-        cand_list = candidates or []
-        if validation is not None:
-            if validation.issues:
-                validation.issues = [
-                    clean_unreadable_characters(strip_ansi_escapes(str(i)))
-                    for i in validation.issues
-                    if i
-                ]
-            if validation.suggestion:
-                validation.suggestion = clean_unreadable_characters(
-                    strip_ansi_escapes(str(validation.suggestion))
-                )
-        query_repr = (
-            query.formatted_query
-            if query
-            else ("No query generated" if (attempts > 1 and not basic_answer and not error) else None)
-        )
-        db_label = target_name if (target_name and target_name not in ("postgres", "postgresql", "mongo", "mongodb")) else db_type.value
-        return PipelineResponse(
-            database=db_label,
-            question=question,
-            provider=provider,
-            providers=providers,
-            guardrail=guardrail,
-            spelling_correction=spelling_correction,
-            basic_answer=basic_answer,
-            semantic_analysis=semantic,
-            linguistic_analysis=linguistic,
-            candidate_tables=cand_list,
-            candidate_objects=[c.table_name for c in cand_list],
-            selected_objects=selected or [],
-            selection_retries=selection_retries,
-            selected_relationships=selected_relationships or [],
-            connector_objects=connector_objects or [],
-            unjoinable_objects=unjoinable_objects or [],
-            selection_notice=selection_notice,
-            table_neighborhood=table_neighborhood,
-            status=status,
-            approval=approval,
-            table_approval=table_approval,
-            relevant_schema=schema.model_dump() if schema else None,
-            query_plan=plan,
-            generated_query=query.formatted_query if query else None,
-            attempts=attempts,
-            validation_retries=validation_retries,
-            validation=validation,
-            policy=policy,
-            results=results,
-            error=error,
-        )
-
-    def _get_or_build_join_graph(self, schema: DatabaseSchema) -> JoinGraph:
-        """Join graph for a schema, built once and reused.
-
-        Keyed by schema identity rather than by database name, because a
-        reloaded schema is a different object that must get a freshly built
-        graph. The cached schema is compared by identity on every hit: CPython
-        reuses the id of a collected object, and a graph from a stale schema
-        would hand the selector tables from another database entirely.
-        """
-        key = id(schema)
-        cached = self._join_graphs.get(key)
-        if cached is not None and cached[0] is schema:
-            return cached[1]
-        graph = JoinGraph(schema)
-        self._join_graphs[key] = (schema, graph)
-        return graph
-
-    def _build_neighborhood(
-        self,
-        candidates: list[CandidateTable],
-        schema: DatabaseSchema,
-    ) -> TableNeighborhood:
-        """Walk the foreign-key graph out from the embedding matches.
-
-        The embedding matches alone are not the candidate space: a bridge table
-        is never semantically similar to the question, so it is never retrieved,
-        so it can never be selected, and the generator ends up inventing the
-        join. Breadth-first traversal from each match supplies those tables, and
-        the single de-duplicated set it produces is what the selector chooses
-        from.
-        """
-        neighborhood = build_table_neighborhood(
-            seed_tables=[(c.table_name, c.similarity, c.rank) for c in candidates],
-            schema=schema,
-            max_levels=settings.table_neighborhood_max_levels,
-            max_tables=settings.table_neighborhood_max_tables,
-            graph=self._get_or_build_join_graph(schema),
-        )
-        logger.info(
-            "Table neighborhood: %d seed(s) -> %d table(s) within %d hop(s)%s.",
-            len(neighborhood.seed_objects),
-            len(neighborhood.tables),
-            neighborhood.max_levels,
-            f", {len(neighborhood.discarded_objects)} discarded by the cap"
-            if neighborhood.truncated
-            else "",
-        )
-        return neighborhood
-
-    def _resolve_selection(
-        self,
-        selected_objects: list[str],
-        neighborhood: TableNeighborhood | None,
-        schema: DatabaseSchema,
-    ) -> tuple[list[str], list[Relationship], list[str], list[str]]:
-        """Make the selection joinable, then derive its relationships.
-
-        The selector is told to include the intermediate tables its choice
-        needs, and it does not reliably do so -- it will name a bridge in its
-        reasoning and leave it out of the answer. Whether two tables can be
-        joined is a fact about the schema, not a judgement, so the gap is closed
-        deterministically here, walking only tables the selector was shown.
-        Relationships are derived afterwards, over the repaired set, so they
-        describe what the planner actually receives.
-        """
-        if not selected_objects:
-            return [], [], [], []
-
-        allowed = neighborhood.table_names() if neighborhood else None
-        resolved, added, unjoinable = connect_selection(
-            selected_objects,
-            schema,
-            graph=self._get_or_build_join_graph(schema),
-            allowed=allowed,
-        )
-        if added:
-            logger.info(
-                "Selection was not joinable; added bridge table(s) %s to connect %s.",
-                added,
-                selected_objects,
-            )
-        if unjoinable:
-            logger.warning(
-                "Dropped %s from the selection: no foreign-key path to the rest "
-                "of the query, so any join would have to be invented.",
-                unjoinable,
-            )
-        source = neighborhood.relationships if neighborhood else schema.relationships
-        return resolved, filter_relationships(resolved, source), added, unjoinable
-
-    async def _retrieve_and_select(
-        self,
-        question: str,
-        analysis: QuestionAnalysis,
-        query_vector: list[float],
-        schema: DatabaseSchema,
-        database: Any,
-        selector: TableSelector | None = None,
-    ) -> "_SelectionOutcome":
-        """Embedding match -> BFS neighborhood -> table selector, with bounded retry.
-
-        A retry does not re-ask the same question of the same tables: the
-        selector's retrieval hint is embedded, the new matches become additional
-        BFS seeds, and the walk is redone, so the second attempt is offered a
-        genuinely wider neighborhood.
-        """
-        active_selector = selector or self.selector
-        try:
-            retriever = self._get_or_load_vector_retriever(database)
-            initial_candidates = retriever.retrieve(query_vector)
-            if not initial_candidates and (analysis.subjective or analysis.nouns):
-                fallback_hint = " ".join(dict.fromkeys(analysis.subjective + analysis.nouns))
-                try:
-                    fallback_vec = await self.embedding_provider.embed(fallback_hint)
-                    initial_candidates = retriever.retrieve(fallback_vec)
-                except Exception as fallback_err:
-                    logger.warning("Fallback candidate retrieval failed: %s", fallback_err)
-        except Exception as err:
-            logger.error("Vector retrieval failed: %s", err)
-            return _SelectionOutcome(error=f"Vector retrieval failed: {err}")
-
-        if not initial_candidates:
-            return _SelectionOutcome(
-                error="I could not find any relevant tables in the database schema matching your question."
-            )
-
-        current_candidates = list(initial_candidates)
-        neighborhood = self._build_neighborhood(current_candidates, schema)
-        attempt = 0
-        feedback: str | None = None
-
-        while True:
-            selection = await active_selector.select(
-                question_analysis=analysis,
-                neighborhood=neighborhood,
-                schema=schema,
-                feedback=feedback,
-            )
-            resolved, relationships, added, unjoinable = self._resolve_selection(
-                selection.selected_objects, neighborhood, schema
-            )
-            if selection.sufficient and resolved:
-                # A selection the model is happy with can still have been
-                # salvaged -- a name it invented was dropped, or the stage
-                # failed and the top embedding match stood in for an answer.
-                uncertainty = assess_selection(
-                    selection, unjoinable, exhausted_retries=False
-                )
-                return _SelectionOutcome(
-                    selected_objects=resolved,
-                    relationships=relationships,
-                    connector_objects=added,
-                    unjoinable_objects=unjoinable,
-                    candidates=current_candidates,
-                    neighborhood=neighborhood,
-                    retries=attempt,
-                    notice=uncertainty.detail if uncertainty else None,
-                    uncertainty=uncertainty,
-                )
-
-            if attempt >= self.max_retries:
-                logger.warning(
-                    "Table selector still reports insufficiency after %d retries: %s",
-                    attempt,
-                    selection.reason,
-                )
-                if not resolved:
-                    return _SelectionOutcome(
-                        candidates=current_candidates,
-                        neighborhood=neighborhood,
-                        retries=attempt,
-                        error="Relevant schema could not be identified reliably after maximum retries.",
-                    )
-                # A joinable selection is worth attempting even when the model
-                # doubts it: the usual reason it reports insufficiency is a join
-                # it could not see, which the repair above has already settled.
-                # Failing here instead would discard a usable answer, so the
-                # doubt is carried on the outcome rather than ending the run --
-                # and it is what a caller willing to ask a human stops on.
-                uncertainty = assess_selection(
-                    selection, unjoinable, exhausted_retries=True
-                )
-                return _SelectionOutcome(
-                    selected_objects=resolved,
-                    relationships=relationships,
-                    connector_objects=added,
-                    unjoinable_objects=unjoinable,
-                    candidates=current_candidates,
-                    neighborhood=neighborhood,
-                    retries=attempt,
-                    notice=uncertainty.detail if uncertainty else None,
-                    uncertainty=uncertainty,
-                )
-
-            attempt += 1
-            hint = selection.retrieval_hint or f"{question} {' '.join(selection.missing_objects)}"
-            try:
-                hint_vec = await self.embedding_provider.embed(hint)
-                new_cands = retriever.retrieve(hint_vec)
-            except Exception as embed_err:
-                logger.warning("Retry embedding retrieval failed: %s", embed_err)
-                new_cands = []
-
-            merged = {c.table_name: c.similarity for c in current_candidates}
-            for nc in new_cands:
-                if nc.table_name not in merged or nc.similarity > merged[nc.table_name]:
-                    merged[nc.table_name] = nc.similarity
-
-            sorted_merged = sorted(merged.items(), key=lambda x: x[1], reverse=True)[: settings.effective_similarity_top_k]
-            current_candidates = [
-                CandidateTable(table_name=tbl, similarity=sim, rank=r)
-                for r, (tbl, sim) in enumerate(sorted_merged, start=1)
-            ]
-            neighborhood = self._build_neighborhood(current_candidates, schema)
-            missing_info = f" Missing: {selection.missing_objects}." if selection.missing_objects else ""
-            feedback = (
-                f"Previous attempt selected {selection.selected_objects} but was marked insufficient. "
-                f"Reason: {selection.reason}.{missing_info}"
-            )
-
-    async def _enrich_schema_descriptions(
-        self,
-        relevant_schema: RelevantSchema,
-        database: Any,
-    ) -> None:
-        """Fetch table and column descriptions from the Descriptions API and populate in place."""
-        if not self.descriptions_client:
-            return
-
-        target_slug = getattr(database, "key", None) or (
-            database.value if isinstance(database, DatabaseType) else str(database)
-        )
-        for obj in relevant_schema.objects:
-            try:
-                desc = await self.descriptions_client.get_table_description(
-                    database_type=target_slug,
-                    table_name=obj.name,
-                )
-                if desc:
-                    if desc.description:
-                        obj.description = desc.description
-                    for col_name, col_desc in desc.columns.items():
-                        if col_desc:
-                            field = obj.get_field(col_name)
-                            if field:
-                                field.description = col_desc
-            except Exception as err:
-                logger.warning(
-                    "Failed to enrich descriptions for %s.%s: %s",
-                    target_slug,
-                    obj.name,
-                    err,
-                )
-
-    async def _materialize_schema(
-        self,
-        selected_objects: list[str],
-        relationships: list[Relationship],
-        schema: DatabaseSchema,
-        database: Any,
-    ) -> RelevantSchema:
-        """Turn the selector's tables and relationships into the planner's slice.
-
-        Nothing is added or removed here. The selector chose from the whole
-        breadth-first neighborhood, bridge tables included, so its answer is the
-        final word on which tables the query touches; this fills in the columns
-        it did not see and the descriptions the Descriptions API holds.
-        """
-        relevant_schema = self.expander.materialize(
-            selected_object_names=selected_objects,
-            relationships=relationships,
-            schema=schema,
-        )
-        await self._enrich_schema_descriptions(relevant_schema, database)
-        return relevant_schema
-
-    async def _plan_generate_validate(
-        self,
-        question: str,
-        analysis: QuestionAnalysis,
-        relevant_schema: RelevantSchema,
-        db_type: DatabaseType,
-        initial_plan: QueryPlan | None = None,
-        planner: QueryPlanner | None = None,
-        generator: Any = None,
-        validator: QueryValidator | None = None,
-    ) -> tuple[Any, GeneratedQuery | None, ValidationResult | None, int, str | None]:
-        """Query Planner -> Generator -> Validator bounded targeted retry loop."""
-        active_generator = generator or (
-            self.postgres_gen if db_type == DatabaseType.POSTGRESQL else self.mongo_gen
-        )
-        active_planner = planner or self.planner
-        active_validator = validator or self.validator
-
-        query_plan = initial_plan
-        if query_plan is None:
-            query_plan = await active_planner.plan(
-                question_analysis=analysis,
-                relevant_schema=relevant_schema,
-                database_type=db_type,
-            )
-
-        last_query: GeneratedQuery | None = None
-        last_val: ValidationResult | None = None
-        gen_feedback: str | None = None
-        planner_feedback: str | None = None
-        retries = 0
-
-        while retries <= self.max_retries:
-            if query_plan is None:
-                query_plan = await active_planner.plan(
-                    question_analysis=analysis,
-                    relevant_schema=relevant_schema,
-                    database_type=db_type,
-                    feedback=planner_feedback,
-                )
-                planner_feedback = None
-
-            try:
-                last_query = await active_generator.generate_query(
-                    question=question,
-                    plan=query_plan,
-                    schema=relevant_schema,
-                    feedback=gen_feedback,
-                )
-                gen_feedback = None
-            except Exception as gen_err:
-                if retries >= self.max_retries:
-                    return query_plan, last_query, last_val, retries, f"Query generation failed after maximum retries: {gen_err}"
-                retries += 1
-                gen_feedback = f"Generation error: {gen_err}"
-                continue
-
-            last_val = await active_validator.validate(
-                question=question,
-                plan=query_plan,
-                generated_query=last_query,
-                schema=relevant_schema,
-            )
-
-            if last_val.valid:
-                return query_plan, last_query, last_val, retries, None
-
-            if last_val.error_type == ValidationErrorType.UNSAFE:
-                return query_plan, last_query, last_val, retries, "Generated query is unsafe. Execution rejected."
-
-            if retries >= self.max_retries:
-                return query_plan, last_query, last_val, retries, (
-                    "Query failed validation after maximum retries. Manual review required."
-                )
-
-            retries += 1
-            clean_issues = [
-                clean_unreadable_characters(strip_ansi_escapes(str(i)))
-                for i in last_val.issues
-                if i
-            ]
-            feedback_msg = "; ".join(clean_issues)
-            if last_val.suggestion:
-                clean_sugg = clean_unreadable_characters(strip_ansi_escapes(str(last_val.suggestion)))
-                feedback_msg += f". Suggestion: {clean_sugg}"
-            feedback_msg = clean_unreadable_characters(strip_ansi_escapes(feedback_msg))
-
-            if last_val.error_type == ValidationErrorType.PLANNER_ERROR:
-                planner_feedback = feedback_msg
-                query_plan = None
-            else:
-                gen_feedback = feedback_msg
-
-        return query_plan, last_query, last_val, retries, "Query failed validation after maximum retries. Manual review required."
+    # -- the run -----------------------------------------------------------
 
     async def execute_pipeline(
         self,
@@ -767,170 +230,93 @@ class NL2AnyQueryOrchestrator:
         question is better served by today's behaviour -- carry on, and say so
         on `selection_notice`.
         """
-        default_name, resolved_default = self._resolve_provider(provider)
-        provider_name = default_name or "koboldcpp"
-        active_provider = resolved_default or self.provider
-        sel_name, sel_provider_obj = self._resolve_provider(selector_provider)
-        gen_name, gen_provider_obj = self._resolve_provider(generator_provider)
-        # Reported rather than inferred by the caller, so a response says which
-        # model wrote the query it is carrying even when the stages differ.
-        provider_map = {
-            "default": provider_name,
-            "selector": sel_name or provider_name,
-            "generator": gen_name or provider_name,
-        }
-        (
-            guardrail,
-            semantic,
-            selector,
-            planner,
-            postgres_gen,
-            mongo_gen,
-            validator,
-        ) = self._get_stages_for_provider(
-            active_provider,
-            selector_provider=sel_provider_obj,
-            generator_provider=gen_provider_obj,
+        providers = plan_providers(
+            self.provider,
+            provider=provider,
+            selector_provider=selector_provider,
+            generator_provider=generator_provider,
+        )
+        stages = self._get_stages_for_provider(
+            providers.default,
+            selector_provider=providers.selector,
+            generator_provider=providers.generator,
         )
 
         # 1. Resolve database target & type
-        if isinstance(database, DatabaseTarget):
-            target = database
-            db_type = target.db_type
-        elif isinstance(database, DatabaseType):
-            target = as_target(database)
-            db_type = database
-        elif isinstance(database, str):
-            try:
-                target = resolve_target(database)
-                db_type = target.db_type
-            except ValueError:
-                db_type = detect_database_type(database)
-                target = as_target(db_type)
-        else:
-            target = as_target(DatabaseType.POSTGRESQL)
-            db_type = DatabaseType.POSTGRESQL
+        target, db_type = resolve_database_target(database)
 
-        active_generator = postgres_gen if db_type == DatabaseType.POSTGRESQL else mongo_gen
+        def respond(**kwargs) -> PipelineResponse:
+            return build_response(
+                db_type=db_type,
+                target_name=target.key,
+                question=question,
+                provider=providers.name,
+                providers=providers.provider_map,
+                **kwargs,
+            )
 
         try:
             schema = self.get_or_load_schema(target)
         except Exception as err:
-            return self._build_response(
-                db_type=db_type,
-                target_name=target.key,
-                question=question,
-                provider=provider_name,
-                providers=provider_map,
+            return respond(
                 guardrail=GuardrailResult(decision=GuardrailDecision.REJECT, reason=str(err)),
                 error=str(err),
             )
 
-        # 2. Stage 1: Guardrail
-        guardrail_result = await guardrail.classify(question)
-        if guardrail_result.decision == GuardrailDecision.REJECT:
-            return self._build_response(
-                db_type=db_type,
-                target_name=target.key,
-                question=question,
-                provider=provider_name,
-                providers=provider_map,
-                guardrail=guardrail_result,
-                error="Sorry, I can't help with this.",
-            )
-
-        if guardrail_result.decision == GuardrailDecision.BASIC:
-            basic_ans = guardrail.handle_basic_question(
-                question=question,
-                database_type=target.key,
-                database_name=schema.database_name,
-            )
-            return self._build_response(
-                db_type=db_type,
-                target_name=target.key,
-                question=question,
-                provider=provider_name,
-                providers=provider_map,
-                guardrail=guardrail_result,
-                basic_answer=basic_ans,
-            )
-
-        # 3. Stage 1.5: SymSpell Spelling Checker (immediately after Guardrail, before Semantic Analysis)
-        spelling_res = self.spelling_checker.check(question=question, jargons=jargons)
-        processed_question = spelling_res.corrected_question
-
-        # 4. Stages 2 & 3: Concurrent Embedding, Semantic SLM & spaCy Linguistic Analysis
-        try:
-            query_vector, semantic_res, linguistic_res = await asyncio.gather(
-                self.embedding_provider.embed(processed_question),
-                semantic.analyze(processed_question),
-                asyncio.to_thread(self.linguistic.analyze, processed_question),
-            )
-        except Exception as err:
-            return self._build_response(
-                db_type=db_type,
-                target_name=target.key,
-                question=question,
-                provider=provider_name,
-                providers=provider_map,
-                guardrail=guardrail_result,
-                spelling_correction=spelling_res,
-                error=f"Failed to analyze query: {err}",
-            )
-
-        analysis = QuestionAnalysis(
-            question=processed_question,
-            subjective=semantic_res.subjective,
-            objective=semantic_res.objective,
-            nouns=linguistic_res.nouns,
-            verbs=linguistic_res.verbs,
-            entities=linguistic_res.entities,
+        # 2. Stages 1 to 3: guardrail, spelling, then the concurrent embedding,
+        #    semantic and linguistic reads of the question. Either of the first
+        #    two can end the run on its own.
+        understood = await understand_question(
+            question=question,
+            target_key=target.key,
+            database_name=schema.database_name,
+            guardrail=stages.guardrail,
+            semantic=stages.semantic,
+            linguistic=self.linguistic,
+            spelling_checker=self.spelling_checker,
+            embedding_provider=self.embedding_provider,
+            jargons=jargons,
         )
+        if understood.is_terminal:
+            return respond(**understood.terminal_fields())
+        analysis = understood.analysis
+        processed_question = understood.processed_question
 
-        # 5. Stages 5, 6 & 7: Candidate Retrieval -> BFS Neighborhood -> Table Selection
-        outcome = await self._retrieve_and_select(
+        # 3. Stages 5, 6 & 7: candidate retrieval -> BFS neighborhood -> table selection
+        outcome = await retrieve_and_select(
             question=processed_question,
             analysis=analysis,
-            query_vector=query_vector,
+            query_vector=understood.query_vector,
             schema=schema,
-            database=target,
-            selector=selector,
+            graph=self._resources.join_graph(schema),
+            selector=stages.selector,
+            retriever=self._resources.vector_retriever(target),
+            embedding_provider=self.embedding_provider,
+            max_retries=self.max_retries,
         )
-        selected_objs = outcome.selected_objects
-        selected_rels = outcome.relationships
-        connector_objs = outcome.connector_objects
-        unjoinable_objs = outcome.unjoinable_objects
-        candidates = outcome.candidates
-        neighborhood = outcome.neighborhood
-        sel_retries = outcome.retries
-        sel_notice = outcome.notice
-        sel_err = outcome.error
-        if sel_notice:
-            logger.warning("Proceeding despite selector doubt: %s", sel_notice)
+        if outcome.notice:
+            logger.warning("Proceeding despite selector doubt: %s", outcome.notice)
 
-        if sel_err or not selected_objs:
-            return self._build_response(
-                db_type=db_type,
-                target_name=target.key,
-                question=question,
-                provider=provider_name,
-                providers=provider_map,
-                guardrail=guardrail_result,
-                spelling_correction=spelling_res,
-                semantic=semantic_res,
-                linguistic=linguistic_res.model_dump(),
-                candidates=candidates,
-                selected=selected_objs,
-                selected_relationships=selected_rels,
-                connector_objects=connector_objs,
-                unjoinable_objects=unjoinable_objs,
-                selection_notice=sel_notice,
-                table_neighborhood=neighborhood,
-                selection_retries=sel_retries,
-                error=sel_err or "I could not find any relevant tables or collections in the database schema matching your question.",
+        selection_fields = {
+            **understood.response_fields(),
+            "candidates": outcome.candidates,
+            "selected": outcome.selected_objects,
+            "selected_relationships": outcome.relationships,
+            "connector_objects": outcome.connector_objects,
+            "unjoinable_objects": outcome.unjoinable_objects,
+            "selection_notice": outcome.notice,
+            "table_neighborhood": outcome.neighborhood,
+            "selection_retries": outcome.retries,
+        }
+
+        if outcome.error or not outcome.selected_objects:
+            return respond(
+                **selection_fields,
+                error=outcome.error
+                or "I could not find any relevant tables or collections in the database schema matching your question.",
             )
 
-        # 6. The table gate. Everything after this point is scoped by the tables
+        # 4. The table gate. Everything after this point is scoped by the tables
         #    chosen above, so a wrong choice does not fail, it answers a
         #    different question. When the selection carries uncertainty and the
         #    caller can ask a human, the run stops here instead.
@@ -942,18 +328,18 @@ class NL2AnyQueryOrchestrator:
             pending = PendingRun(
                 target=target,
                 db_type=db_type,
-                provider_name=provider_name,
+                provider_name=providers.name,
                 provider_arg=provider,
-                provider_map=dict(provider_map),
+                provider_map=dict(providers.provider_map),
                 selector_provider_arg=selector_provider,
                 generator_provider_arg=generator_provider,
                 question=question,
                 processed_question=processed_question,
                 schema=schema,
-                guardrail_result=guardrail_result,
-                spelling_res=spelling_res,
-                semantic_res=semantic_res,
-                linguistic_res=linguistic_res,
+                guardrail_result=understood.guardrail,
+                spelling_res=understood.spelling,
+                semantic_res=understood.semantic,
+                linguistic_res=understood.linguistic,
                 analysis=analysis,
                 outcome=outcome,
                 uncertainty=outcome.uncertainty,
@@ -962,29 +348,15 @@ class NL2AnyQueryOrchestrator:
             logger.info(
                 "Pausing for table approval (run %s): %s", run_id, outcome.uncertainty.reasons
             )
-            return self._build_response(
-                db_type=db_type,
-                target_name=target.key,
-                question=question,
-                provider=provider_name,
-                providers=provider_map,
-                guardrail=guardrail_result,
-                spelling_correction=spelling_res,
-                semantic=semantic_res,
-                linguistic=linguistic_res.model_dump(),
-                candidates=candidates,
-                selected=selected_objs,
-                selected_relationships=selected_rels,
-                connector_objects=connector_objs,
-                unjoinable_objects=unjoinable_objs,
-                selection_notice=sel_notice,
-                table_neighborhood=neighborhood,
-                selection_retries=sel_retries,
+            return respond(
+                **selection_fields,
                 status="awaiting_table_approval",
                 approval=TableApprovalRequest(
                     run_id=run_id,
-                    proposed_objects=selected_objs,
-                    selectable_objects=neighborhood.table_names() if neighborhood else [],
+                    proposed_objects=outcome.selected_objects,
+                    selectable_objects=(
+                        outcome.neighborhood.table_names() if outcome.neighborhood else []
+                    ),
                     uncertainty=outcome.uncertainty,
                     expires_at=pending.expires_at(),
                 ),
@@ -993,21 +365,21 @@ class NL2AnyQueryOrchestrator:
         return await self._finish_pipeline(
             target=target,
             db_type=db_type,
-            provider_name=provider_name,
-            provider_map=provider_map,
+            provider_name=providers.name,
+            provider_map=providers.provider_map,
             question=question,
             processed_question=processed_question,
             schema=schema,
             analysis=analysis,
             outcome=outcome,
-            guardrail_result=guardrail_result,
-            spelling_res=spelling_res,
-            semantic_res=semantic_res,
-            linguistic_res=linguistic_res,
-            selector=selector,
-            planner=planner,
-            generator=active_generator,
-            validator=validator,
+            guardrail_result=understood.guardrail,
+            spelling_res=understood.spelling,
+            semantic_res=understood.semantic,
+            linguistic_res=understood.linguistic,
+            selector=stages.selector,
+            planner=stages.planner,
+            generator=stages.generator_for(db_type),
+            validator=stages.validator,
         )
 
     async def resume_pipeline(
@@ -1017,9 +389,7 @@ class NL2AnyQueryOrchestrator:
     ) -> PipelineResponse:
         """Finish a run a human stopped at the table gate.
 
-        The approved names are not taken as given. They are checked against the
-        neighborhood -- a table the selector was never shown is not one a human
-        may add either, because nothing says it can be joined -- and then put
+        The approved names are checked against the neighborhood and then put
         through the same deterministic repair the model's answer goes through,
         so a hand-picked set gets its bridge tables and loses its unreachable
         ones exactly as the automatic path would. A human chooses the query's
@@ -1027,28 +397,13 @@ class NL2AnyQueryOrchestrator:
         """
         run = self.pending_runs.get(run_id)
         outcome = run.outcome
-        neighborhood = outcome.neighborhood
+        chosen = normalize_approved_objects(approved_objects, outcome.neighborhood)
 
-        allowed = {name.lower(): name for name in (neighborhood.table_names() if neighborhood else [])}
-        chosen: list[str] = []
-        unknown: list[str] = []
-        for name in approved_objects:
-            key = name.strip().lower()
-            if key in allowed:
-                canonical = allowed[key]
-                if canonical not in chosen:
-                    chosen.append(canonical)
-            else:
-                unknown.append(name)
-        if unknown:
-            raise ValueError(
-                "Table(s) not in this run's candidate set: " + ", ".join(unknown)
-            )
-        if not chosen:
-            raise ValueError("At least one table must be approved.")
-
-        resolved, relationships, added, unjoinable = self._resolve_selection(
-            chosen, neighborhood, run.schema
+        resolved, relationships, added, unjoinable = resolve_selection(
+            chosen,
+            outcome.neighborhood,
+            run.schema,
+            self._resources.join_graph(run.schema),
         )
         if not resolved:
             raise ValueError("The approved tables could not be resolved into a joinable set.")
@@ -1067,24 +422,19 @@ class NL2AnyQueryOrchestrator:
             proposed,
         )
 
-        _default_name, resolved_default = self._resolve_provider(run.provider_arg)
-        active_provider = resolved_default or self.provider
-        _sel_name, sel_provider_obj = self._resolve_provider(run.selector_provider_arg)
-        _gen_name, gen_provider_obj = self._resolve_provider(run.generator_provider_arg)
-        (
-            _guardrail,
-            _semantic,
-            selector,
-            planner,
-            postgres_gen,
-            mongo_gen,
-            validator,
-        ) = self._get_stages_for_provider(
-            active_provider,
-            selector_provider=sel_provider_obj,
-            generator_provider=gen_provider_obj,
+        # Re-resolved from the arguments the first call was given, so a run
+        # cannot finish against a provider the request never asked for.
+        providers = plan_providers(
+            self.provider,
+            provider=run.provider_arg,
+            selector_provider=run.selector_provider_arg,
+            generator_provider=run.generator_provider_arg,
         )
-        generator = postgres_gen if run.db_type == DatabaseType.POSTGRESQL else mongo_gen
+        stages = self._get_stages_for_provider(
+            providers.default,
+            selector_provider=providers.selector,
+            generator_provider=providers.generator,
+        )
 
         return await self._finish_pipeline(
             target=run.target,
@@ -1100,10 +450,10 @@ class NL2AnyQueryOrchestrator:
             spelling_res=run.spelling_res,
             semantic_res=run.semantic_res,
             linguistic_res=run.linguistic_res,
-            selector=selector,
-            planner=planner,
-            generator=generator,
-            validator=validator,
+            selector=stages.selector,
+            planner=stages.planner,
+            generator=stages.generator_for(run.db_type),
+            validator=stages.validator,
             approval_record=TableApprovalRecord(
                 proposed_objects=proposed,
                 approved_objects=resolved,
@@ -1118,12 +468,11 @@ class NL2AnyQueryOrchestrator:
         target: DatabaseTarget,
         db_type: DatabaseType,
         provider_name: str,
-        provider_map: dict[str, str] | None = None,
         question: str,
         processed_question: str,
         schema: DatabaseSchema,
         analysis: QuestionAnalysis,
-        outcome: "_SelectionOutcome",
+        outcome: SelectionOutcome,
         guardrail_result: GuardrailResult,
         spelling_res: SpellingCorrectionResult | None,
         semantic_res: SemanticAnalysisResult | None,
@@ -1132,6 +481,7 @@ class NL2AnyQueryOrchestrator:
         planner: QueryPlanner,
         generator: Any,
         validator: QueryValidator,
+        provider_map: dict[str, str] | None = None,
         approval_record: TableApprovalRecord | None = None,
     ) -> PipelineResponse:
         """Everything downstream of a settled table selection.
@@ -1140,103 +490,56 @@ class NL2AnyQueryOrchestrator:
         from exactly here, whether the tables were settled by the selector or by
         a human.
         """
-        selected_objs = outcome.selected_objects
-        selected_rels = outcome.relationships
-        connector_objs = outcome.connector_objects
-        unjoinable_objs = outcome.unjoinable_objects
-        candidates = outcome.candidates
-        neighborhood = outcome.neighborhood
-        sel_retries = outcome.retries
-        sel_notice = outcome.notice
+        graph = self._resources.join_graph(schema)
 
-        # 6. Deterministic materialization of the selected tables and their
-        #    relationships, plus description enrichment via the Descriptions API.
-        relevant_schema = await self._materialize_schema(
-            selected_objects=selected_objs,
-            relationships=selected_rels,
-            schema=schema,
-            database=target,
-        )
-
-        # 7. Stage 8: Query Planning (with feedback loop to Table Selector if required tables are missing)
-        planner_retries = 0
-        query_plan = None
-        total_sel_retries = sel_retries
-        while planner_retries <= self.max_retries:
-            query_plan = await planner.plan(
-                question_analysis=analysis,
-                relevant_schema=relevant_schema,
-                database_type=db_type,
-            )
-            if not query_plan.missing_tables:
-                break
-
-            if approval_record is not None:
-                # A human settled this list. Widening it here would put tables
-                # into the query behind their back, which is the whole thing the
-                # gate exists to prevent, so the gap is reported instead.
-                logger.warning(
-                    "Planner identified missing tables %s, but the tables were "
-                    "approved by a human and are not re-selected.",
-                    query_plan.missing_tables,
-                )
-                break
-
-            if planner_retries >= self.max_retries:
-                logger.warning(
-                    "Planner identified missing tables %s, but reached max retries.",
-                    query_plan.missing_tables,
-                )
-                break
-
-            planner_retries += 1
-            total_sel_retries += 1
-            missing_names = ", ".join(query_plan.missing_tables)
-            selector_feedback = (
-                f"The query plan identified that table(s) [{missing_names}] are required to answer "
-                f"the question '{processed_question}', but their schema is not in the retrieved schema. "
-                f"Please select ALL required tables (including {missing_names}) from the candidate tables."
-            )
-            re_selection = await selector.select(
-                question_analysis=analysis,
-                neighborhood=neighborhood,
+        async def materialize(selected: list[str], relationships: list[Any]):
+            return await materialize_schema(
+                selected_objects=selected,
+                relationships=relationships,
                 schema=schema,
-                feedback=selector_feedback,
+                database=target,
+                expander=self.expander,
+                descriptions_client=self.descriptions_client,
             )
-            if re_selection.selected_objects:
-                new_selected = list(dict.fromkeys(selected_objs + re_selection.selected_objects))
-                if set(new_selected) == set(selected_objs):
-                    break
-                # Repaired and re-derived over the widened selection rather than
-                # merged, so an edge can never outlive the tables it joins and a
-                # table added by the planner's feedback still gets its bridge.
-                selected_objs, selected_rels, added, unjoinable = self._resolve_selection(
-                    new_selected, neighborhood, schema
-                )
-                connector_objs = list(dict.fromkeys(connector_objs + added))
-                unjoinable_objs = list(dict.fromkeys(unjoinable_objs + unjoinable))
-                relevant_schema = await self._materialize_schema(
-                    selected_objects=selected_objs,
-                    relationships=selected_rels,
-                    schema=schema,
-                    database=target,
-                )
-            else:
-                break
 
-        # 8. Stages 9 & 10: Query Generation & Validation Loop
-        query_plan, last_query, last_val, val_retries, val_err = await self._plan_generate_validate(
+        # 1. Deterministic materialization of the selected tables and their
+        #    relationships, plus description enrichment via the Descriptions API.
+        relevant_schema = await materialize(outcome.selected_objects, outcome.relationships)
+
+        # 2. Stage 8: query planning, with a feedback loop back into table
+        #    selection when the plan needs a table the selector left out.
+        planned = await plan_with_table_feedback(
             question=processed_question,
             analysis=analysis,
             relevant_schema=relevant_schema,
+            schema=schema,
+            neighborhood=outcome.neighborhood,
+            graph=graph,
             db_type=db_type,
-            initial_plan=query_plan,
+            planner=planner,
+            selector=selector,
+            materialize=materialize,
+            max_retries=self.max_retries,
+            selected_objects=outcome.selected_objects,
+            relationships=outcome.relationships,
+            connector_objects=outcome.connector_objects,
+            unjoinable_objects=outcome.unjoinable_objects,
+            tables_are_human_approved=approval_record is not None,
+        )
+
+        # 3. Stages 9 & 10: query generation and validation loop
+        generated = await plan_generate_validate(
+            question=processed_question,
+            analysis=analysis,
+            relevant_schema=planned.relevant_schema,
+            db_type=db_type,
             planner=planner,
             generator=generator,
             validator=validator,
+            max_retries=self.max_retries,
+            initial_plan=planned.plan,
         )
 
-        attempts = val_retries + 1
         ctx: dict[str, Any] = {
             "db_type": db_type,
             "target_name": target.key,
@@ -1247,54 +550,52 @@ class NL2AnyQueryOrchestrator:
             "spelling_correction": spelling_res,
             "semantic": semantic_res,
             "linguistic": linguistic_res.model_dump(),
-            "candidates": candidates,
-            "selected": selected_objs,
-            "selected_relationships": selected_rels,
-            "connector_objects": connector_objs,
-            "unjoinable_objects": unjoinable_objs,
-            "selection_notice": sel_notice,
-            "table_neighborhood": neighborhood,
+            "candidates": outcome.candidates,
+            "selected": planned.selected_objects,
+            "selected_relationships": planned.relationships,
+            "connector_objects": planned.connector_objects,
+            "unjoinable_objects": planned.unjoinable_objects,
+            "selection_notice": outcome.notice,
+            "table_neighborhood": outcome.neighborhood,
             "table_approval": approval_record,
-            "selection_retries": total_sel_retries,
-            "schema": relevant_schema,
-            "plan": query_plan,
-            "query": last_query,
-            "attempts": attempts,
-            "validation_retries": val_retries,
-            "validation": last_val,
+            "selection_retries": outcome.retries + planned.extra_selection_retries,
+            "schema": planned.relevant_schema,
+            "plan": generated.plan,
+            "query": generated.query,
+            "attempts": generated.retries + 1,
+            "validation_retries": generated.retries,
+            "validation": generated.validation,
         }
 
-        if val_err or not last_query or not last_val or not last_val.valid:
-            return self._build_response(**ctx, error=val_err)
+        if generated.error or not generated.query or not generated.validation or not generated.validation.valid:
+            return build_response(**ctx, error=generated.error)
 
-        # 9. Stage 11: Deterministic Safety Policy Check
-        policy_result = self.policy.check(last_query, schema=relevant_schema)
+        # 4. Stage 11: deterministic safety policy check
+        policy_result = self.policy.check(generated.query, schema=planned.relevant_schema)
         if not policy_result.allowed:
-            return self._build_response(
+            return build_response(
                 **ctx,
                 policy=policy_result,
                 error=f"Policy rejected query: {policy_result.reason}",
             )
 
-        # 10. Stages 12 & 13: Execution and Result Processing
+        # 5. Stages 12 & 13: execution and result processing
         try:
             columns, raw_rows = self.executor.execute(
-                last_query,
+                generated.query,
                 connection=target.connection,
                 database=target.mongo_database,
             )
         except Exception as exec_err:
             logger.error("Execution error: %s", exec_err)
-            return self._build_response(
+            return build_response(
                 **ctx,
                 policy=policy_result,
                 error=f"Database execution error: {exec_err}",
             )
 
-        execution_results = self.results.process(columns, raw_rows)
-        return self._build_response(
+        return build_response(
             **ctx,
             policy=policy_result,
-            results=execution_results,
+            results=self.results.process(columns, raw_rows),
         )
-

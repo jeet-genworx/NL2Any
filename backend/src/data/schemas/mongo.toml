@@ -2,7 +2,7 @@
 type = "mongodb"
 name = "nl2anyquery_demo"
 schema_version = "1.0"
-last_updated = "2026-10-13T09:02:12.702697+00:00"
+last_updated = "2026-10-13T12:04:01.903982+00:00"
 description_generated_at = ""
 
 [collections.customers]

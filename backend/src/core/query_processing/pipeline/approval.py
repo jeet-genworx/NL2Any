@@ -12,8 +12,9 @@ stage makes silently when the model misread the schema it was shown. When any
 of that fires the run is parked here rather than carried on with a warning
 attached, and a human settles which tables it may use.
 
-This module holds the assessment and the parked runs. Resuming one is the
-orchestrator's job, because only it knows what comes next.
+This module holds the assessment, the parked runs, and the check a human's
+answer goes through. Resuming a run is the orchestrator's job, because only it
+knows what comes next.
 """
 
 from __future__ import annotations
@@ -33,8 +34,8 @@ from backend.src.schemas.pipeline import (
     TableSelectionResult,
 )
 
-if TYPE_CHECKING:  # pragma: no cover - import cycle: the orchestrator imports this module
-    from backend.src.core.query_processing.pipeline.orchestrator import _SelectionOutcome
+if TYPE_CHECKING:  # pragma: no cover - import cycle: the selection stage imports this module
+    from backend.src.core.query_processing.pipeline.selection import SelectionOutcome
 
 
 # Reason codes. They are strings rather than an enum because they travel to the
@@ -129,7 +130,7 @@ class PendingRun:
     semantic_res: SemanticAnalysisResult | None
     linguistic_res: Any
     analysis: QuestionAnalysis
-    outcome: "_SelectionOutcome"
+    outcome: "SelectionOutcome"
     uncertainty: SelectionUncertainty
     created_at: float = field(default_factory=time.time)
     provider_map: dict[str, str] = field(default_factory=dict)
@@ -202,3 +203,35 @@ class PendingRunStore:
     def __len__(self) -> int:
         self._evict_expired()
         return len(self._runs)
+
+
+def normalize_approved_objects(
+    approved_objects: list[str],
+    neighborhood: Any,
+) -> list[str]:
+    """Check a human's answer against the candidate set and canonicalize it.
+
+    The approved names are not taken as given. A table the selector was never
+    shown is not one a human may add either, because nothing says it can be
+    joined to the rest of the query. Matching is case-insensitive and
+    de-duplicating, since the names come back from a UI, but an unknown name is
+    an error rather than something to quietly drop.
+    """
+    allowed = {
+        name.lower(): name
+        for name in (neighborhood.table_names() if neighborhood else [])
+    }
+    chosen: list[str] = []
+    unknown: list[str] = []
+    for name in approved_objects:
+        canonical = allowed.get(name.strip().lower())
+        if canonical is None:
+            unknown.append(name)
+        elif canonical not in chosen:
+            chosen.append(canonical)
+
+    if unknown:
+        raise ValueError("Table(s) not in this run's candidate set: " + ", ".join(unknown))
+    if not chosen:
+        raise ValueError("At least one table must be approved.")
+    return chosen

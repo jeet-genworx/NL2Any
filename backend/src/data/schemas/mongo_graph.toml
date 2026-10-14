@@ -3,7 +3,7 @@ edges = []
 [graph]
 database_type = "mongodb"
 database_name = "nl2anyquery_demo"
-generated_at = "2026-10-13T09:02:12.704661+00:00"
+generated_at = "2026-10-13T12:04:01.905505+00:00"
 node_count = 5
 edge_count = 0
 
