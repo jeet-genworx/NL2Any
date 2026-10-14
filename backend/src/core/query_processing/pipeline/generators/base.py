@@ -1,7 +1,12 @@
 """Base protocol for database query generators."""
 
 from typing import Any, Protocol, runtime_checkable
-from backend.src.schemas.pipeline import GeneratedQuery, GeneratorMissingInfo, RelevantSchema
+
+from backend.src.schemas.pipeline import (
+    GeneratedQuery,
+    GeneratorMissingInfo,
+    RelevantSchema,
+)
 
 
 @runtime_checkable

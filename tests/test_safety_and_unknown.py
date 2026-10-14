@@ -72,7 +72,7 @@ async def test_unknown_schema_zero_candidates(question, mock_shop_schema):
         selector=selector,
         executor=executor,
     )
-    orchestrator._schemas[DatabaseType.POSTGRESQL] = mock_shop_schema
+    orchestrator.schema_cache._schemas[DatabaseType.POSTGRESQL] = mock_shop_schema
 
     resp = await orchestrator.execute_pipeline(question, database="postgres")
     assert resp.error is not None

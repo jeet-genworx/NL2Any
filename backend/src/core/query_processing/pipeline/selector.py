@@ -298,7 +298,7 @@ class TableSelector:
             prefix = self.build_static_prefix(schema)
 
         self.last_prompt_tokens = 0
-        prompt = f"{prefix}{feedback_context}User Question:\n{q_text}\n"
+        prompt = f"{prefix}User Question:\n{q_text}\n{feedback_context}"
         self.last_prompt_tokens = estimate_token_count(prompt)
         max_toks = max_tokens if max_tokens is not None else settings.table_selector_max_tokens
 

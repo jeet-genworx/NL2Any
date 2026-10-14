@@ -1,10 +1,24 @@
 """Tests for database-specific query generators in V2."""
 
 import pytest
-from backend.src.schemas.pipeline import GeneratorMissingInfo, MongoQuery, QueryPlan, RelevantSchema
-from backend.src.data.models.schema import DatabaseType, Field, SchemaObject, SchemaObjectKind
-from backend.src.core.query_processing.pipeline.generators.mongo import MongoQueryGenerator
-from backend.src.core.query_processing.pipeline.generators.postgres import PostgresQueryGenerator
+
+from backend.src.core.query_processing.pipeline.generators.mongo import (
+    MongoQueryGenerator,
+)
+from backend.src.core.query_processing.pipeline.generators.postgres import (
+    PostgresQueryGenerator,
+)
+from backend.src.data.models.schema import (
+    DatabaseType,
+    Field,
+    SchemaObject,
+    SchemaObjectKind,
+)
+from backend.src.schemas.pipeline import (
+    GeneratorMissingInfo,
+    MongoQuery,
+    RelevantSchema,
+)
 
 
 class MockPostgresProvider:
@@ -223,6 +237,100 @@ async def test_mongo_generator_with_feedback():
         feedback="Stage 0: Missing filter for active customers",
     )
     assert res2.database_type == DatabaseType.MONGODB
+
+
+class MockPostgresUnselectedTableProvider:
+    async def generate(self, prompt: str, **kwargs) -> str:
+        return """
+        ```sql
+        SELECT v.vendor_id, SUM(i.balance_due) AS total
+        FROM finopsiq.vendors v
+        JOIN finopsiq.invoices i ON v.vendor_id = i.vendor_id
+        GROUP BY v.vendor_id;
+        ```
+        """
+
+
+@pytest.mark.asyncio
+async def test_postgres_generator_unselected_table_detected():
+    """Generator detects tables in SQL that are missing from Selected Schema and emits GeneratorMissingInfo."""
+    generator = PostgresQueryGenerator(provider=MockPostgresUnselectedTableProvider())
+    schema = RelevantSchema(
+        objects=[
+            SchemaObject(
+                name="finopsiq.vendors",
+                kind=SchemaObjectKind.TABLE,
+                fields=[Field(name="vendor_id", type="int"), Field(name="balance", type="numeric")],
+            )
+        ]
+    )
+
+    result = await generator.generate_query("What is the total balance?", schema)
+    assert isinstance(result, GeneratorMissingInfo)
+    assert result.status == "missing_information"
+    assert "finopsiq.invoices" in result.missing_tables
+    assert "not in the Selected Schema" in result.reason
+
+
+class MockPostgresCTEProvider:
+    async def generate(self, prompt: str, **kwargs) -> str:
+        return """
+        ```sql
+        WITH summary AS (
+            SELECT vendor_id, balance FROM vendors
+        )
+        SELECT * FROM summary;
+        ```
+        """
+
+
+@pytest.mark.asyncio
+async def test_postgres_generator_cte_not_flagged_as_missing():
+    """Generator recognizes CTEs and does not flag CTE names as missing tables."""
+    generator = PostgresQueryGenerator(provider=MockPostgresCTEProvider())
+    schema = RelevantSchema(
+        objects=[
+            SchemaObject(
+                name="vendors",
+                kind=SchemaObjectKind.TABLE,
+                fields=[Field(name="vendor_id", type="int"), Field(name="balance", type="numeric")],
+            )
+        ]
+    )
+
+    result = await generator.generate_query("Show vendors", schema)
+    assert result.database_type == DatabaseType.POSTGRESQL
+
+
+class MockMongoUnselectedCollectionProvider:
+    async def generate(self, prompt: str, **kwargs) -> str:
+        return """```json
+        {
+          "operation": "find",
+          "collection": "invoices",
+          "filter": {"status": "valid"}
+        }
+        ```"""
+
+
+@pytest.mark.asyncio
+async def test_mongo_generator_unselected_collection_detected():
+    """Mongo generator detects collections missing from Selected Schema and emits GeneratorMissingInfo."""
+    generator = MongoQueryGenerator(provider=MockMongoUnselectedCollectionProvider())
+    schema = RelevantSchema(
+        objects=[
+            SchemaObject(
+                name="vendors",
+                kind=SchemaObjectKind.COLLECTION,
+                fields=[Field(name="name", type="string")],
+            )
+        ]
+    )
+
+    result = await generator.generate_query("Show valid invoices", schema)
+    assert isinstance(result, GeneratorMissingInfo)
+    assert result.status == "missing_information"
+    assert "invoices" in result.missing_tables
 
 
 

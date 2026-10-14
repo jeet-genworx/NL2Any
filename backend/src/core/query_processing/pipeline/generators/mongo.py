@@ -6,18 +6,23 @@ from pathlib import Path
 from typing import Any
 
 from backend.src.config import settings
+from backend.src.control.providers.model.base import ModelProvider
+from backend.src.control.providers.model.koboldcpp import KoboldCppProvider
+from backend.src.core.query_processing.pipeline.generators.base import QueryGenerator
+from backend.src.core.query_processing.pipeline.selector import format_relevant_schema
+from backend.src.data.models.schema import DatabaseType
+from backend.src.schemas.pipeline import (
+    GeneratedQuery,
+    GeneratorMissingInfo,
+    MongoQuery,
+    RelevantSchema,
+)
 from backend.src.utils.text_utils import (
     clean_unreadable_characters,
     estimate_token_count,
     extract_json_block,
     strip_ansi_escapes,
 )
-from backend.src.schemas.pipeline import GeneratedQuery, GeneratorMissingInfo, MongoQuery, RelevantSchema
-from backend.src.data.models.schema import DatabaseType
-from backend.src.core.query_processing.pipeline.generators.base import QueryGenerator
-from backend.src.core.query_processing.pipeline.selector import format_relevant_schema
-from backend.src.control.providers.model.base import ModelProvider
-from backend.src.control.providers.model.koboldcpp import KoboldCppProvider
 
 logger = logging.getLogger(__name__)
 
@@ -118,6 +123,39 @@ class MongoQueryGenerator(QueryGenerator):
                 reason=str(data.get("reason", "Required schema information is missing.")),
             )
         mongo_query = MongoQuery.model_validate(data)
+
+        # Check if MongoQuery references collections outside the Selected Schema
+        if active_schema and active_schema.objects:
+            allowed_collections = set()
+            for obj in active_schema.objects:
+                nl = obj.name.lower()
+                allowed_collections.add(nl)
+                if "." in nl:
+                    allowed_collections.add(nl.split(".", 1)[-1])
+
+            unselected_collections: list[str] = []
+            base_col = mongo_query.collection.lower() if mongo_query.collection else ""
+            if base_col and base_col not in allowed_collections:
+                unselected_collections.append(mongo_query.collection)
+
+            for stage in (mongo_query.pipeline or []):
+                if isinstance(stage, dict) and "$lookup" in stage and isinstance(stage["$lookup"], dict):
+                    from_col = stage["$lookup"].get("from", "")
+                    if from_col and from_col.lower() not in allowed_collections and from_col not in unselected_collections:
+                        unselected_collections.append(from_col)
+
+            if unselected_collections:
+                logger.info(
+                    "Generated MongoDB query referenced unselected collections %s not in schema %s; emitting GeneratorMissingInfo",
+                    unselected_collections,
+                    sorted(allowed_collections),
+                )
+                return GeneratorMissingInfo(
+                    status="missing_information",
+                    missing_tables=unselected_collections,
+                    reason=f"Generated query requires collection(s) {', '.join(unselected_collections)} which are not in the Selected Schema.",
+                )
+
         formatted_json = json.dumps(mongo_query.model_dump(exclude_none=True), indent=2)
 
         return GeneratedQuery(

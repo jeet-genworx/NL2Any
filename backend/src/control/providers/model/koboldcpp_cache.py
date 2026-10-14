@@ -97,6 +97,14 @@ class KoboldCppCacheManager:
         except Exception as err:
             logger.debug("Failed to read descriptions TOML for hash calculation: %s", err)
 
+        try:
+            from pathlib import Path
+            p_path = Path("backend/src/core/query_processing/prompts/table_selection.txt")
+            if p_path.exists():
+                hasher.update(p_path.read_bytes())
+        except Exception as err:
+            logger.debug("Failed to read selector prompt for hash calculation: %s", err)
+
         return hasher.hexdigest()
 
     def get_or_allocate_slot(self, db_key: str) -> int:

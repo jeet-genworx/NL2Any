@@ -1,41 +1,46 @@
 """End-to-end pipeline orchestrator for NL2AnyQuery V2."""
 
+import json
 import logging
 import time
 import uuid
 from typing import Any
 
-from backend.src.data.clients.detector import detect_database_type
-from backend.src.data.models.targets import DatabaseTarget, as_target, resolve_target
-from backend.src.data.repositories.run_repository import (
-    cleanup_old_runs,
-    load_run_state,
-    save_run_state,
-    validate_run_id,
-)
-from backend.src.data.repositories.schema_cache import SchemaCache
-from backend.src.core.query_processing.pipeline.feedback_guardrail import FeedbackGuardrailClassifier
 from backend.src.config import settings
-from backend.src.schemas.pipeline import (
-    CandidateTable,
-    ExecutionResult,
-    GeneratedQuery,
-    GeneratorMissingInfo,
-    GuardrailDecision,
-    GuardrailResult,
-    PipelineResponse,
-    PolicyResult,
-    RelevantSchema,
-    SemanticAnalysisResult,
-    SpellingCorrectionResult,
-    ValidationErrorType,
-    ValidationResult,
+from backend.src.control.providers.model.base import ModelProvider
+from backend.src.control.providers.model.factory import resolve_model_provider
+from backend.src.control.providers.model.koboldcpp import KoboldCppProvider
+from backend.src.control.providers.model.koboldcpp_cache import (
+    KoboldCppCacheManager,
+    get_cache_manager,
 )
-from backend.src.data.models.schema import DatabaseSchema, DatabaseType
-from backend.src.schemas.request import StageProviders
 from backend.src.core.query_processing.pipeline.executor import QueryExecutor
-from backend.src.core.query_processing.pipeline.generators.mongo import MongoQueryGenerator
-from backend.src.core.query_processing.pipeline.generators.postgres import PostgresQueryGenerator
+from backend.src.core.query_processing.pipeline.feedback import (
+    build_cascading_guidance,
+)
+from backend.src.core.query_processing.pipeline.feedback_guardrail import (
+    FeedbackGuardrailClassifier,
+)
+from backend.src.core.query_processing.pipeline.fsm import (
+    ExecutionAdapter,
+    FeedbackGuardrailAdapter,
+    PipelineContext,
+    PipelineFSMRunner,
+    PipelineState,
+    PolicyAdapter,
+    QueryGenerationAdapter,
+    QueryValidationAdapter,
+    QuestionGuardrailAdapter,
+    SpellingAdapter,
+    StageAdapters,
+    TableSelectionAdapter,
+)
+from backend.src.core.query_processing.pipeline.generators.mongo import (
+    MongoQueryGenerator,
+)
+from backend.src.core.query_processing.pipeline.generators.postgres import (
+    PostgresQueryGenerator,
+)
 from backend.src.core.query_processing.pipeline.guardrail import GuardrailClassifier
 from backend.src.core.query_processing.pipeline.policy import SafetyPolicyValidator
 from backend.src.core.query_processing.pipeline.results import ResultProcessor
@@ -45,24 +50,34 @@ from backend.src.core.query_processing.pipeline.selector import (
 )
 from backend.src.core.query_processing.pipeline.spelling import SpellingChecker
 from backend.src.core.query_processing.pipeline.validator import QueryValidator
-from backend.src.control.providers.model.base import ModelProvider
-from backend.src.control.providers.model.factory import resolve_model_provider
-from backend.src.control.providers.model.koboldcpp import KoboldCppProvider
-from backend.src.control.providers.model.koboldcpp_cache import (
-    KoboldCppCacheManager,
-    get_cache_manager,
+from backend.src.data.clients.detector import detect_database_type
+from backend.src.data.models.schema import DatabaseSchema, DatabaseType
+from backend.src.data.models.targets import DatabaseTarget, as_target, resolve_target
+from backend.src.data.repositories.run_repository import (
+    cleanup_old_runs,
+    load_run_state,
+    save_run_state,
+    validate_run_id,
 )
+from backend.src.data.repositories.schema_cache import SchemaCache
+from backend.src.schemas.pipeline import (
+    CandidateTable,
+    ExecutionResult,
+    GeneratedQuery,
+    GuardrailDecision,
+    GuardrailResult,
+    MongoQuery,
+    PipelineResponse,
+    PolicyResult,
+    RelevantSchema,
+    SemanticAnalysisResult,
+    SpellingCorrectionResult,
+    ValidationResult,
+)
+from backend.src.schemas.request import StageProviders
 from backend.src.utils.text_utils import clean_unreadable_characters, strip_ansi_escapes
 
 logger = logging.getLogger(__name__)
-
-
-from backend.src.core.query_processing.pipeline.feedback import (
-    _format_stage_user_guidance,
-    _get_stage_feedback_items,
-    build_cascading_guidance,
-    compose_feedback_prompt,
-)
 
 
 class NL2AnyQueryOrchestrator:
@@ -96,6 +111,7 @@ class NL2AnyQueryOrchestrator:
         self.executor = executor or QueryExecutor()
         self.results = results or ResultProcessor()
         self.max_retries = max_retries if max_retries is not None else settings.max_retries
+        self.feedback_guardrail = kwargs.get("feedback_guardrail") or FeedbackGuardrailClassifier(provider=self.provider)
 
         self._custom_guardrail = guardrail is not None
         self._custom_selector = selector is not None
@@ -104,7 +120,6 @@ class NL2AnyQueryOrchestrator:
         self._custom_validator = validator is not None
 
         self.schema_cache = SchemaCache()
-        self._schemas: dict[Any, DatabaseSchema] = self.schema_cache._schemas
 
     def _resolve_stage_provider(
         self,
@@ -165,10 +180,6 @@ class NL2AnyQueryOrchestrator:
             else QueryValidator(provider=s3_provider)
         )
         return guardrail, selector, postgres_gen, mongo_gen, validator
-
-    def _get_stages_for_provider(self, active_provider: ModelProvider):
-        """Return stage instances bound to the active provider for this execution."""
-        return self._get_stages_for_providers(active_provider, active_provider, active_provider)
 
     def get_or_load_schema(self, database: DatabaseTarget | DatabaseType | str) -> DatabaseSchema:
         """Load and cache canonical schema from TOML file, enriched with table/column descriptions."""
@@ -241,6 +252,118 @@ class NL2AnyQueryOrchestrator:
             error=error,
         )
 
+    def _calculate_stage_tokens_dict(self, context: PipelineContext) -> dict[str, int]:
+        tokens_map = context.stage_tokens
+        g_tok = (
+            tokens_map.get("feedback_guardrail", 0)
+            + tokens_map.get("question_guardrail", 0)
+            + tokens_map.get("guardrail", 0)
+        )
+        sel_tok = tokens_map.get("table_selection", 0)
+        gen_tok = tokens_map.get("query_generation", 0)
+        val_tok = tokens_map.get("query_validation", 0) + tokens_map.get("validation", 0)
+        s1_tok = g_tok + sel_tok
+        s2_tok = gen_tok
+        s3_tok = val_tok
+        return {
+            "stage_1": s1_tok,
+            "stage_2": s2_tok,
+            "stage_3": s3_tok,
+            "guardrail": g_tok,
+            "table_selection": sel_tok,
+            "query_generation": gen_tok,
+            "validation": val_tok,
+            "total": s1_tok + s2_tok + s3_tok,
+        }
+
+    def _build_pipeline_response(
+        self,
+        context: PipelineContext,
+        provider_name: str,
+    ) -> PipelineResponse:
+        """Construct a PipelineResponse from final pipeline execution context."""
+        stage_tokens = self._calculate_stage_tokens_dict(context)
+
+        guardrail_res = context.guardrail_result
+        if guardrail_res is None and context.error and "Stage 1 (Guardrail) failed" in context.error:
+            guardrail_res = GuardrailResult(decision=GuardrailDecision.REJECT, reason=context.error)
+
+        return self._build_response(
+            run_id=context.run_id,
+            db_type=context.db_type,
+            target_name=context.target_name,
+            question=context.question,
+            provider=provider_name,
+            stage_providers=context.stage_providers,
+            stage_tokens=stage_tokens,
+            guardrail=guardrail_res,
+            spelling_correction=context.spelling_result,
+            basic_answer=context.basic_answer,
+            selected=context.selected_objects,
+            selection_retries=context.selector_retries,
+            schema=context.relevant_schema,
+            query=context.generated_query,
+            attempts=context.attempts,
+            validation_retries=context.validation_retries,
+            validation=context.validation_result,
+            policy=context.policy_result,
+            results=context.execution_result,
+            error=context.error,
+        )
+
+    def _save_pipeline_run_file(
+        self,
+        context: PipelineContext,
+        resp: PipelineResponse,
+    ) -> None:
+        """Persist pipeline run artifacts from final pipeline execution context."""
+        if not (
+            context.execution_result is not None
+            or (context.policy_result is not None and not context.policy_result.allowed)
+            or (
+                context.policy_result is not None
+                and context.policy_result.allowed
+                and context.error is not None
+                and "Database execution error" in context.error
+            )
+            or (
+                context.error is not None
+                and "Query failed validation after maximum retries" in context.error
+            )
+        ):
+            return
+
+        stage_tokens = self._calculate_stage_tokens_dict(context)
+
+        try:
+            run_data = {
+                "run_id": context.run_id,
+                "created_at": time.time(),
+                "updated_at": time.time(),
+                "database": context.target_name,
+                "question": context.question,
+                "processed_question": context.processed_question,
+                "jargons": list(context.jargons or []),
+                "stage_providers": context.stage_providers,
+                "stage_tokens": stage_tokens,
+                "guardrail": context.guardrail_result.model_dump() if context.guardrail_result else None,
+                "spelling_correction": context.spelling_result.model_dump() if context.spelling_result else None,
+                "selected_objects": list(context.selected_objects or []),
+                "selection_retries": context.selector_retries,
+                "relevant_schema": context.relevant_schema.model_dump() if context.relevant_schema else None,
+                "generated_query": context.generated_query.formatted_query if context.generated_query else None,
+                "attempts": context.attempts,
+                "validation_retries": context.validation_retries,
+                "validation": context.validation_result.model_dump() if context.validation_result else None,
+                "policy": context.policy_result.model_dump() if context.policy_result else None,
+                "error": resp.error,
+                "feedback_history": list(context.feedback_history or []),
+            }
+            save_run_state(run_data)
+            cleanup_old_runs()
+        except Exception as save_err:
+            logger.warning("Failed to save run state for %s: %s", context.run_id, save_err)
+
     async def execute_pipeline(
         self,
         question: str,
@@ -249,8 +372,9 @@ class NL2AnyQueryOrchestrator:
         stages: StageProviders | dict[str, str] | None = None,
         jargons: list[str] | None = None,
     ) -> PipelineResponse:
-        """Run complete V2 natural-language-to-query pipeline with clean stages and bounded retries."""
+        """Run complete V2 natural-language-to-query pipeline driven by the FSM runner."""
         run_id = uuid.uuid4().hex
+
         # Resolve active fallback provider
         if isinstance(provider, str):
             fallback_name = provider.strip().lower()
@@ -300,7 +424,7 @@ class NL2AnyQueryOrchestrator:
             self._get_stages_for_providers(s1_provider, s2_provider, s3_provider)
         )
 
-        # 1. Resolve database target & type
+        # Resolve database target & type
         if isinstance(database, DatabaseTarget):
             target = database
             db_type = target.db_type
@@ -318,32 +442,6 @@ class NL2AnyQueryOrchestrator:
             target = as_target(DatabaseType.POSTGRESQL)
             db_type = DatabaseType.POSTGRESQL
 
-        active_generator = postgres_gen if db_type == DatabaseType.POSTGRESQL else mongo_gen
-
-        accum_guardrail_tokens = 0
-        accum_selector_tokens = 0
-        accum_generator_tokens = 0
-        accum_validator_tokens = 0
-
-        def _get_stage_tokens() -> dict[str, int]:
-            g_tok = accum_guardrail_tokens + getattr(guardrail, "last_prompt_tokens", 0)
-            sel_tok = accum_selector_tokens + getattr(selector, "last_prompt_tokens", 0)
-            gen_tok = accum_generator_tokens + getattr(active_generator, "last_prompt_tokens", 0)
-            val_tok = accum_validator_tokens + getattr(validator, "last_prompt_tokens", 0)
-            s1_tok = g_tok + sel_tok
-            s2_tok = gen_tok
-            s3_tok = val_tok
-            return {
-                "stage_1": s1_tok,
-                "stage_2": s2_tok,
-                "stage_3": s3_tok,
-                "guardrail": g_tok,
-                "table_selection": sel_tok,
-                "query_generation": gen_tok,
-                "validation": val_tok,
-                "total": s1_tok + s2_tok + s3_tok,
-            }
-
         try:
             schema = self.get_or_load_schema(target)
         except Exception as err:
@@ -354,466 +452,53 @@ class NL2AnyQueryOrchestrator:
                 question=question,
                 provider=provider_name,
                 stage_providers=stage_providers_map,
-                stage_tokens=_get_stage_tokens(),
+                stage_tokens={
+                    "stage_1": 0,
+                    "stage_2": 0,
+                    "stage_3": 0,
+                    "guardrail": 0,
+                    "table_selection": 0,
+                    "query_generation": 0,
+                    "validation": 0,
+                    "total": 0,
+                },
                 guardrail=GuardrailResult(decision=GuardrailDecision.REJECT, reason=str(err)),
                 error=str(err),
             )
 
-        # 2. Stage 1: SymSpell Spelling Checker (runs FIRST on raw question)
-        spelling_res = self.spelling_checker.check(question=question, jargons=jargons)
-        processed_question = spelling_res.corrected_question
-
-        # 3. Stage 1 (Guardrail): Guardrail Classifier (runs on corrected question)
-        try:
-            guardrail_result = await guardrail.classify(processed_question)
-        except Exception as err:
-            err_msg = f"Stage 1 (Guardrail) failed using provider '{s1_name}': {err}"
-            logger.error(err_msg)
-            return self._build_response(
-                run_id=run_id,
-                db_type=db_type,
-                target_name=target.key,
-                question=question,
-                provider=provider_name,
-                stage_providers=stage_providers_map,
-                stage_tokens=_get_stage_tokens(),
-                guardrail=GuardrailResult(decision=GuardrailDecision.REJECT, reason=err_msg),
-                spelling_correction=spelling_res,
-                error=err_msg,
-            )
-
-        if guardrail_result.decision == GuardrailDecision.REJECT:
-            return self._build_response(
-                run_id=run_id,
-                db_type=db_type,
-                target_name=target.key,
-                question=question,
-                provider=provider_name,
-                stage_providers=stage_providers_map,
-                stage_tokens=_get_stage_tokens(),
-                guardrail=guardrail_result,
-                spelling_correction=spelling_res,
-                error="Sorry, I can't help with this.",
-            )
-
-        if guardrail_result.decision == GuardrailDecision.BASIC:
-            basic_ans = guardrail.handle_basic_question(
-                question=processed_question,
-                database_type=target.key,
-                database_name=schema.database_name,
-            )
-            return self._build_response(
-                run_id=run_id,
-                db_type=db_type,
-                target_name=target.key,
-                question=question,
-                provider=provider_name,
-                stage_providers=stage_providers_map,
-                stage_tokens=_get_stage_tokens(),
-                guardrail=guardrail_result,
-                spelling_correction=spelling_res,
-                basic_answer=basic_ans,
-            )
-
-        # 4. Stages 3-5: Table Selector & Query Generator with Bounded Backtrack Loops
-        selector_retries = 0
-        validator_retries = 0
-        selector_feedback: str | None = None
-        gen_feedback: str | None = None
-
-        selected_objs: list[str] = []
-        relevant_schema: RelevantSchema = RelevantSchema()
-        last_query: GeneratedQuery | None = None
-        last_val: ValidationResult | None = None
-
-        while selector_retries <= self.max_retries:
-            # Stage 1: Table Selector (evaluates complete schema description)
-            try:
-                selection = await selector.select(
-                    question=processed_question,
-                    schema=schema,
-                    feedback=selector_feedback,
-                    target_key=target.key,
-                )
-            except Exception as err:
-                err_msg = f"Stage 1 (Table Selection) failed using provider '{s1_name}': {err}"
-                logger.error(err_msg)
-                return self._build_response(
-                    run_id=run_id,
-                    db_type=db_type,
-                    target_name=target.key,
-                    question=question,
-                    provider=provider_name,
-                    stage_providers=stage_providers_map,
-                    stage_tokens=_get_stage_tokens(),
-                    guardrail=guardrail_result,
-                    spelling_correction=spelling_res,
-                    selection_retries=selector_retries,
-                    error=err_msg,
-                )
-
-            if not selection.selected_objects:
-                if selection.reason and selection.reason.startswith("Table selection failed due to error:"):
-                    err_detail = selection.reason.replace("Table selection failed due to error:", "").strip()
-                    err_msg = f"Stage 1 (Table Selection) failed using provider '{s1_name}': {err_detail}"
-                    logger.error(err_msg)
-                    return self._build_response(
-                        run_id=run_id,
-                        db_type=db_type,
-                        target_name=target.key,
-                        question=question,
-                        provider=provider_name,
-                        stage_providers=stage_providers_map,
-                        stage_tokens=_get_stage_tokens(),
-                        guardrail=guardrail_result,
-                        spelling_correction=spelling_res,
-                        selected=[],
-                        selection_retries=selector_retries,
-                        error=err_msg,
-                    )
-                if selector_retries >= self.max_retries:
-                    return self._build_response(
-                        run_id=run_id,
-                        db_type=db_type,
-                        target_name=target.key,
-                        question=question,
-                        provider=provider_name,
-                        stage_providers=stage_providers_map,
-                        stage_tokens=_get_stage_tokens(),
-                        guardrail=guardrail_result,
-                        spelling_correction=spelling_res,
-                        selected=[],
-                        selection_retries=selector_retries,
-                        error=selection.reason or "I could not find any relevant tables or collections in the database schema matching your question.",
-                    )
-                selector_retries += 1
-                accum_selector_tokens += getattr(selector, "last_prompt_tokens", 0)
-                selector.last_prompt_tokens = 0
-                selector_feedback = (
-                    "No tables were selected. Please select all required tables from the database schema to answer the question."
-                )
-                continue
-
-            selected_objs = selection.selected_objects
-            relevant_schema = package_selected_schema(schema, selected_objs)
-
-            # Stage 2 & 3: Query Generator & Validator Loop
-            gen_needed_more_schema = False
-
-            while validator_retries <= self.max_retries:
-                try:
-                    gen_result = await active_generator.generate_query(
-                        question=processed_question,
-                        schema=relevant_schema,
-                        feedback=gen_feedback,
-                    )
-                except Exception as gen_err:
-                    err_msg = f"Stage 2 (Query Generation) failed using provider '{s2_name}': {gen_err}"
-                    logger.error(err_msg)
-                    return self._build_response(
-                        run_id=run_id,
-                        db_type=db_type,
-                        target_name=target.key,
-                        question=question,
-                        provider=provider_name,
-                        stage_providers=stage_providers_map,
-                        stage_tokens=_get_stage_tokens(),
-                        guardrail=guardrail_result,
-                        spelling_correction=spelling_res,
-                        selected=selected_objs,
-                        selection_retries=selector_retries,
-                        schema=relevant_schema,
-                        validation_retries=validator_retries,
-                        attempts=validator_retries + 1,
-                        error=err_msg,
-                    )
-
-                # Check if Query Generator detected missing schema information
-                if isinstance(gen_result, GeneratorMissingInfo):
-                    if selector_retries >= self.max_retries:
-                        return self._build_response(
-                            run_id=run_id,
-                            db_type=db_type,
-                            target_name=target.key,
-                            question=question,
-                            provider=provider_name,
-                            stage_providers=stage_providers_map,
-                            stage_tokens=_get_stage_tokens(),
-                            guardrail=guardrail_result,
-                            spelling_correction=spelling_res,
-                            selected=selected_objs,
-                            selection_retries=selector_retries,
-                            schema=relevant_schema,
-                            error=f"Required schema information could not be identified after maximum retries: {gen_result.reason}",
-                        )
-                    selector_retries += 1
-                    accum_generator_tokens += getattr(active_generator, "last_prompt_tokens", 0)
-                    active_generator.last_prompt_tokens = 0
-                    missing_str = ", ".join(gen_result.missing_tables) if gen_result.missing_tables else "additional tables"
-                    selector_feedback = (
-                        f"The query generator determined that the previous selection of tables {selected_objs} "
-                        f"lacks required schema information: {gen_result.reason}. "
-                        f"Missing tables/concepts: [{missing_str}]. Please re-evaluate the full schema and select ALL necessary tables."
-                    )
-                    gen_needed_more_schema = True
-                    break
-
-                last_query = gen_result
-
-                # Stage 3: Query Validator
-                try:
-                    last_val = await validator.validate(
-                        question=processed_question,
-                        generated_query=last_query,
-                        schema=relevant_schema,
-                        fail_fast=True,
-                    )
-                except Exception as val_err:
-                    err_msg = f"Stage 3 (Validation) failed using provider '{s3_name}': {val_err}"
-                    logger.error(err_msg)
-                    return self._build_response(
-                        run_id=run_id,
-                        db_type=db_type,
-                        target_name=target.key,
-                        question=question,
-                        provider=provider_name,
-                        stage_providers=stage_providers_map,
-                        stage_tokens=_get_stage_tokens(),
-                        guardrail=guardrail_result,
-                        spelling_correction=spelling_res,
-                        selected=selected_objs,
-                        selection_retries=selector_retries,
-                        schema=relevant_schema,
-                        query=last_query,
-                        validation_retries=validator_retries,
-                        attempts=validator_retries + 1,
-                        error=err_msg,
-                    )
-
-                if last_val.valid:
-                    break
-
-                if last_val.error_type == ValidationErrorType.UNSAFE:
-                    return self._build_response(
-                        run_id=run_id,
-                        db_type=db_type,
-                        target_name=target.key,
-                        question=question,
-                        provider=provider_name,
-                        stage_providers=stage_providers_map,
-                        stage_tokens=_get_stage_tokens(),
-                        guardrail=guardrail_result,
-                        spelling_correction=spelling_res,
-                        selected=selected_objs,
-                        selection_retries=selector_retries,
-                        schema=relevant_schema,
-                        query=last_query,
-                        validation=last_val,
-                        validation_retries=validator_retries,
-                        attempts=validator_retries + 1,
-                        error="Generated query is unsafe. Execution rejected.",
-                    )
-
-                if validator_retries >= self.max_retries:
-                    break
-
-                validator_retries += 1
-                accum_generator_tokens += getattr(active_generator, "last_prompt_tokens", 0)
-                active_generator.last_prompt_tokens = 0
-                accum_validator_tokens += getattr(validator, "last_prompt_tokens", 0)
-                if hasattr(validator, "postgres_validator"):
-                    validator.postgres_validator.last_prompt_tokens = 0
-                if hasattr(validator, "mongo_validator"):
-                    validator.mongo_validator.last_prompt_tokens = 0
-
-                clean_issues = [
-                    clean_unreadable_characters(strip_ansi_escapes(str(i)))
-                    for i in last_val.issues
-                    if i
-                ]
-                feedback_msg = "; ".join(clean_issues)
-                if last_val.suggestion:
-                    clean_sugg = clean_unreadable_characters(strip_ansi_escapes(str(last_val.suggestion)))
-                    feedback_msg += f". Suggestion: {clean_sugg}"
-                gen_feedback = clean_unreadable_characters(strip_ansi_escapes(feedback_msg))
-
-            if gen_needed_more_schema:
-                continue
-
-            break
-
-        attempts = validator_retries + 1
-        ctx: dict[str, Any] = {
-            "run_id": run_id,
-            "db_type": db_type,
-            "target_name": target.key,
-            "question": question,
-            "provider": provider_name,
-            "stage_providers": stage_providers_map,
-            "stage_tokens": _get_stage_tokens(),
-            "guardrail": guardrail_result,
-            "spelling_correction": spelling_res,
-            "selected": selected_objs,
-            "selection_retries": selector_retries,
-            "schema": relevant_schema,
-            "query": last_query,
-            "attempts": attempts,
-            "validation_retries": validator_retries,
-            "validation": last_val,
-        }
-
-        if not last_query or not last_val or not last_val.valid:
-            resp = self._build_response(
-                **ctx,
-                error="Query failed validation after maximum retries. Manual review required.",
-            )
-            try:
-                run_data = {
-                    "run_id": run_id,
-                    "created_at": time.time(),
-                    "updated_at": time.time(),
-                    "database": target.key,
-                    "question": question,
-                    "processed_question": processed_question,
-                    "jargons": jargons or [],
-                    "stage_providers": stage_providers_map,
-                    "stage_tokens": _get_stage_tokens(),
-                    "guardrail": guardrail_result.model_dump() if guardrail_result else None,
-                    "spelling_correction": spelling_res.model_dump() if spelling_res else None,
-                    "selected_objects": selected_objs,
-                    "selection_retries": selector_retries,
-                    "relevant_schema": relevant_schema.model_dump() if relevant_schema else None,
-                    "generated_query": last_query.formatted_query if last_query else None,
-                    "attempts": attempts,
-                    "validation_retries": validator_retries,
-                    "validation": last_val.model_dump() if last_val else None,
-                    "error": resp.error,
-                    "feedback_history": [],
-                }
-                save_run_state(run_data)
-                cleanup_old_runs()
-            except Exception as save_err:
-                logger.warning("Failed to save run state for %s: %s", run_id, save_err)
-            return resp
-
-        # 5. Stage 6: Deterministic Safety Policy Check
-        policy_result = self.policy.check(last_query, schema=relevant_schema)
-        if not policy_result.allowed:
-            resp = self._build_response(
-                **ctx,
-                policy=policy_result,
-                error=f"Policy rejected query: {policy_result.reason}",
-            )
-            try:
-                run_data = {
-                    "run_id": run_id,
-                    "created_at": time.time(),
-                    "updated_at": time.time(),
-                    "database": target.key,
-                    "question": question,
-                    "processed_question": processed_question,
-                    "jargons": jargons or [],
-                    "stage_providers": stage_providers_map,
-                    "stage_tokens": _get_stage_tokens(),
-                    "guardrail": guardrail_result.model_dump() if guardrail_result else None,
-                    "spelling_correction": spelling_res.model_dump() if spelling_res else None,
-                    "selected_objects": selected_objs,
-                    "selection_retries": selector_retries,
-                    "relevant_schema": relevant_schema.model_dump() if relevant_schema else None,
-                    "generated_query": last_query.formatted_query if last_query else None,
-                    "attempts": attempts,
-                    "validation_retries": validator_retries,
-                    "validation": last_val.model_dump() if last_val else None,
-                    "policy": policy_result.model_dump(),
-                    "error": resp.error,
-                    "feedback_history": [],
-                }
-                save_run_state(run_data)
-                cleanup_old_runs()
-            except Exception as save_err:
-                logger.warning("Failed to save run state for %s: %s", run_id, save_err)
-            return resp
-
-        # 6. Stages 7 & 8: Execution and Result Processing
-        try:
-            columns, raw_rows = self.executor.execute(
-                last_query,
-                connection=target.connection,
-                database=target.mongo_database,
-            )
-        except Exception as exec_err:
-            logger.error("Execution error: %s", exec_err)
-            resp = self._build_response(
-                **ctx,
-                policy=policy_result,
-                error=f"Database execution error: {exec_err}",
-            )
-            try:
-                run_data = {
-                    "run_id": run_id,
-                    "created_at": time.time(),
-                    "updated_at": time.time(),
-                    "database": target.key,
-                    "question": question,
-                    "processed_question": processed_question,
-                    "jargons": jargons or [],
-                    "stage_providers": stage_providers_map,
-                    "stage_tokens": _get_stage_tokens(),
-                    "guardrail": guardrail_result.model_dump() if guardrail_result else None,
-                    "spelling_correction": spelling_res.model_dump() if spelling_res else None,
-                    "selected_objects": selected_objs,
-                    "selection_retries": selector_retries,
-                    "relevant_schema": relevant_schema.model_dump() if relevant_schema else None,
-                    "generated_query": last_query.formatted_query if last_query else None,
-                    "attempts": attempts,
-                    "validation_retries": validator_retries,
-                    "validation": last_val.model_dump() if last_val else None,
-                    "policy": policy_result.model_dump(),
-                    "error": resp.error,
-                    "feedback_history": [],
-                }
-                save_run_state(run_data)
-                cleanup_old_runs()
-            except Exception as save_err:
-                logger.warning("Failed to save run state for %s: %s", run_id, save_err)
-            return resp
-
-        execution_results = self.results.process(columns, raw_rows)
-        resp = self._build_response(
-            **ctx,
-            policy=policy_result,
-            results=execution_results,
+        context = PipelineContext(
+            run_id=run_id,
+            database_target=target,
+            db_type=db_type,
+            target_name=target.key,
+            schema=schema,
+            question=question,
+            processed_question=question,
+            jargons=list(jargons or []),
+            stage_providers=stage_providers_map,
+            max_retries=self.max_retries,
         )
 
-        try:
-            run_data = {
-                "run_id": run_id,
-                "created_at": time.time(),
-                "updated_at": time.time(),
-                "database": target.key,
-                "question": question,
-                "processed_question": processed_question,
-                "jargons": jargons or [],
-                "stage_providers": stage_providers_map,
-                "stage_tokens": _get_stage_tokens(),
-                "guardrail": guardrail_result.model_dump() if guardrail_result else None,
-                "spelling_correction": spelling_res.model_dump() if spelling_res else None,
-                "selected_objects": selected_objs,
-                "selection_retries": selector_retries,
-                "relevant_schema": relevant_schema.model_dump() if relevant_schema else None,
-                "generated_query": last_query.formatted_query if last_query else None,
-                "attempts": attempts,
-                "validation_retries": validator_retries,
-                "validation": last_val.model_dump() if last_val else None,
-                "policy": policy_result.model_dump() if policy_result else None,
-                "error": None,
-                "feedback_history": [],
-            }
-            save_run_state(run_data)
-            cleanup_old_runs()
-        except Exception as save_err:
-            logger.warning("Failed to save run state for %s: %s", run_id, save_err)
+        fb_guardrail = getattr(self, "feedback_guardrail", None) or FeedbackGuardrailClassifier(
+            provider=s1_provider, provider_name=s1_name
+        )
+        adapters_map = {
+            PipelineState.SPELLING_CHECK: SpellingAdapter(self.spelling_checker),
+            PipelineState.QUESTION_GUARDRAIL: QuestionGuardrailAdapter(guardrail),
+            PipelineState.FEEDBACK_GUARDRAIL: FeedbackGuardrailAdapter(fb_guardrail),
+            PipelineState.TABLE_SELECTION: TableSelectionAdapter(selector),
+            PipelineState.QUERY_GENERATION: QueryGenerationAdapter(postgres_gen, mongo_gen),
+            PipelineState.QUERY_VALIDATION: QueryValidationAdapter(validator),
+            PipelineState.POLICY_CHECK: PolicyAdapter(self.policy),
+            PipelineState.QUERY_EXECUTION: ExecutionAdapter(self.executor, self.results),
+        }
+        stage_adapters = StageAdapters(adapters=adapters_map)
+        runner = PipelineFSMRunner(adapters=stage_adapters)
 
+        final_context = await runner.run(context, initial_state=PipelineState.SPELLING_CHECK)
+
+        resp = self._build_pipeline_response(final_context, provider_name)
+        self._save_pipeline_run_file(final_context, resp)
         return resp
 
     def _update_saved_run_state(
@@ -861,13 +546,133 @@ class NL2AnyQueryOrchestrator:
         except Exception as save_err:
             logger.warning("Failed to update run state for %s: %s", run_id, save_err)
 
+    def _rehydrate_rerun_context(
+        self,
+        run_id: str,
+        run_state: dict[str, Any],
+        actual_start: str,
+        applicable_feedback: dict[str, str],
+        stage_providers_map: dict[str, str],
+        target: DatabaseTarget,
+        schema: DatabaseSchema,
+    ) -> PipelineContext:
+        """Rehydrate a PipelineContext from the saved run file with downstream clearing rules."""
+        question = run_state.get("question", "")
+        processed_question = run_state.get("processed_question") or question
+        feedback_history = list(run_state.get("feedback_history", []))
+
+        s1_user_guidance, s2_user_guidance, s3_val_guidance = build_cascading_guidance(
+            feedback_history, applicable_feedback
+        )
+
+        selected_objs: list[str] = []
+        relevant_schema: RelevantSchema | None = None
+        selector_retries = 0
+        last_query: GeneratedQuery | None = None
+
+        if actual_start == "table_selection":
+            stage_1_frozen = False
+        elif actual_start == "query_generation":
+            stage_1_frozen = True
+            selected_objs = list(run_state.get("selected_objects", []))
+            rel_dict = run_state.get("relevant_schema")
+            relevant_schema = RelevantSchema.model_validate(rel_dict) if rel_dict else package_selected_schema(schema, selected_objs)
+            selector_retries = int(run_state.get("selection_retries", 0))
+        else:  # "validation"
+            stage_1_frozen = True
+            selected_objs = list(run_state.get("selected_objects", []))
+            rel_dict = run_state.get("relevant_schema")
+            relevant_schema = RelevantSchema.model_validate(rel_dict) if rel_dict else package_selected_schema(schema, selected_objs)
+            selector_retries = int(run_state.get("selection_retries", 0))
+            prev_q_str = run_state.get("generated_query")
+            if prev_q_str:
+                if target.db_type == DatabaseType.POSTGRESQL:
+                    last_query = GeneratedQuery(
+                        database_type=DatabaseType.POSTGRESQL,
+                        raw_query=str(prev_q_str),
+                        formatted_query=str(prev_q_str),
+                    )
+                else:
+                    try:
+                        raw_q = MongoQuery.model_validate(
+                            json.loads(prev_q_str) if isinstance(prev_q_str, str) else prev_q_str
+                        )
+                        last_query = GeneratedQuery(
+                            database_type=DatabaseType.MONGODB,
+                            raw_query=raw_q,
+                            formatted_query=str(prev_q_str),
+                        )
+                    except Exception:
+                        last_query = None
+            if not last_query:
+                actual_start = "query_generation"
+
+        orig_tokens = run_state.get("stage_tokens") or {}
+        g_tok = orig_tokens.get("guardrail", 0) if actual_start != "table_selection" else 0
+        sel_tok = orig_tokens.get("table_selection", 0) if actual_start != "table_selection" else 0
+        gen_tok = orig_tokens.get("query_generation", 0) if actual_start == "validation" else 0
+
+        stage_tokens = {
+            "guardrail": g_tok,
+            "table_selection": sel_tok,
+            "query_generation": gen_tok,
+            "query_validation": 0,
+        }
+
+        spelling_dict = run_state.get("spelling_correction")
+        spelling_res = (
+            SpellingCorrectionResult.model_validate(spelling_dict)
+            if spelling_dict
+            else None
+        )
+        guardrail_dict = run_state.get("guardrail")
+        guardrail_result = (
+            GuardrailResult.model_validate(guardrail_dict)
+            if guardrail_dict
+            else GuardrailResult(decision=GuardrailDecision.READ_QUERY, reason="Loaded from run state")
+        )
+
+        return PipelineContext(
+            run_id=run_id,
+            database_target=target,
+            db_type=target.db_type,
+            target_name=target.key,
+            schema=schema,
+            question=question,
+            processed_question=processed_question,
+            jargons=list(run_state.get("jargons") or []),
+            is_rerun=True,
+            entry_stage=actual_start,
+            stage_1_frozen=stage_1_frozen,
+            initial_val_checked=False,
+            stage_3_fallthrough_allowed=(actual_start == "validation"),
+            created_at=float(run_state.get("created_at") or time.time()),
+            updated_at=time.time(),
+            feedback_history=feedback_history,
+            applicable_feedback=applicable_feedback,
+            s1_user_guidance=s1_user_guidance,
+            s2_user_guidance=s2_user_guidance,
+            s3_user_guidance=s3_val_guidance,
+            selected_objects=selected_objs,
+            relevant_schema=relevant_schema,
+            generated_query=last_query,
+            selector_retries=selector_retries,
+            validation_retries=0,
+            attempts=1,
+            max_retries=self.max_retries,
+            spelling_result=spelling_res,
+            guardrail_result=guardrail_result,
+            stage_providers=stage_providers_map,
+            stage_tokens=stage_tokens,
+        )
+
     async def rerun_pipeline(
         self,
         run_id: str,
         starting_stage: str | None = None,
         feedback: dict[str, str] | None = None,
     ) -> PipelineResponse:
-        """Execute a partial pipeline rerun from a specified stage using saved run state."""
+        """Execute a partial pipeline rerun from a specified stage using saved run state driven by FSM."""
         if not validate_run_id(run_id):
             raise ValueError(f"Invalid run_id format: {run_id!r}")
 
@@ -894,8 +699,6 @@ class NL2AnyQueryOrchestrator:
                     actual_start = stg
                     break
 
-        # A "Rerun" button at stage N submits that stage's feedback plus any non-empty
-        # feedback boxes of later stages, and starts from stage N. Earlier stages' boxes are ignored.
         start_idx = valid_stages.index(actual_start)
         applicable_feedback = {
             stg: cleaned_feedback[stg]
@@ -903,7 +706,6 @@ class NL2AnyQueryOrchestrator:
             if stg in cleaned_feedback
         }
 
-        # 1. Resolve providers from original run state
         orig_providers = run_state.get("stage_providers") or {}
         s1_spec = orig_providers.get("table_selection", "koboldcpp")
         s2_spec = orig_providers.get("query_generation", "koboldcpp")
@@ -930,481 +732,77 @@ class NL2AnyQueryOrchestrator:
             else f"{s1_name}/{s2_name}/{s3_name}"
         )
 
-        guardrail, selector, postgres_gen, mongo_gen, validator = (
+        _guardrail, selector, postgres_gen, mongo_gen, validator = (
             self._get_stages_for_providers(s1_provider, s2_provider, s3_provider)
         )
 
-        # 2. Safety Guardrail for Feedback
-        # Uses table selection stage's provider for the run.
-        # Zero admin calls issued to /api/admin/* even on koboldcpp.
-        fb_guardrail = FeedbackGuardrailClassifier(provider=s1_provider, provider_name=s1_name)
-        accum_guardrail_tokens = 0
-        for stg_key, fb_text in applicable_feedback.items():
-            fb_result = await fb_guardrail.classify(feedback=fb_text, stage=stg_key)
-            accum_guardrail_tokens += fb_result.prompt_tokens
-            if fb_result.decision == "REJECT":
-                raise ValueError(
-                    f"Feedback for {stg_key} was rejected by the safety guardrail: {fb_result.reason}"
-                )
-
-        # 3. Database Target & Schema
         database = run_state.get("database", "postgres")
         target = resolve_target(database)
-        db_type = target.db_type
-        active_generator = postgres_gen if db_type == DatabaseType.POSTGRESQL else mongo_gen
         schema = self.get_or_load_schema(target)
 
-        question = run_state.get("question", "")
-        processed_question = run_state.get("processed_question") or question
-        feedback_history = list(run_state.get("feedback_history", []))
-
-        spelling_dict = run_state.get("spelling_correction")
-        spelling_res = (
-            SpellingCorrectionResult.model_validate(spelling_dict)
-            if spelling_dict
-            else None
-        )
-        guardrail_dict = run_state.get("guardrail")
-        guardrail_result = (
-            GuardrailResult.model_validate(guardrail_dict)
-            if guardrail_dict
-            else GuardrailResult(decision=GuardrailDecision.READ_QUERY, reason="Loaded from run state")
-        )
-
-        accum_selector_tokens = 0
-        accum_generator_tokens = 0
-        accum_validator_tokens = 0
-
-        def _get_stage_tokens() -> dict[str, int]:
-            orig_tokens = run_state.get("stage_tokens") or {}
-            g_tok = accum_guardrail_tokens + (orig_tokens.get("guardrail", 0) if actual_start != "table_selection" else 0)
-            sel_tok = accum_selector_tokens + getattr(selector, "last_prompt_tokens", 0) + (orig_tokens.get("table_selection", 0) if actual_start != "table_selection" else 0)
-            gen_tok = accum_generator_tokens + getattr(active_generator, "last_prompt_tokens", 0) + (orig_tokens.get("query_generation", 0) if actual_start == "validation" else 0)
-            val_tok = accum_validator_tokens + getattr(validator, "last_prompt_tokens", 0)
-            s1_tok = g_tok + sel_tok
-            s2_tok = gen_tok
-            s3_tok = val_tok
-            return {
-                "stage_1": s1_tok,
-                "stage_2": s2_tok,
-                "stage_3": s3_tok,
-                "guardrail": g_tok,
-                "table_selection": sel_tok,
-                "query_generation": gen_tok,
-                "validation": val_tok,
-                "total": s1_tok + s2_tok + s3_tok,
-            }
-
-        selector_retries = 0
-        validator_retries = 0
-        selected_objs: list[str] = []
-        relevant_schema: RelevantSchema = RelevantSchema()
-        last_query: GeneratedQuery | None = None
-        last_val: ValidationResult | None = None
-
-        # Build cascading user guidance blocks per stage
-        s1_user_guidance, s2_user_guidance, s3_val_guidance = build_cascading_guidance(
-            feedback_history, applicable_feedback
-        )
-
-        # ----------------------------------------------------
-        # Stage 1: Table Selection (if actual_start == "table_selection")
-        # ----------------------------------------------------
-        if actual_start == "table_selection":
-            selector_feedback = s1_user_guidance
-            while selector_retries <= self.max_retries:
-                try:
-                    selection = await selector.select(
-                        question=processed_question,
-                        schema=schema,
-                        feedback=selector_feedback,
-                        target_key=target.key,
-                    )
-                except Exception as err:
-                    err_msg = f"Stage 1 (Table Selection) failed using provider '{s1_name}': {err}"
-                    logger.error(err_msg)
-                    return self._build_response(
-                        run_id=run_id,
-                        db_type=db_type,
-                        target_name=target.key,
-                        question=question,
-                        provider=provider_name,
-                        stage_providers=stage_providers_map,
-                        stage_tokens=_get_stage_tokens(),
-                        guardrail=guardrail_result,
-                        spelling_correction=spelling_res,
-                        selection_retries=selector_retries,
-                        error=err_msg,
-                    )
-
-                if not selection.selected_objects:
-                    if selector_retries >= self.max_retries:
-                        return self._build_response(
-                            run_id=run_id,
-                            db_type=db_type,
-                            target_name=target.key,
-                            question=question,
-                            provider=provider_name,
-                            stage_providers=stage_providers_map,
-                            stage_tokens=_get_stage_tokens(),
-                            guardrail=guardrail_result,
-                            spelling_correction=spelling_res,
-                            selected=[],
-                            selection_retries=selector_retries,
-                            error=selection.reason or "I could not find any relevant tables in the schema matching your question.",
-                        )
-                    selector_retries += 1
-                    accum_selector_tokens += getattr(selector, "last_prompt_tokens", 0)
-                    selector.last_prompt_tokens = 0
-                    retry_msg = "No tables were selected. Please select all required tables from the database schema to answer the question."
-                    selector_feedback = compose_feedback_prompt(
-                        s1_user_guidance, f"[SYSTEM RETRY FEEDBACK]:\n{retry_msg}"
-                    )
-                    continue
-
-                selected_objs = selection.selected_objects
-                relevant_schema = package_selected_schema(schema, selected_objs)
-                break
-        else:
-            # Re-use previous table selection from saved run state
-            selected_objs = list(run_state.get("selected_objects", []))
-            rel_dict = run_state.get("relevant_schema")
-            relevant_schema = RelevantSchema.model_validate(rel_dict) if rel_dict else package_selected_schema(schema, selected_objs)
-            selector_retries = int(run_state.get("selection_retries", 0))
-
-        # ----------------------------------------------------
-        # Stage 2 & 3: Query Generation & Validation
-        # ----------------------------------------------------
-        skip_initial_gen = False
-        if actual_start == "validation":
-            prev_q_str = run_state.get("generated_query")
-            if prev_q_str:
-                if db_type == DatabaseType.POSTGRESQL:
-                    last_query = GeneratedQuery(
-                        database_type=DatabaseType.POSTGRESQL,
-                        raw_query=str(prev_q_str),
-                        formatted_query=str(prev_q_str),
-                    )
-                else:
-                    import json
-                    from backend.src.schemas.pipeline import MongoQuery
-                    try:
-                        raw_q = MongoQuery.model_validate(json.loads(prev_q_str) if isinstance(prev_q_str, str) else prev_q_str)
-                        last_query = GeneratedQuery(
-                            database_type=DatabaseType.MONGODB,
-                            raw_query=raw_q,
-                            formatted_query=str(prev_q_str),
-                        )
-                    except Exception:
-                        last_query = None
-
-                if last_query:
-                    try:
-                        last_val = await validator.validate(
-                            question=processed_question,
-                            generated_query=last_query,
-                            schema=relevant_schema,
-                            feedback=s3_val_guidance,
-                            fail_fast=True,
-                        )
-                    except Exception as val_err:
-                        err_msg = f"Stage 3 (Validation) failed using provider '{s3_name}': {val_err}"
-                        logger.error(err_msg)
-                        return self._build_response(
-                            run_id=run_id,
-                            db_type=db_type,
-                            target_name=target.key,
-                            question=question,
-                            provider=provider_name,
-                            stage_providers=stage_providers_map,
-                            stage_tokens=_get_stage_tokens(),
-                            guardrail=guardrail_result,
-                            spelling_correction=spelling_res,
-                            selected=selected_objs,
-                            selection_retries=selector_retries,
-                            schema=relevant_schema,
-                            query=last_query,
-                            error=err_msg,
-                        )
-
-                    if last_val.valid:
-                        skip_initial_gen = True
-
-        if not skip_initial_gen:
-            gen_feedback = s2_user_guidance
-            while validator_retries <= self.max_retries:
-                try:
-                    gen_result = await active_generator.generate_query(
-                        question=processed_question,
-                        schema=relevant_schema,
-                        feedback=gen_feedback,
-                    )
-                except Exception as gen_err:
-                    err_msg = f"Stage 2 (Query Generation) failed using provider '{s2_name}': {gen_err}"
-                    logger.error(err_msg)
-                    return self._build_response(
-                        run_id=run_id,
-                        db_type=db_type,
-                        target_name=target.key,
-                        question=question,
-                        provider=provider_name,
-                        stage_providers=stage_providers_map,
-                        stage_tokens=_get_stage_tokens(),
-                        guardrail=guardrail_result,
-                        spelling_correction=spelling_res,
-                        selected=selected_objs,
-                        selection_retries=selector_retries,
-                        schema=relevant_schema,
-                        validation_retries=validator_retries,
-                        attempts=validator_retries + 1,
-                        error=err_msg,
-                    )
-
-                if isinstance(gen_result, GeneratorMissingInfo):
-                    if actual_start == "table_selection" and selector_retries < self.max_retries:
-                        selector_retries += 1
-                        accum_generator_tokens += getattr(active_generator, "last_prompt_tokens", 0)
-                        active_generator.last_prompt_tokens = 0
-                        missing_str = ", ".join(gen_result.missing_tables) if gen_result.missing_tables else "additional tables"
-                        sys_fb = (
-                            f"The query generator determined that the previous selection of tables {selected_objs} "
-                            f"lacks required schema information: {gen_result.reason}. "
-                            f"Missing tables/concepts: [{missing_str}]. Please re-evaluate the full schema and select ALL necessary tables."
-                        )
-                        selector_feedback = compose_feedback_prompt(
-                            s1_user_guidance, f"[SYSTEM RETRY FEEDBACK]:\n{sys_fb}"
-                        )
-                        selection = await selector.select(
-                            question=processed_question,
-                            schema=schema,
-                            feedback=selector_feedback,
-                            target_key=target.key,
-                        )
-                        if selection.selected_objects:
-                            selected_objs = selection.selected_objects
-                            relevant_schema = package_selected_schema(schema, selected_objs)
-                            continue
-                    return self._build_response(
-                        run_id=run_id,
-                        db_type=db_type,
-                        target_name=target.key,
-                        question=question,
-                        provider=provider_name,
-                        stage_providers=stage_providers_map,
-                        stage_tokens=_get_stage_tokens(),
-                        guardrail=guardrail_result,
-                        spelling_correction=spelling_res,
-                        selected=selected_objs,
-                        selection_retries=selector_retries,
-                        schema=relevant_schema,
-                        error=f"Required schema information missing: {gen_result.reason}. Please rerun from Table Selection with guidance.",
-                    )
-
-                last_query = gen_result
-
-                # Stage 3: Query Validator
-                try:
-                    last_val = await validator.validate(
-                        question=processed_question,
-                        generated_query=last_query,
-                        schema=relevant_schema,
-                        feedback=s3_val_guidance,
-                        fail_fast=True,
-                    )
-                except Exception as val_err:
-                    err_msg = f"Stage 3 (Validation) failed using provider '{s3_name}': {val_err}"
-                    logger.error(err_msg)
-                    return self._build_response(
-                        run_id=run_id,
-                        db_type=db_type,
-                        target_name=target.key,
-                        question=question,
-                        provider=provider_name,
-                        stage_providers=stage_providers_map,
-                        stage_tokens=_get_stage_tokens(),
-                        guardrail=guardrail_result,
-                        spelling_correction=spelling_res,
-                        selected=selected_objs,
-                        selection_retries=selector_retries,
-                        schema=relevant_schema,
-                        query=last_query,
-                        validation_retries=validator_retries,
-                        attempts=validator_retries + 1,
-                        error=err_msg,
-                    )
-
-                if last_val.valid:
-                    break
-
-                if last_val.error_type == ValidationErrorType.UNSAFE:
-                    return self._build_response(
-                        run_id=run_id,
-                        db_type=db_type,
-                        target_name=target.key,
-                        question=question,
-                        provider=provider_name,
-                        stage_providers=stage_providers_map,
-                        stage_tokens=_get_stage_tokens(),
-                        guardrail=guardrail_result,
-                        spelling_correction=spelling_res,
-                        selected=selected_objs,
-                        selection_retries=selector_retries,
-                        schema=relevant_schema,
-                        query=last_query,
-                        validation=last_val,
-                        validation_retries=validator_retries,
-                        attempts=validator_retries + 1,
-                        error="Generated query is unsafe. Execution rejected.",
-                    )
-
-                if validator_retries >= self.max_retries:
-                    break
-
-                validator_retries += 1
-                accum_generator_tokens += getattr(active_generator, "last_prompt_tokens", 0)
-                active_generator.last_prompt_tokens = 0
-                accum_validator_tokens += getattr(validator, "last_prompt_tokens", 0)
-
-                clean_issues = [
-                    clean_unreadable_characters(strip_ansi_escapes(str(i)))
-                    for i in last_val.issues
-                    if i
-                ]
-                feedback_msg = "; ".join(clean_issues)
-                if last_val.suggestion:
-                    clean_sugg = clean_unreadable_characters(strip_ansi_escapes(str(last_val.suggestion)))
-                    feedback_msg += f". Suggestion: {clean_sugg}"
-                clean_fb = clean_unreadable_characters(strip_ansi_escapes(feedback_msg))
-                system_retry_part = f"[SYSTEM VALIDATOR FEEDBACK (RETRY)]:\n{clean_fb}"
-                gen_feedback = compose_feedback_prompt(s2_user_guidance, system_retry_part)
-
-        attempts = validator_retries + 1
-        ctx: dict[str, Any] = {
-            "run_id": run_id,
-            "db_type": db_type,
-            "target_name": target.key,
-            "question": question,
-            "provider": provider_name,
-            "stage_providers": stage_providers_map,
-            "stage_tokens": _get_stage_tokens(),
-            "guardrail": guardrail_result,
-            "spelling_correction": spelling_res,
-            "selected": selected_objs,
-            "selection_retries": selector_retries,
-            "schema": relevant_schema,
-            "query": last_query,
-            "attempts": attempts,
-            "validation_retries": validator_retries,
-            "validation": last_val,
-        }
-
-        if not last_query or not last_val or not last_val.valid:
-            resp = self._build_response(
-                **ctx,
-                error="Query failed validation after maximum retries. Manual review required.",
-            )
-            self._update_saved_run_state(
-                run_id=run_id,
-                run_state=run_state,
-                applicable_feedback=applicable_feedback,
-                selected_objs=selected_objs,
-                relevant_schema=relevant_schema,
-                last_query=last_query,
-                last_val=last_val,
-                policy_result=None,
-                execution_results=None,
-                error=resp.error,
-                attempts=attempts,
-                selector_retries=selector_retries,
-                validator_retries=validator_retries,
-                stage_tokens=_get_stage_tokens(),
-            )
-            return resp
-
-        # ----------------------------------------------------
-        # Stage 4: Deterministic Safety Policy Check
-        # ----------------------------------------------------
-        policy_result = self.policy.check(last_query, schema=relevant_schema)
-        if not policy_result.allowed:
-            resp = self._build_response(
-                **ctx,
-                policy=policy_result,
-                error=f"Policy rejected query: {policy_result.reason}",
-            )
-            self._update_saved_run_state(
-                run_id=run_id,
-                run_state=run_state,
-                applicable_feedback=applicable_feedback,
-                selected_objs=selected_objs,
-                relevant_schema=relevant_schema,
-                last_query=last_query,
-                last_val=last_val,
-                policy_result=policy_result,
-                execution_results=None,
-                error=resp.error,
-                attempts=attempts,
-                selector_retries=selector_retries,
-                validator_retries=validator_retries,
-                stage_tokens=_get_stage_tokens(),
-            )
-            return resp
-
-        # ----------------------------------------------------
-        # Stage 5: Execution & Result Processing
-        # ----------------------------------------------------
-        try:
-            columns, raw_rows = self.executor.execute(
-                last_query,
-                connection=target.connection,
-                database=target.mongo_database,
-            )
-        except Exception as exec_err:
-            logger.error("Execution error: %s", exec_err)
-            resp = self._build_response(
-                **ctx,
-                policy=policy_result,
-                error=f"Database execution error: {exec_err}",
-            )
-            self._update_saved_run_state(
-                run_id=run_id,
-                run_state=run_state,
-                applicable_feedback=applicable_feedback,
-                selected_objs=selected_objs,
-                relevant_schema=relevant_schema,
-                last_query=last_query,
-                last_val=last_val,
-                policy_result=policy_result,
-                execution_results=None,
-                error=resp.error,
-                attempts=attempts,
-                selector_retries=selector_retries,
-                validator_retries=validator_retries,
-                stage_tokens=_get_stage_tokens(),
-            )
-            return resp
-
-        execution_results = self.results.process(columns, raw_rows)
-        resp = self._build_response(
-            **ctx,
-            policy=policy_result,
-            results=execution_results,
-        )
-
-        self._update_saved_run_state(
+        context = self._rehydrate_rerun_context(
             run_id=run_id,
             run_state=run_state,
+            actual_start=actual_start,
             applicable_feedback=applicable_feedback,
-            selected_objs=selected_objs,
-            relevant_schema=relevant_schema,
-            last_query=last_query,
-            last_val=last_val,
-            policy_result=policy_result,
-            execution_results=execution_results,
-            error=None,
-            attempts=attempts,
-            selector_retries=selector_retries,
-            validator_retries=validator_retries,
-            stage_tokens=_get_stage_tokens(),
+            stage_providers_map=stage_providers_map,
+            target=target,
+            schema=schema,
         )
 
+        fb_guardrail = getattr(self, "feedback_guardrail", None) or FeedbackGuardrailClassifier(
+            provider=s1_provider, provider_name=s1_name
+        )
+        adapters_map = {
+            PipelineState.FEEDBACK_GUARDRAIL: FeedbackGuardrailAdapter(fb_guardrail),
+            PipelineState.TABLE_SELECTION: TableSelectionAdapter(selector),
+            PipelineState.QUERY_GENERATION: QueryGenerationAdapter(postgres_gen, mongo_gen),
+            PipelineState.QUERY_VALIDATION: QueryValidationAdapter(validator),
+            PipelineState.POLICY_CHECK: PolicyAdapter(self.policy),
+            PipelineState.QUERY_EXECUTION: ExecutionAdapter(self.executor, self.results),
+        }
+        stage_adapters = StageAdapters(adapters=adapters_map)
+        runner = PipelineFSMRunner(adapters=stage_adapters)
+
+        final_context = await runner.run(context, initial_state=PipelineState.FEEDBACK_GUARDRAIL)
+
+        if final_context.error and "was rejected by the safety guardrail:" in final_context.error:
+            raise ValueError(final_context.error)
+
+        resp = self._build_pipeline_response(final_context, provider_name)
+
+        should_save = (
+            final_context.execution_result is not None
+            or (final_context.policy_result is not None and not final_context.policy_result.allowed)
+            or (
+                final_context.policy_result is not None
+                and final_context.policy_result.allowed
+                and final_context.error is not None
+                and "Database execution error" in final_context.error
+            )
+            or (
+                final_context.error is not None
+                and "Query failed validation after maximum retries" in final_context.error
+            )
+        )
+        if should_save:
+            stage_tokens_dict = self._calculate_stage_tokens_dict(final_context)
+            self._update_saved_run_state(
+                run_id=run_id,
+                run_state=run_state,
+                applicable_feedback=applicable_feedback,
+                selected_objs=final_context.selected_objects,
+                relevant_schema=final_context.relevant_schema,
+                last_query=final_context.generated_query,
+                last_val=final_context.validation_result,
+                policy_result=final_context.policy_result,
+                execution_results=final_context.execution_result,
+                error=resp.error,
+                attempts=final_context.attempts,
+                selector_retries=final_context.selector_retries,
+                validator_retries=final_context.validation_retries,
+                stage_tokens=stage_tokens_dict,
+            )
+
         return resp
+

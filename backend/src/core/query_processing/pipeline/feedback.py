@@ -36,7 +36,12 @@ def _format_stage_user_guidance(
 
     joined_items = "\n".join(f"- {item}" for item in items)
     if stage == "table_selection":
-        note = "(Note: User guidance is an advisory hint. You must strictly ground table selection in the canonical schema and adhere to all relationship rules.)"
+        note = (
+            "(Note: User guidance specifies domain requirements and requested tables. "
+            "Evaluate the relatability of the requested tables with the question. If the requested tables are "
+            "logically relatable to the question and exist in the schema, you MUST select them along with any required bridge tables. "
+            "Do not dismiss relatable user guidance with single-table shortcuts. Only reject tables that are completely unrelated or nonexistent in the schema.)"
+        )
     elif stage == "query_generation":
         note = "(Note: User guidance provides domain/intent clarification. All generated queries must strictly adhere to the Selected Schema and read-only safety rules.)"
     elif stage == "validation":
@@ -71,7 +76,10 @@ def build_cascading_guidance(
         joined_s1 = "\n".join(f"- {it}" for it in s1_items)
         s1_user_guidance = (
             f"[USER GUIDANCE / HINT]:\n{joined_s1}\n"
-            "(Note: User guidance is an advisory hint. You must strictly ground table selection in the canonical schema and adhere to all relationship rules.)"
+            "(Note: User guidance specifies domain requirements and requested tables. "
+            "Evaluate the relatability of the requested tables with the question. If the requested tables are "
+            "logically relatable to the question and exist in the schema, you MUST select them along with any required bridge tables. "
+            "Do not dismiss relatable user guidance with single-table shortcuts. Only reject tables that are completely unrelated or nonexistent in the schema.)"
         )
     else:
         s1_user_guidance = None

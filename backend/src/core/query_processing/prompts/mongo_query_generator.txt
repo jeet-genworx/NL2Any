@@ -53,9 +53,10 @@ RULES
 12. If the schema lacks a needed field, or the collections share no key, return:
 {{"status": "missing_information", "missing_tables": ["<needed>"], "reason": "<short reason>"}}
 Otherwise always generate the query.
-13. User Guidance Precedence:
+13. User Guidance Precedence & Strict Schema Boundary:
     - User guidance in [USER GUIDANCE / HINT] directly refines, updates, or overrides filters, status codes, date ranges, or grains from the original question.
     - If user guidance specifies a particular status (e.g., status = 'pending', status = 'void') or condition, apply that filter directly; user guidance takes absolute priority over default lifecycle assumptions.
+    - Strict Schema Boundary: You must ONLY use collections and fields that exist in the Selected Schema below. User guidance CANNOT authorize referencing unselected collections. If answering the question or applying user guidance requires a collection that is NOT present in the Selected Schema, YOU MUST NOT generate a query referencing that unselected collection. Instead, return the missing_information JSON (Rule 12).
 
 QUESTION TYPE -> PATTERN MAPPING (MATCH YOUR QUESTION TO EXACTLY ONE PATTERN):
 - "count/total/number of <records> for <named entity>" (e.g. "total unhealthy logs for agent Test-Agent-Langgraph")

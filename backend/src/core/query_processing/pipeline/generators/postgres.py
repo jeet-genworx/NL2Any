@@ -1,11 +1,24 @@
 """PostgreSQL query generator translating user question and Selected Schema directly into SQL."""
 
 import logging
-from pathlib import Path
 import re
+from pathlib import Path
 from typing import Any
 
+import sqlglot
+from sqlglot import exp
+
 from backend.src.config import settings
+from backend.src.control.providers.model.base import ModelProvider
+from backend.src.control.providers.model.koboldcpp import KoboldCppProvider
+from backend.src.core.query_processing.pipeline.generators.base import QueryGenerator
+from backend.src.core.query_processing.pipeline.selector import format_relevant_schema
+from backend.src.data.models.schema import DatabaseType
+from backend.src.schemas.pipeline import (
+    GeneratedQuery,
+    GeneratorMissingInfo,
+    RelevantSchema,
+)
 from backend.src.utils.text_utils import (
     clean_unreadable_characters,
     estimate_token_count,
@@ -13,12 +26,6 @@ from backend.src.utils.text_utils import (
     strip_ansi_escapes,
     strip_think_tags,
 )
-from backend.src.schemas.pipeline import GeneratedQuery, GeneratorMissingInfo, RelevantSchema
-from backend.src.data.models.schema import DatabaseType
-from backend.src.core.query_processing.pipeline.generators.base import QueryGenerator
-from backend.src.core.query_processing.pipeline.selector import format_relevant_schema
-from backend.src.control.providers.model.base import ModelProvider
-from backend.src.control.providers.model.koboldcpp import KoboldCppProvider
 
 logger = logging.getLogger(__name__)
 
@@ -148,10 +155,58 @@ class PostgresQueryGenerator(QueryGenerator):
                     missing_columns=missing_cols,
                     reason=str(data.get("reason", "Required schema information is missing.")),
                 )
-        except Exception:
-            pass
+        except (ValueError, TypeError, KeyError) as json_err:
+            logger.debug("Response is not missing_information JSON: %s", json_err)
 
         sql = _extract_sql(raw_response)
+
+        # Check if extracted SQL references tables outside the Selected Schema
+        if sql and active_schema and active_schema.objects:
+            allowed_tables = set()
+            for obj in active_schema.objects:
+                nl = obj.name.lower()
+                allowed_tables.add(nl)
+                if "." in nl:
+                    allowed_tables.add(nl.split(".", 1)[-1])
+
+            try:
+                parsed = sqlglot.parse_one(sql, read="postgres")
+                cte_names = {
+                    cte.alias_or_name.lower()
+                    for cte in parsed.find_all(exp.CTE)
+                    if cte.alias_or_name
+                }
+                subquery_aliases = {
+                    s.alias.lower()
+                    for s in parsed.find_all(exp.Subquery)
+                    if s.alias
+                }
+
+                unselected_tables: list[str] = []
+                for table_exp in parsed.find_all(exp.Table):
+                    t_name = table_exp.name.lower()
+                    full_name = f"{table_exp.db.lower()}.{t_name}" if table_exp.db else t_name
+                    if not t_name or t_name in cte_names or t_name in subquery_aliases:
+                        continue
+                    if full_name not in allowed_tables and t_name not in allowed_tables:
+                        candidate = full_name if table_exp.db else t_name
+                        if candidate not in unselected_tables:
+                            unselected_tables.append(candidate)
+
+                if unselected_tables:
+                    logger.info(
+                        "Generated SQL referenced unselected tables %s not in schema %s; emitting GeneratorMissingInfo",
+                        unselected_tables,
+                        sorted(allowed_tables),
+                    )
+                    return GeneratorMissingInfo(
+                        status="missing_information",
+                        missing_tables=unselected_tables,
+                        reason=f"Generated query requires table(s) {', '.join(unselected_tables)} which are not in the Selected Schema.",
+                    )
+            except (sqlglot.errors.SqlglotError, ValueError, AttributeError) as parse_err:
+                logger.debug("sqlglot schema containment check skipped: %s", parse_err)
+
         return GeneratedQuery(
             database_type=DatabaseType.POSTGRESQL,
             raw_query=sql,

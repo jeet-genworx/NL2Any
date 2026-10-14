@@ -11,12 +11,8 @@ Verifies:
 8. Feedback retention sliding window (at most 1 prior item + current item).
 """
 
-import asyncio
-from concurrent.futures import ThreadPoolExecutor
-import json
-from pathlib import Path
-import tempfile
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -28,19 +24,24 @@ from backend.src.control.providers.model.gemini import GeminiProvider
 from backend.src.control.providers.model.huggingface import HuggingFaceProvider
 from backend.src.control.providers.model.koboldcpp import KoboldCppProvider
 from backend.src.control.providers.model.koboldcpp_cache import KoboldCppCacheManager
-from backend.src.core.query_processing.pipeline.feedback_guardrail import (
-    FeedbackGuardrailClassifier,
-    MAX_FEEDBACK_LENGTH,
-)
-from backend.src.core.query_processing.pipeline.orchestrator import (
-    NL2AnyQueryOrchestrator,
+from backend.src.core.query_processing.pipeline.feedback import (
     _format_stage_user_guidance,
     _get_stage_feedback_items,
 )
-from backend.src.core.query_processing.pipeline.selector import TableSelector
-from backend.src.core.query_processing.pipeline.validators.postgres import PostgresQueryValidator
-from backend.src.core.query_processing.pipeline.validators.mongo import MongoQueryValidator
+from backend.src.core.query_processing.pipeline.feedback_guardrail import (
+    MAX_FEEDBACK_LENGTH,
+    FeedbackGuardrailClassifier,
+)
+from backend.src.core.query_processing.pipeline.orchestrator import (
+    NL2AnyQueryOrchestrator,
+)
 from backend.src.core.query_processing.pipeline.policy import SafetyPolicyValidator
+from backend.src.core.query_processing.pipeline.validators.mongo import (
+    MongoQueryValidator,
+)
+from backend.src.core.query_processing.pipeline.validators.postgres import (
+    PostgresQueryValidator,
+)
 from backend.src.data.models.schema import (
     DatabaseSchema,
     DatabaseType,
@@ -48,18 +49,12 @@ from backend.src.data.models.schema import (
     SchemaObject,
     SchemaObjectKind,
 )
-from backend.src.data.repositories import run_repository
 from backend.src.data.repositories.run_repository import (
-    get_run_file_path,
     load_run_state,
     save_run_state,
-    validate_run_id,
 )
 from backend.src.schemas.pipeline import (
     GeneratedQuery,
-    GuardrailDecision,
-    GuardrailResult,
-    TableSelectionResult,
     ValidationErrorType,
     ValidationResult,
 )
@@ -595,7 +590,7 @@ async def test_cascading_guidance_in_rerun_pipeline():
     mock_validator = AsyncMock()
     async def fake_validate(*args, **kwargs):
         captured_val_feedback.append(kwargs.get("feedback"))
-        from backend.src.schemas.pipeline import ValidationResult, ValidationErrorType
+        from backend.src.schemas.pipeline import ValidationErrorType
         return ValidationResult(valid=True, error_type=ValidationErrorType.VALID, issues=[])
     mock_validator.validate = fake_validate
 

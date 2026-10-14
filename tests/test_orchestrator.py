@@ -1,9 +1,19 @@
 """Tests for end-to-end NL2AnyQueryOrchestrator V2 pipeline."""
 
 import pytest
+
+from backend.src.core.query_processing.pipeline.orchestrator import (
+    NL2AnyQueryOrchestrator,
+)
+from backend.src.data.models.schema import (
+    DatabaseSchema,
+    DatabaseType,
+    Field,
+    Relationship,
+    SchemaObject,
+    SchemaObjectKind,
+)
 from backend.src.schemas.pipeline import (
-    CandidateTable,
-    ExecutionResult,
     GeneratedQuery,
     GeneratorMissingInfo,
     GuardrailDecision,
@@ -14,15 +24,6 @@ from backend.src.schemas.pipeline import (
     ValidationErrorType,
     ValidationResult,
 )
-from backend.src.data.models.schema import (
-    DatabaseSchema,
-    DatabaseType,
-    Field,
-    Relationship,
-    SchemaObject,
-    SchemaObjectKind,
-)
-from backend.src.core.query_processing.pipeline.orchestrator import NL2AnyQueryOrchestrator
 
 
 class MockGuardrail:
@@ -175,7 +176,7 @@ async def test_v2_orchestrator_happy_path(test_schema):
         policy=policy,
         executor=executor,
     )
-    orchestrator._schemas[DatabaseType.POSTGRESQL] = test_schema
+    orchestrator.schema_cache._schemas[DatabaseType.POSTGRESQL] = test_schema
 
     resp = await orchestrator.execute_pipeline("Show all customrs", database="postgres")
 
@@ -211,7 +212,7 @@ async def test_v2_orchestrator_pipeline_ordering(test_schema):
         policy=MockPolicy(),
         executor=MockExecutor(),
     )
-    orchestrator._schemas[DatabaseType.POSTGRESQL] = test_schema
+    orchestrator.schema_cache._schemas[DatabaseType.POSTGRESQL] = test_schema
 
     resp = await orchestrator.execute_pipeline("Shoow all customers", database="postgres")
     # Guardrail must have received the spell-checked question
@@ -254,7 +255,7 @@ async def test_v2_orchestrator_generator_to_selector_backtrack(test_schema):
         executor=MockExecutor(),
         max_retries=3,
     )
-    orchestrator._schemas[DatabaseType.POSTGRESQL] = test_schema
+    orchestrator.schema_cache._schemas[DatabaseType.POSTGRESQL] = test_schema
 
     resp = await orchestrator.execute_pipeline("Show customer order history", database="postgres")
 
@@ -294,7 +295,7 @@ async def test_v2_orchestrator_validator_to_generator_backtrack(test_schema):
         executor=MockExecutor(),
         max_retries=3,
     )
-    orchestrator._schemas[DatabaseType.POSTGRESQL] = test_schema
+    orchestrator.schema_cache._schemas[DatabaseType.POSTGRESQL] = test_schema
 
     resp = await orchestrator.execute_pipeline("Show customers", database="postgres")
 
@@ -335,7 +336,7 @@ async def test_v2_orchestrator_unsafe_immediate_stop(test_schema):
         executor=executor,
         max_retries=3,
     )
-    orchestrator._schemas[DatabaseType.POSTGRESQL] = test_schema
+    orchestrator.schema_cache._schemas[DatabaseType.POSTGRESQL] = test_schema
 
     resp = await orchestrator.execute_pipeline("Drop table customers", database="postgres")
 
@@ -359,7 +360,7 @@ async def test_v2_orchestrator_guardrail_reject(test_schema):
         selector=selector,
         postgres_gen=gen,
     )
-    orchestrator._schemas[DatabaseType.POSTGRESQL] = test_schema
+    orchestrator.schema_cache._schemas[DatabaseType.POSTGRESQL] = test_schema
 
     resp = await orchestrator.execute_pipeline("Delete database", database="postgres")
     assert resp.guardrail.decision == GuardrailDecision.REJECT
@@ -379,7 +380,7 @@ async def test_v2_orchestrator_guardrail_basic(test_schema):
         selector=selector,
         postgres_gen=gen,
     )
-    orchestrator._schemas[DatabaseType.POSTGRESQL] = test_schema
+    orchestrator.schema_cache._schemas[DatabaseType.POSTGRESQL] = test_schema
 
     resp = await orchestrator.execute_pipeline("What database is this?", database="postgres")
     assert resp.basic_answer == "I am NL2AnyQuery."
@@ -404,7 +405,7 @@ async def test_v2_orchestrator_selector_retry_exhaustion(test_schema):
         postgres_gen=gen,
         max_retries=3,
     )
-    orchestrator._schemas[DatabaseType.POSTGRESQL] = test_schema
+    orchestrator.schema_cache._schemas[DatabaseType.POSTGRESQL] = test_schema
 
     resp = await orchestrator.execute_pipeline("Show orders", database="postgres")
     assert "after maximum retries" in resp.error
@@ -431,7 +432,7 @@ async def test_v2_orchestrator_validator_retry_exhaustion(test_schema):
         validator=val,
         max_retries=3,
     )
-    orchestrator._schemas[DatabaseType.POSTGRESQL] = test_schema
+    orchestrator.schema_cache._schemas[DatabaseType.POSTGRESQL] = test_schema
 
     resp = await orchestrator.execute_pipeline("Show customers", database="postgres")
     assert "after maximum retries" in resp.error
@@ -468,7 +469,7 @@ async def test_v2_orchestrator_mongo_execution():
         policy=MockPolicy(),
         executor=executor,
     )
-    orchestrator._schemas[DatabaseType.MONGODB] = mongo_schema
+    orchestrator.schema_cache._schemas[DatabaseType.MONGODB] = mongo_schema
 
     resp = await orchestrator.execute_pipeline("Show mongo customers", database="mongo")
 
