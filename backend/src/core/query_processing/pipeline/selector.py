@@ -8,8 +8,6 @@ from typing import Any
 from backend.src.config import settings
 from backend.src.utils.text_utils import estimate_token_count, extract_json_block
 from backend.src.schemas.pipeline import (
-    CandidateTable,
-    QuestionAnalysis,
     RelevantSchema,
     TableSelectionResult,
 )
@@ -245,15 +243,14 @@ class TableSelector:
 
     async def select(
         self,
-        question: str | QuestionAnalysis,
+        question: str,
         schema: DatabaseSchema,
-        candidates: list[CandidateTable] | None = None,
         feedback: str | None = None,
         target_key: str | None = None,
         max_tokens: int | None = None,
     ) -> TableSelectionResult:
         """Select relevant tables from complete database description using SLM."""
-        q_text = question.question if isinstance(question, QuestionAnalysis) else str(question)
+        q_text = str(question)
 
         if not schema or not schema.objects:
             return TableSelectionResult(

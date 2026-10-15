@@ -61,7 +61,6 @@ from backend.src.data.repositories.run_repository import (
 )
 from backend.src.data.repositories.schema_cache import SchemaCache
 from backend.src.schemas.pipeline import (
-    CandidateTable,
     ExecutionResult,
     GeneratedQuery,
     GuardrailDecision,
@@ -70,7 +69,6 @@ from backend.src.schemas.pipeline import (
     PipelineResponse,
     PolicyResult,
     RelevantSchema,
-    SemanticAnalysisResult,
     SpellingCorrectionResult,
     ValidationResult,
 )
@@ -191,13 +189,9 @@ class NL2AnyQueryOrchestrator:
         question: str,
         guardrail: GuardrailResult,
         run_id: str | None = None,
-        semantic: SemanticAnalysisResult | None = None,
-        linguistic: dict[str, Any] | None = None,
-        candidates: list[CandidateTable] | None = None,
         selected: list[str] | None = None,
         selection_retries: int = 0,
         schema: RelevantSchema | None = None,
-        plan: Any = None,
         query: GeneratedQuery | None = None,
         attempts: int = 1,
         validation_retries: int = 0,
@@ -212,7 +206,6 @@ class NL2AnyQueryOrchestrator:
         stage_tokens: dict[str, int] | None = None,
         spelling_correction: SpellingCorrectionResult | None = None,
     ) -> PipelineResponse:
-        cand_list = candidates or []
         if validation is not None:
             if validation.issues:
                 validation.issues = [
@@ -235,14 +228,9 @@ class NL2AnyQueryOrchestrator:
             guardrail=guardrail,
             spelling_correction=spelling_correction,
             basic_answer=basic_answer,
-            semantic_analysis=semantic,
-            linguistic_analysis=linguistic,
-            candidate_tables=cand_list,
-            candidate_objects=[c.table_name for c in cand_list],
             selected_objects=selected or [],
             selection_retries=selection_retries,
             relevant_schema=schema.model_dump() if schema else None,
-            query_plan=plan,
             generated_query=query.formatted_query if query else None,
             attempts=attempts,
             validation_retries=validation_retries,

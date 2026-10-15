@@ -2,7 +2,6 @@
 
 import json
 import pytest
-from backend.src.schemas.pipeline import CandidateTable, QuestionAnalysis
 from backend.src.data.models.schema import (
     DatabaseSchema,
     DatabaseType,
