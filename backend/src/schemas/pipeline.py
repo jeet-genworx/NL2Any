@@ -2,10 +2,16 @@
 
 from enum import Enum
 from typing import Any, Literal
-from pydantic import BaseModel, Field as PydanticField
+from pydantic import BaseModel, Field as PydanticField, model_validator
 
 from backend.src.data.models.schema import DatabaseType, Relationship, SchemaObject
-from backend.src.core.query_processing.nlp.linguistic import LinguisticEntity
+
+
+class LinguisticEntity(BaseModel):
+    """Named entity extracted from text."""
+
+    text: str
+    label: str
 
 
 class GuardrailDecision(str, Enum):
@@ -79,6 +85,31 @@ class TableSelectionResult(BaseModel):
     missing_objects: list[str] = PydanticField(default_factory=list)
     reason: str = ""
     retrieval_hint: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_tables_key(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if "selected_tables" in data and "selected_objects" not in data:
+                data["selected_objects"] = data["selected_tables"]
+            if "missing_tables" in data and "missing_objects" not in data:
+                data["missing_objects"] = data["missing_tables"]
+            if "missing_information" in data and "missing_objects" not in data:
+                missing_info = data["missing_information"]
+                if isinstance(missing_info, list):
+                    data["missing_objects"] = missing_info
+                elif isinstance(missing_info, str) and missing_info:
+                    data["missing_objects"] = [missing_info]
+        return data
+
+
+class GeneratorMissingInfo(BaseModel):
+    """Structured feedback from Query Generator when required schema information is missing."""
+
+    status: Literal["missing_information"] = "missing_information"
+    missing_tables: list[str] = PydanticField(default_factory=list)
+    missing_columns: list[str] = PydanticField(default_factory=list)
+    reason: str = ""
 
 
 class RelevantSchema(BaseModel):
@@ -167,12 +198,15 @@ class ValidationErrorType(str, Enum):
     PLANNER_ERROR = "PLANNER_ERROR"
     UNSAFE = "UNSAFE"
     GENERATION_ERROR = "GENERATION_ERROR"
+    SEMANTIC_ERROR = "SEMANTIC_ERROR"
+    SCHEMA_ERROR = "SCHEMA_ERROR"
 
 
 class ValidationResult(BaseModel):
     """Result of query validation stage."""
 
     valid: bool
+    verdict: str | None = None
     error_type: ValidationErrorType = ValidationErrorType.VALID
     issues: list[str] = PydanticField(default_factory=list)
     suggestion: str | None = None
@@ -198,9 +232,21 @@ class ExecutionResult(BaseModel):
 class PipelineResponse(BaseModel):
     """Comprehensive trace and response of the NL2AnyQuery pipeline."""
 
+    run_id: str | None = PydanticField(
+        default=None,
+        description="Unique 32-char hex identifier for the pipeline run",
+    )
     database: str
     question: str
     provider: str | None = None
+    stage_providers: dict[str, str] | None = PydanticField(
+        default=None,
+        description="Resolved model provider for each stage: table_selection, query_generation, validation",
+    )
+    stage_tokens: dict[str, int] | None = PydanticField(
+        default=None,
+        description="Estimated token consumption per stage and total",
+    )
     guardrail: GuardrailResult
     spelling_correction: SpellingCorrectionResult | None = None
     basic_answer: str | None = None

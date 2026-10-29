@@ -84,3 +84,31 @@ async def test_gemini_provider_timeout_error():
 
     with pytest.raises(TimeoutError, match="timed out"):
         await provider.generate("Hi")
+
+
+def test_gemini_provider_litellm_base_url_model_prefix():
+    """Verify LiteLLM proxy base_url adds gemini/ prefix if omitted, and passes http_options."""
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(settings, "gemini_base_url", "https://litellm.genworx.ai/")
+        mp.setattr(settings, "gemini_api_key", "sk-test-virtual-key")
+        mp.setattr(settings, "gemini_model", "gemini-3.5-flash")
+
+        p = GeminiProvider()
+        assert p.base_url == "https://litellm.genworx.ai/"
+        assert p.model == "gemini/gemini-3.5-flash"
+
+        # Client builds with http_options
+        client = p._get_client()
+        assert client is not None
+
+
+def test_gemini_provider_direct_google_api_strips_prefix():
+    """Verify direct Google API without base_url strips gemini/ prefix if present."""
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(settings, "gemini_base_url", None)
+        mp.setattr(settings, "gemini_api_key", "AIzaSyTest")
+        mp.setattr(settings, "gemini_model", "gemini/gemini-2.5-flash")
+
+        p = GeminiProvider()
+        assert p.base_url is None
+        assert p.model == "gemini-2.5-flash"

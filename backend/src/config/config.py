@@ -1,6 +1,6 @@
-"""Core configuration and settings."""
-
-from pydantic import Field
+import os
+from typing import Any
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -49,7 +49,12 @@ class Settings(BaseSettings):
     gemini_model: str = Field(
         default="",
         alias="GEMINI_MODEL",
-        description="Google Gemini Model ID (e.g. gemini-2.5-flash)",
+        description="Google Gemini Model ID (e.g. gemini/gemini-3.5-flash or gemini-2.5-flash)",
+    )
+    gemini_base_url: str | None = Field(
+        default=None,
+        alias="GEMINI_BASE_URL",
+        description="Optional custom base URL for LiteLLM proxy or private gateway (e.g. https://litellm.genworx.ai/)",
     )
 
     postgres_dsn: str = Field(
@@ -220,6 +225,69 @@ class Settings(BaseSettings):
         alias="MAX_RESULT_ROWS",
         description="Maximum result rows allowed",
     )
+
+    koboldcpp_admin_enabled: bool = Field(
+        default=True,
+        alias="KOBOLDCPP_ADMIN_ENABLED",
+        description="Enable KoboldCpp KV cache slot preloading and state management for stage 1 table selection",
+    )
+    koboldcpp_admin_url: str = Field(
+        default="",
+        alias="KOBOLDCPP_ADMIN_URL",
+        description="Base URL for KoboldCpp admin/extra endpoints (defaults to koboldcpp_base_url with /v1 stripped)",
+    )
+    koboldcpp_max_slots: int = Field(
+        default=5,
+        alias="KOBOLDCPP_MAX_SLOTS",
+        description="Maximum slots available for KV cache save/load in KoboldCpp",
+    )
+    koboldcpp_slot_mapping: dict[str, int] = Field(
+        default_factory=dict,
+        alias="KOBOLDCPP_SLOT_MAPPING",
+        description="Optional explicit mapping from database key to slot number",
+    )
+    koboldcpp_warmup_dummy_question: str = Field(
+        default="ping",
+        alias="KOBOLDCPP_WARMUP_DUMMY_QUESTION",
+        description="Dummy question sent during KV cache warm-up",
+    )
+    koboldcpp_warmup_timeout_seconds: float = Field(
+        default=120.0,
+        alias="KOBOLDCPP_WARMUP_TIMEOUT_SECONDS",
+        description="Timeout in seconds for cold warm-up of large database schemas",
+    )
+    koboldcpp_admin_timeout_seconds: float = Field(
+        default=15.0,
+        alias="KOBOLDCPP_ADMIN_TIMEOUT_SECONDS",
+        description="Timeout in seconds for admin save_state and load_state calls",
+    )
+
+    @property
+    def effective_koboldcpp_admin_url(self) -> str:
+        """Root URL for KoboldCpp admin and extra endpoints (e.g. http://127.0.0.1:5001)."""
+        if self.koboldcpp_admin_url.strip():
+            return self.koboldcpp_admin_url.rstrip("/")
+        base = self.koboldcpp_base_url.rstrip("/")
+        if base.endswith("/v1"):
+            return base[:-3]
+        return base
+
+
+    @model_validator(mode="before")
+    @classmethod
+    def _apply_env_fallbacks(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            # Allow LITELLM_API_KEY as fallback for GEMINI_API_KEY
+            if not data.get("gemini_api_key") and not data.get("GEMINI_API_KEY"):
+                litellm_key = os.getenv("LITELLM_API_KEY")
+                if litellm_key:
+                    data["GEMINI_API_KEY"] = litellm_key
+            # Allow LITELLM_BASE_URL as fallback for GEMINI_BASE_URL
+            if not data.get("gemini_base_url") and not data.get("GEMINI_BASE_URL"):
+                litellm_url = os.getenv("LITELLM_BASE_URL")
+                if litellm_url:
+                    data["GEMINI_BASE_URL"] = litellm_url
+        return data
 
     model_config = SettingsConfigDict(
         env_file=".env",

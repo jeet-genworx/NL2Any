@@ -2,6 +2,7 @@
 
 import json
 import os
+import time
 import httpx
 import pandas as pd
 import streamlit as st
@@ -23,6 +24,23 @@ DEFAULT_DATABASES = [
     {"key": "mongo", "label": "MongoDB (Document)", "database_type": "mongodb"},
     {"key": "finops", "label": "FinOps (PostgreSQL)", "database_type": "postgresql"},
 ]
+
+DEFAULT_PROVIDERS = [
+    {"id": "koboldcpp", "name": "KoboldCpp (Local SLM)", "configured": True},
+    {"id": "huggingface", "name": "Hugging Face", "configured": False},
+    {"id": "gemini", "name": "Google Gemini", "configured": False},
+]
+
+
+@st.cache_data(ttl=60)
+def fetch_providers(api_url: str) -> list[dict]:
+    """Fetch available model providers and configuration status from API."""
+    try:
+        resp = httpx.get(f"{api_url}/providers", timeout=5.0)
+        resp.raise_for_status()
+        return resp.json()
+    except Exception:
+        return list(DEFAULT_PROVIDERS)
 
 
 @st.cache_data(ttl=60)
@@ -109,6 +127,147 @@ def run_ingestion(database: str, use_mst: bool, api_url: str, force: bool = Fals
         return False, f"Ingestion failed: {detail}"
     except Exception as err:
         return False, f"Ingestion failed: {err}"
+
+
+STAGE_CONFIG: dict[str, tuple[str, str]] = {
+    "spelling_check": ("🔤", "Spelling Check"),
+    "question_guardrail": ("🛡️", "Safety & Intent Guardrail"),
+    "feedback_guardrail": ("🛡️", "Feedback Guardrail"),
+    "table_selection": ("📋", "Table & Schema Selection"),
+    "query_generation": ("⚙️", "Query Generation"),
+    "query_validation": ("🔍", "Query Validation"),
+    "policy_check": ("🔒", "Safety Policy Verification"),
+    "query_execution": ("⚡", "Database Query Execution"),
+}
+
+
+def execute_rerun(
+    api_url: str,
+    run_id: str,
+    starting_stage: str,
+    feedback_payload: dict[str, str],
+) -> None:
+    """Execute partial pipeline rerun from a specified stage with stage progress updates."""
+    start_time = time.perf_counter()
+    status_label = f"Rerunning pipeline from {starting_stage.replace('_', ' ').title()}..."
+
+    with st.status(f"🔄 {status_label}", expanded=True) as status_box:
+        pipeline_data = None
+        stream_error = None
+
+        try:
+            with httpx.stream(
+                "POST",
+                f"{api_url}/rerun/stream",
+                json={
+                    "run_id": run_id,
+                    "starting_stage": starting_stage,
+                    "feedback": feedback_payload,
+                },
+                timeout=None,
+            ) as resp:
+                resp.raise_for_status()
+                for line in resp.iter_lines():
+                    if not line or not line.startswith("data: "):
+                        continue
+                    raw_data = line[len("data: "):].strip()
+                    try:
+                        evt = json.loads(raw_data)
+                    except Exception:
+                        continue
+
+                    evt_type = evt.get("event")
+                    stage = evt.get("stage", "")
+                    icon, name = STAGE_CONFIG.get(stage, ("⏳", stage.replace("_", " ").title()))
+
+                    if evt_type == "stage_start":
+                        status_box.update(
+                            label=f"⏳ Running: {name} (rerun)...",
+                            state="running",
+                            expanded=True,
+                        )
+                    elif evt_type == "stage_done":
+                        summary = evt.get("summary") or {}
+                        extra = ""
+                        if stage == "table_selection" and summary.get("selected_objects"):
+                            objs = summary["selected_objects"]
+                            extra = f" (Selected: `{', '.join(objs)}`)"
+                        elif stage == "query_validation":
+                            extra = " (Valid query)" if summary.get("is_valid") else " (Retrying or invalid)"
+                        elif stage == "policy_check":
+                            extra = " (Approved)" if summary.get("passed") else " (Rejected by policy)"
+
+                        st.write(f"{icon} **{name}** done ✅{extra}")
+                    elif evt_type == "complete":
+                        pipeline_data = evt.get("data")
+                        status_box.update(
+                            label="✅ Rerun completed!",
+                            state="complete",
+                            expanded=False,
+                        )
+                    elif evt_type == "error":
+                        status_code = evt.get("status_code", 500)
+                        detail = evt.get("detail", "Error during rerun")
+                        stream_error = (status_code, detail)
+                        status_box.update(
+                            label=f"❌ Error: {detail}",
+                            state="error",
+                            expanded=True,
+                        )
+                        break
+
+            elapsed_time = time.perf_counter() - start_time
+            if stream_error:
+                code, detail = stream_error
+                if code == 404:
+                    st.session_state["query_data"] = None
+                    st.session_state["query_execution_time"] = None
+                    st.session_state["query_error"] = (
+                        "This run has expired or does not exist. Please ask your question again."
+                    )
+                    st.session_state["feedback_warning"] = None
+                elif code == 400:
+                    st.session_state["feedback_warning"] = f"🛡️ {detail}"
+                elif code >= 500:
+                    st.session_state["query_error"] = f"❌ Backend Server Error (HTTP {code}): {detail}"
+                else:
+                    st.session_state["query_error"] = f"❌ Pipeline Error: {detail}"
+            elif pipeline_data:
+                st.session_state["query_data"] = pipeline_data
+                st.session_state["query_execution_time"] = elapsed_time
+                st.session_state["query_error"] = None
+                st.session_state["feedback_warning"] = None
+
+        except httpx.ConnectError:
+            st.session_state["query_error"] = (
+                f"Could not connect to FastAPI backend at {api_url}. "
+                "Please make sure it is running via `uv run run-api`."
+            )
+        except httpx.HTTPStatusError as err:
+            try:
+                detail = err.response.json().get("detail", err.response.text)
+            except Exception:
+                detail = err.response.text
+            if err.response.status_code == 404:
+                st.session_state["query_data"] = None
+                st.session_state["query_execution_time"] = None
+                st.session_state["query_error"] = (
+                    "This run has expired or does not exist. Please ask your question again."
+                )
+                st.session_state["feedback_warning"] = None
+            elif err.response.status_code == 400:
+                st.session_state["feedback_warning"] = f"🛡️ {detail}"
+            elif err.response.status_code >= 500:
+                st.session_state["query_error"] = f"❌ Backend Server Error (HTTP {err.response.status_code}): {detail}"
+            else:
+                st.session_state["query_error"] = f"❌ Pipeline Error: {detail}"
+        except Exception as err:
+            st.session_state["query_error"] = f"Error during rerun: {err}"
+
+        st.rerun()
+
+
+
 
 # Sidebar
 with st.sidebar:
@@ -210,18 +369,58 @@ with st.sidebar:
     )
     db_type = db_types.get(db_choice, "postgresql")
 
-    PROVIDER_OPTIONS = {
-        "koboldcpp": "SLM (KoboldCpp)",
-        "huggingface": "Hugging Face",
-        "gemini": "Gemini",
+    providers = fetch_providers(api_url)
+    provider_ids = [p["id"] for p in providers]
+    provider_labels = {
+        p["id"]: p["name"] if p.get("configured", True) else f"{p['name']} (unconfigured)"
+        for p in providers
     }
-    provider_choice = st.selectbox(
-        "LLM Provider",
-        options=list(PROVIDER_OPTIONS.keys()),
-        format_func=lambda key: PROVIDER_OPTIONS[key],
+
+    st.markdown("#### Model Providers (Per-Stage)")
+    stage1_choice = st.selectbox(
+        "Stage 1: Table Selection & Guardrail",
+        options=provider_ids,
+        format_func=lambda key: provider_labels.get(key, key),
         index=0,
-        help="Select the language model provider for query generation.",
+        help="Select model provider for Guardrail classification and Table Selection.",
+        key="stage1_choice",
     )
+    stage2_choice = st.selectbox(
+        "Stage 2: Query Generation",
+        options=provider_ids,
+        format_func=lambda key: provider_labels.get(key, key),
+        index=0,
+        help="Select model provider for generating queries (PostgreSQL / MongoDB).",
+        key="stage2_choice",
+    )
+    stage3_choice = st.selectbox(
+        "Stage 3: Validation",
+        options=provider_ids,
+        format_func=lambda key: provider_labels.get(key, key),
+        index=0,
+        help="Select model provider for query syntax and safety validation.",
+        key="stage3_choice",
+    )
+
+    # Trigger KV cache warm-up ONLY when Stage 1 table selection provider is koboldcpp:
+    # Triggers when database changes (while on koboldcpp) OR when stage 1 is switched to koboldcpp.
+    s1_is_kobold = stage1_choice == "koboldcpp"
+    db_changed = bool(db_choice and st.session_state.get("_last_selected_db") != db_choice)
+    s1_changed_to_kobold = (
+        s1_is_kobold
+        and st.session_state.get("_last_stage1_provider") != "koboldcpp"
+    )
+    if s1_is_kobold and (db_changed or s1_changed_to_kobold):
+        st.session_state["_last_selected_db"] = db_choice
+        st.session_state["_last_stage1_provider"] = stage1_choice
+        try:
+            httpx.post(f"{api_url}/databases/{db_choice}/select?stage1_provider={stage1_choice}", timeout=1.0)
+        except Exception:
+            pass
+    else:
+        if db_changed:
+            st.session_state["_last_selected_db"] = db_choice
+        st.session_state["_last_stage1_provider"] = stage1_choice
 
     st.divider()
     st.markdown("### Database Ingestion")
@@ -257,6 +456,9 @@ with st.sidebar:
         st.session_state["ingested_db"] = db_choice if ok else None
         st.session_state["ingestion_summary"] = payload if ok else None
         st.session_state["ingestion_error"] = None if ok else payload
+        st.session_state["query_data"] = None
+        st.session_state["query_execution_time"] = None
+        st.session_state["query_error"] = None
 
     # Rendered from session_state so the status survives later reruns.
     if st.session_state.get("ingestion_error"):
@@ -316,6 +518,10 @@ with st.sidebar:
         for q in sample_questions:
             if st.button(q, key=f"btn_{q}"):
                 st.session_state["question_input"] = q
+                st.session_state["query_data"] = None
+                st.session_state["query_execution_time"] = None
+                st.session_state["query_error"] = None
+                st.session_state["feedback_warning"] = None
     else:
         st.caption(
             "No canned questions for this database — ask anything about its own "
@@ -335,47 +541,223 @@ jargons_input = st.text_input(
     help="Words entered here will be treated as valid vocabulary by the spelling checker.",
 )
 
+if "is_executing_query" not in st.session_state:
+    st.session_state["is_executing_query"] = False
+if "query_data" not in st.session_state:
+    st.session_state["query_data"] = None
+if "query_execution_time" not in st.session_state:
+    st.session_state["query_execution_time"] = None
+if "query_error" not in st.session_state:
+    st.session_state["query_error"] = None
+if "feedback_warning" not in st.session_state:
+    st.session_state["feedback_warning"] = None
+
+
+def on_run_query_click() -> None:
+    st.session_state["is_executing_query"] = True
+    st.session_state["feedback_warning"] = None
+
+
+is_executing = st.session_state["is_executing_query"]
+
 col1, col2 = st.columns([1, 5])
 with col1:
-    run_btn = st.button("🚀 Run Query", type="primary", use_container_width=True)
+    st.button(
+        "⏳ Running..." if is_executing else "🚀 Run Query",
+        type="primary",
+        use_container_width=True,
+        disabled=is_executing,
+        on_click=on_run_query_click,
+        key="run_query_btn",
+    )
 
-if run_btn and question.strip():
-    spinner_label = f"Executing pipeline through {PROVIDER_OPTIONS.get(provider_choice, provider_choice)}..."
-    with st.spinner(spinner_label):
-        try:
-            jargon_list = [j.strip() for j in jargons_input.split(",") if j.strip()]
-            resp = httpx.post(
-                f"{api_url}/query",
-                json={
-                    "database": db_choice,
-                    "question": question.strip(),
-                    "provider": provider_choice,
-                    "jargons": jargon_list,
-                },
-                timeout=None,
-            )
-            resp.raise_for_status()
-            data = resp.json()
-        except httpx.ConnectError:
-            st.error(
-                f"Could not connect to FastAPI backend at {api_url}. "
-                "Please make sure it is running via `uv run run-api`."
-            )
-            st.stop()
-        except httpx.HTTPStatusError as err:
+with col2:
+    if is_executing:
+        st.caption("⏳ Executing query pipeline... please wait.")
+    elif st.session_state.get("query_execution_time") is not None:
+        exec_time = st.session_state["query_execution_time"]
+        st.caption(f"⏱️ **Total Execution Time:** `{exec_time:.2f}s`")
+
+if is_executing:
+    if not question.strip():
+        st.warning("⚠️ Please enter a question before running.")
+        st.session_state["is_executing_query"] = False
+    else:
+        start_time = time.perf_counter()
+        jargon_list = [j.strip() for j in jargons_input.split(",") if j.strip()]
+        payload = {
+            "database": db_choice,
+            "question": question.strip(),
+            "stages": {
+                "table_selection": stage1_choice,
+                "query_generation": stage2_choice,
+                "validation": stage3_choice,
+            },
+            "jargons": jargon_list,
+        }
+
+        with st.status("🚀 Processing query pipeline...", expanded=True) as status_box:
+            pipeline_data = None
+            stream_error = None
+
             try:
-                detail = err.response.json().get("detail", err.response.text)
-            except Exception:
-                detail = err.response.text
-            st.error(f"❌ Provider Error ({PROVIDER_OPTIONS.get(provider_choice, provider_choice)}): {detail}")
-            st.stop()
-        except Exception as err:
-            st.error(f"Error querying API: {err}")
-            st.stop()
+                with httpx.stream("POST", f"{api_url}/query/stream", json=payload, timeout=None) as resp:
+                    resp.raise_for_status()
+                    for line in resp.iter_lines():
+                        if not line or not line.startswith("data: "):
+                            continue
+                        raw_data = line[len("data: "):].strip()
+                        try:
+                            evt = json.loads(raw_data)
+                        except Exception:
+                            continue
+
+                        evt_type = evt.get("event")
+                        stage = evt.get("stage", "")
+                        icon, name = STAGE_CONFIG.get(stage, ("⏳", stage.replace("_", " ").title()))
+
+                        if evt_type == "stage_start":
+                            status_box.update(
+                                label=f"⏳ Running: {name}...",
+                                state="running",
+                                expanded=True,
+                            )
+                        elif evt_type == "stage_done":
+                            summary = evt.get("summary") or {}
+                            extra = ""
+                            if stage == "table_selection" and summary.get("selected_objects"):
+                                objs = summary["selected_objects"]
+                                extra = f" (Selected: `{', '.join(objs)}`)"
+                            elif stage == "spelling_check":
+                                extra = " (Corrections applied)" if summary.get("has_changes") else " (No typos found)"
+                            elif stage == "question_guardrail" and summary.get("decision"):
+                                extra = f" (Decision: `{summary['decision']}`)"
+                            elif stage == "query_validation":
+                                extra = " (Valid query)" if summary.get("is_valid") else " (Retrying or invalid)"
+                            elif stage == "policy_check":
+                                extra = " (Approved)" if summary.get("passed") else " (Rejected by policy)"
+
+                            st.write(f"{icon} **{name}** done ✅{extra}")
+                        elif evt_type == "complete":
+                            pipeline_data = evt.get("data")
+                            status_box.update(
+                                label="✅ Pipeline execution completed!",
+                                state="complete",
+                                expanded=False,
+                            )
+                        elif evt_type == "error":
+                            status_code = evt.get("status_code", 500)
+                            detail = evt.get("detail", "Error during execution")
+                            stream_error = (status_code, detail)
+                            status_box.update(
+                                label=f"❌ Error: {detail}",
+                                state="error",
+                                expanded=True,
+                            )
+                            break
+
+                elapsed_time = time.perf_counter() - start_time
+                if stream_error:
+                    code, detail = stream_error
+                    st.session_state["query_data"] = None
+                    st.session_state["query_execution_time"] = elapsed_time
+                    if code == 400:
+                        st.session_state["query_error"] = f"❌ Pipeline Error: {detail}"
+                    elif code >= 500:
+                        st.session_state["query_error"] = f"❌ Backend Server Error (HTTP {code}): {detail}"
+                    else:
+                        st.session_state["query_error"] = f"❌ Error: {detail}"
+                elif pipeline_data:
+                    st.session_state["query_data"] = pipeline_data
+                    st.session_state["query_execution_time"] = elapsed_time
+                    st.session_state["query_error"] = None
+
+            except httpx.ConnectError:
+                elapsed_time = time.perf_counter() - start_time
+                st.session_state["query_data"] = None
+                st.session_state["query_execution_time"] = elapsed_time
+                st.session_state["query_error"] = (
+                    f"Could not connect to FastAPI backend at {api_url}. "
+                    "Please make sure it is running via `uv run run-api`."
+                )
+            except httpx.HTTPStatusError as err:
+                elapsed_time = time.perf_counter() - start_time
+                try:
+                    detail = err.response.json().get("detail", err.response.text)
+                except Exception:
+                    detail = err.response.text
+                if err.response.status_code >= 500:
+                    err_msg = f"❌ Backend Server Error (HTTP {err.response.status_code}): {detail}"
+                else:
+                    err_msg = f"❌ Pipeline Error: {detail}"
+                st.session_state["query_data"] = None
+                st.session_state["query_execution_time"] = elapsed_time
+                st.session_state["query_error"] = err_msg
+            except Exception as err:
+                elapsed_time = time.perf_counter() - start_time
+                st.session_state["query_data"] = None
+                st.session_state["query_execution_time"] = elapsed_time
+                st.session_state["query_error"] = f"Error querying API: {err}"
+            finally:
+                st.session_state["is_executing_query"] = False
+                st.rerun()
+
+if st.session_state.get("query_error"):
+    st.error(st.session_state["query_error"])
+if st.session_state.get("feedback_warning"):
+    st.warning(st.session_state["feedback_warning"])
+
+data = st.session_state.get("query_data")
+execution_time = st.session_state.get("query_execution_time")
+
+if data:
+    stage_provs = data.get("stage_providers")
+    if stage_provs:
+        st.caption(
+            f"🧩 **Stage Providers:** Stage 1 (Table Selection): `{stage_provs.get('table_selection')}` | "
+            f"Stage 2 (Generation): `{stage_provs.get('query_generation')}` | "
+            f"Stage 3 (Validation): `{stage_provs.get('validation')}`"
+        )
+
+    stage_tokens = data.get("stage_tokens")
+    if stage_tokens:
+        s1_tok = stage_tokens.get("stage_1", 0)
+        s2_tok = stage_tokens.get("stage_2", 0)
+        s3_tok = stage_tokens.get("stage_3", 0)
+        tot_tok = stage_tokens.get("total", 0)
+        g_tok = stage_tokens.get("guardrail", 0)
+        sel_tok = stage_tokens.get("table_selection", 0)
+
+        st.markdown("##### 🪙 Estimated Prompt Token Consumption")
+        mcol1, mcol2, mcol3, mcol4 = st.columns(4)
+        with mcol1:
+            st.metric(
+                label="Stage 1: Selection",
+                value=f"{s1_tok:,} tokens",
+                help=f"Guardrail: {g_tok:,} | Table Selector: {sel_tok:,}",
+            )
+        with mcol2:
+            st.metric(
+                label="Stage 2: Generation",
+                value=f"{s2_tok:,} tokens",
+            )
+        with mcol3:
+            st.metric(
+                label="Stage 3: Validation",
+                value=f"{s3_tok:,} tokens",
+            )
+        with mcol4:
+            st.metric(
+                label="Total Tokens Sent",
+                value=f"{tot_tok:,} tokens",
+                help="Sum of prompt tokens sent across all executed pipeline stages.",
+            )
 
     # Check for basic answers or errors
     if data.get("basic_answer"):
         st.info(f"ℹ️ **System Response:** {data['basic_answer']}")
+        if execution_time is not None:
+            st.caption(f"⏱️ Total execution time: `{execution_time:.2f}s`")
 
     elif data.get("error"):
         if data.get("guardrail", {}).get("decision") == "REJECT":
@@ -384,12 +766,15 @@ if run_btn and question.strip():
                 st.caption(f"Reason: {data['guardrail']['reason']}")
         else:
             st.error(f"❌ **Pipeline Notice:** {data['error']}")
+        if execution_time is not None:
+            st.caption(f"⏱️ Total execution time: `{execution_time:.2f}s`")
 
     # Results section if present
     results = data.get("results")
     if results:
         row_count = results.get("row_count", 0)
-        st.subheader(f"📊 Results ({row_count} rows)")
+        time_badge = f" — ⏱️ `{execution_time:.2f}s`" if execution_time is not None else ""
+        st.subheader(f"📊 Results ({row_count} rows){time_badge}")
 
         preview_rows = results.get("preview_rows", [])
         if preview_rows:
@@ -427,10 +812,7 @@ if run_btn and question.strip():
     st.divider()
     st.markdown("### 🔍 Pipeline Tracing & Inspection")
 
-    with st.expander("Guardrail"):
-        st.json(data.get("guardrail", {}))
-
-    with st.expander("Spelling Checker (SymSpell)"):
+    with st.expander("1. Spelling Checker (SymSpell)", expanded=False):
         spelling_data = data.get("spelling_correction")
         if spelling_data:
             st.markdown(f"**Original Question:** `{spelling_data.get('original_question')}`")
@@ -446,37 +828,53 @@ if run_btn and question.strip():
         else:
             st.info("Spelling check was not executed for this query.")
 
-    with st.expander("Semantic Analysis"):
-        st.json(data.get("semantic_analysis", {}))
+    with st.expander("2. Guardrail", expanded=False):
+        if stage_tokens and stage_tokens.get("guardrail") is not None:
+            st.caption(f"🪙 **Prompt Tokens Sent:** `{stage_tokens.get('guardrail', 0):,}` tokens")
+        st.json(data.get("guardrail", {}))
 
-    with st.expander("Linguistic Analysis"):
-        st.json(data.get("linguistic_analysis", {}))
+    with st.expander("3. Table Selection & Grounded Schema", expanded=False):
+        if stage_tokens and stage_tokens.get("table_selection") is not None:
+            st.caption(f"🪙 **Prompt Tokens Sent:** `{stage_tokens.get('table_selection', 0):,}` tokens")
 
-    with st.expander("Embedding Retrieval"):
-        candidate_tables = data.get("candidate_tables", [])
-        if candidate_tables:
-            st.markdown("**Embedding Candidates (Cosine Similarity > 0.80, Top 15 max):**")
-            cand_df = pd.DataFrame(candidate_tables)[["rank", "table_name", "similarity"]]
-            cand_df.columns = ["Rank", "Table", "Similarity Score"]
-            st.dataframe(cand_df, hide_index=True, use_container_width=True)
-        else:
-            st.info("No candidate tables retrieved or applicable.")
-
-    with st.expander("Table Selection"):
         st.markdown(f"**Selected Tables / Objects:** `{data.get('selected_objects', [])}`")
         st.markdown(f"**Selection Retries:** {data.get('selection_retries', 0)}")
+        if data.get("relevant_schema"):
+            st.markdown("**Grounded Schema for Selected Tables:**")
+            tab_tree, tab_raw = st.tabs(["🌳 Interactive Tree View", "📝 Raw JSON View"])
+            with tab_tree:
+                st.json(data.get("relevant_schema", {}))
+            with tab_raw:
+                st.code(json.dumps(data.get("relevant_schema", {}), indent=2, default=str), language="json")
 
-    with st.expander("Relevant Schema"):
-        st.json(data.get("relevant_schema", {}))
+        run_id = data.get("run_id")
+        if run_id:
+            st.divider()
+            st.markdown("##### 💬 Feedback & Rerun from Stage 1")
+            st.caption("Provide domain guidance or table suggestions to rerun from Table Selection.")
+            st.text_area(
+                "Feedback for Table Selection:",
+                placeholder="e.g. Include contracts table as well",
+                key="feedback_stage_1",
+            )
+            if st.button("🔄 Rerun from Table Selection", key="rerun_btn_stage_1", type="primary", disabled=is_executing):
+                fb_payload = {}
+                s1_val = st.session_state.get("feedback_stage_1", "").strip()
+                s2_val = st.session_state.get("feedback_stage_2", "").strip()
+                s3_val = st.session_state.get("feedback_stage_3", "").strip()
+                if s1_val:
+                    fb_payload["table_selection"] = s1_val
+                if s2_val:
+                    fb_payload["query_generation"] = s2_val
+                if s3_val:
+                    fb_payload["validation"] = s3_val
+                execute_rerun(api_url, run_id, "table_selection", fb_payload)
 
-    with st.expander("Query Plan"):
-        st.json(data.get("query_plan", {}))
-
-    with st.expander("Generated Query"):
+    with st.expander("4. Generated Query", expanded=True):
+        if stage_tokens and stage_tokens.get("query_generation") is not None:
+            st.caption(f"🪙 **Prompt Tokens Sent:** `{stage_tokens.get('query_generation', 0):,}` tokens")
         gen_q = data.get("generated_query")
         if gen_q:
-            # Driven by the engine, not the target key, so a PostgreSQL database
-            # added from a connection string is still highlighted as SQL.
             if db_type == "postgresql":
                 st.code(gen_q, language="sql")
             else:
@@ -487,10 +885,34 @@ if run_btn and question.strip():
         else:
             st.write("No query generated.")
 
-    with st.expander("Validation"):
+        run_id = data.get("run_id")
+        if run_id:
+            st.divider()
+            st.markdown("##### 💬 Feedback & Rerun from Stage 2")
+            st.caption("Clarify query intent, metrics, or filters to rerun from Query Generation (reuses selected tables).")
+            st.text_area(
+                "Feedback for Query Generation:",
+                placeholder="e.g. Group by vendor_id instead of vendor_name",
+                key="feedback_stage_2",
+            )
+            if st.button("🔄 Rerun from Query Generation", key="rerun_btn_stage_2", type="primary", disabled=is_executing):
+                fb_payload = {}
+                s2_val = st.session_state.get("feedback_stage_2", "").strip()
+                s3_val = st.session_state.get("feedback_stage_3", "").strip()
+                if s2_val:
+                    fb_payload["query_generation"] = s2_val
+                if s3_val:
+                    fb_payload["validation"] = s3_val
+                execute_rerun(api_url, run_id, "query_generation", fb_payload)
+
+    with st.expander("5. Validation", expanded=False):
+        if stage_tokens and stage_tokens.get("validation") is not None:
+            st.caption(f"🪙 **Prompt Tokens Sent:** `{stage_tokens.get('validation', 0):,}` tokens")
         val_data = data.get("validation", {}) or {}
         st.markdown(f"**Validation Retries:** {data.get('validation_retries', 0)}")
         st.markdown(f"**Valid:** `{val_data.get('valid')}`")
+        if val_data.get("verdict"):
+            st.markdown(f"**Verdict:** `{val_data.get('verdict')}`")
         st.markdown(f"**Error Classification:** `{val_data.get('error_type', 'VALID')}`")
         if val_data.get("issues"):
             st.markdown(f"**Issues:** {val_data.get('issues')}")
@@ -498,11 +920,28 @@ if run_btn and question.strip():
             st.markdown(f"**Suggestion:** {val_data.get('suggestion')}")
         st.json(val_data)
 
-    with st.expander("Policy"):
+        run_id = data.get("run_id")
+        if run_id:
+            st.divider()
+            st.markdown("##### 💬 Feedback & Rerun from Stage 3")
+            st.caption("Provide validation guidance or acceptable caveats to re-validate the generated query.")
+            st.text_area(
+                "Feedback for Validation:",
+                placeholder="e.g. The query is valid; NULL handling on invoice_id is intended",
+                key="feedback_stage_3",
+            )
+            if st.button("🔄 Rerun from Validation", key="rerun_btn_stage_3", type="primary", disabled=is_executing):
+                fb_payload = {}
+                s3_val = st.session_state.get("feedback_stage_3", "").strip()
+                if s3_val:
+                    fb_payload["validation"] = s3_val
+                execute_rerun(api_url, run_id, "validation", fb_payload)
+
+    with st.expander("6. Safety Policy", expanded=False):
         pol_data = data.get("policy", {}) or {}
         st.markdown(f"**Allowed:** `{pol_data.get('allowed')}`")
         st.markdown(f"**Reason:** {pol_data.get('reason', '')}")
         st.json(pol_data)
 
-    with st.expander("Results"):
+    with st.expander("7. Execution Results", expanded=False):
         st.json(data.get("results", {}))

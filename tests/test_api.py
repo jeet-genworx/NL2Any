@@ -53,6 +53,69 @@ def test_query_endpoint_reject():
     assert data["error"] == "Sorry, I can't help with this."
 
 
+def test_query_stream_endpoint_basic():
+    client = TestClient(app)
+    response = client.post(
+        "/query/stream",
+        json={"database": "postgres", "question": "What database is this?"},
+    )
+    assert response.status_code == 200
+    assert "text/event-stream" in response.headers.get("content-type", "")
+
+    events = []
+    for line in response.text.splitlines():
+        if line.startswith("data: "):
+            events.append(json.loads(line[6:]))
+
+    event_types = [e.get("event") for e in events]
+    assert "stage_start" in event_types
+    assert "stage_done" in event_types
+    assert "complete" in event_types
+    complete_evt = next(e for e in events if e.get("event") == "complete")
+    assert complete_evt["data"]["database"] == "postgresql"
+    assert complete_evt["data"]["basic_answer"] is not None
+
+
+def test_query_stream_endpoint_reject():
+    client = TestClient(app)
+    response = client.post(
+        "/query/stream",
+        json={"database": "postgres", "question": "DROP TABLE customers;"},
+    )
+    assert response.status_code == 200
+    events = []
+    for line in response.text.splitlines():
+        if line.startswith("data: "):
+            events.append(json.loads(line[6:]))
+
+    complete_evt = next(e for e in events if e.get("event") == "complete")
+    assert complete_evt["data"]["guardrail"]["decision"] == "REJECT"
+    assert complete_evt["data"]["error"] == "Sorry, I can't help with this."
+
+
+def test_rerun_stream_endpoint_404():
+    client = TestClient(app)
+    missing_id = "0123456789abcdef0123456789abcdef"
+    response = client.post(
+        "/rerun/stream",
+        json={
+            "run_id": missing_id,
+            "starting_stage": "table_selection",
+            "feedback": {"table_selection": "Retry"},
+        },
+    )
+    assert response.status_code == 200
+    events = []
+    for line in response.text.splitlines():
+        if line.startswith("data: "):
+            events.append(json.loads(line[6:]))
+
+    err_evt = next(e for e in events if e.get("event") == "error")
+    assert err_evt["status_code"] == 404
+    assert f"Run '{missing_id}' not found or expired" in err_evt["detail"]
+
+
+
 
 def test_table_description_endpoint():
     response = TestClient(app).get("/descriptions/postgres/customers")
@@ -182,3 +245,13 @@ def test_schema_endpoint_accepts_finops_aliases():
 def test_unknown_database_error_lists_finops():
     detail = TestClient(app).get("/schema/nope").json()["detail"]
     assert "finops" in detail
+
+
+def test_select_database_endpoint():
+    client = TestClient(app)
+    resp = client.post("/databases/postgres/select")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["database"] == "postgres"
+    assert "status" in data
+

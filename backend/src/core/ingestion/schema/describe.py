@@ -134,12 +134,7 @@ async def _describe_batch(
             if attempt == DESCRIBE_MAX_ATTEMPTS:
                 raise ValueError(
                     f"Could not get parseable JSON for tables {sorted(batch_ids)} "
-                    f"after {DESCRIBE_MAX_ATTEMPTS} attempts: {err} "
-                    f"(an unterminated string means the reply was cut off mid-JSON, "
-                    f"an empty preview that no JSON was emitted at all; both point at "
-                    f"the completion budget of {DESCRIBE_MAX_TOKENS} tokens going to "
-                    f"a <think> block -- check MODEL_DISABLE_THINKING is on, then "
-                    f"lower max_batch_columns)"
+                    f"after {DESCRIBE_MAX_ATTEMPTS} attempts: {err}"
                 ) from err
             logger.warning(
                 "Describe attempt %d/%d for tables %s returned no parseable JSON (%s). Retrying.",

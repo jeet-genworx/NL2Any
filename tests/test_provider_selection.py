@@ -40,6 +40,7 @@ def test_resolve_huggingface_missing_config(monkeypatch):
 def test_resolve_gemini(monkeypatch):
     monkeypatch.setattr(settings, "gemini_api_key", "test-key")
     monkeypatch.setattr(settings, "gemini_model", "gemini-2.5-flash")
+    monkeypatch.setattr(settings, "gemini_base_url", None)
 
     provider = resolve_model_provider("gemini")
     assert isinstance(provider, GeminiProvider)
@@ -95,29 +96,21 @@ async def test_orchestrator_unconfigured_gemini_fails_clearly(monkeypatch):
 async def test_orchestrator_spelling_checker_execution():
     from backend.src.core.query_processing.pipeline.orchestrator import NL2AnyQueryOrchestrator
     from tests.test_orchestrator import (
-        MockEmbeddingProvider,
         MockExecutor,
         MockGuardrail,
-        MockPlanner,
         MockPolicy,
         MockPostgresGen,
         MockSelector,
-        MockSemantic,
         MockValidator,
-        MockVectorRetriever,
     )
 
     orchestrator = NL2AnyQueryOrchestrator(
         guardrail=MockGuardrail(),
-        semantic=MockSemantic(),
         selector=MockSelector(),
-        planner=MockPlanner(),
         postgres_gen=MockPostgresGen(),
         validator=MockValidator(),
         policy=MockPolicy(),
         executor=MockExecutor(),
-        embedding_provider=MockEmbeddingProvider(),
-        vector_retriever=MockVectorRetriever(),
     )
 
     # Query with a typo in customrs and technical jargon

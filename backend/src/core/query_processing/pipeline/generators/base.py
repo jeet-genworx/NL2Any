@@ -1,19 +1,24 @@
 """Base protocol for database query generators."""
 
-from typing import Protocol, runtime_checkable
-from backend.src.schemas.pipeline import GeneratedQuery, QueryPlan, RelevantSchema
+from typing import Any, Protocol, runtime_checkable
+
+from backend.src.schemas.pipeline import (
+    GeneratedQuery,
+    GeneratorMissingInfo,
+    RelevantSchema,
+)
 
 
 @runtime_checkable
 class QueryGenerator(Protocol):
-    """Protocol for converting database-independent QueryPlan into native queries."""
+    """Protocol for generating native database queries directly from question and selected schema."""
 
     async def generate_query(
         self,
         question: str,
-        plan: QueryPlan,
         schema: RelevantSchema,
         feedback: str | None = None,
-    ) -> GeneratedQuery:
-        """Generate a native database query based on the plan and relevant schema."""
+        plan: Any = None,
+    ) -> GeneratedQuery | GeneratorMissingInfo:
+        """Generate a native database query or structured missing information feedback."""
         ...

@@ -3,6 +3,7 @@
 import logging
 from pathlib import Path
 import re
+from typing import Any
 import sqlglot
 from sqlglot import exp
 
@@ -21,7 +22,7 @@ from backend.src.schemas.pipeline import (
     ValidationResult,
 )
 from backend.src.data.models.schema import DatabaseType
-from backend.src.core.query_processing.pipeline.planner import _format_relevant_schema_for_planner
+from backend.src.core.query_processing.pipeline.selector import format_relevant_schema
 from backend.src.control.providers.model.base import ModelProvider
 from backend.src.control.providers.model.koboldcpp import KoboldCppProvider
 
@@ -144,112 +145,85 @@ def validate_sql_schema_references(sql: str, schema: RelevantSchema) -> list[str
     return [clean_unreadable_characters(strip_ansi_escapes(i)) for i in issues]
 
 
-class QueryValidator:
-    """Validates generated queries using relaxed diagnostic checks and SLM verification."""
+from backend.src.core.query_processing.pipeline.validators.base import QueryValidator as BaseQueryValidator
+from backend.src.core.query_processing.pipeline.validators.postgres import PostgresQueryValidator
+from backend.src.core.query_processing.pipeline.validators.mongo import MongoQueryValidator
+
+
+class QueryValidator(BaseQueryValidator):
+    """Composite query validator delegating to PostgresQueryValidator or MongoQueryValidator."""
 
     def __init__(
         self,
         provider: ModelProvider | None = None,
         prompt_path: Path | str | None = None,
+        postgres_validator: PostgresQueryValidator | None = None,
+        mongo_validator: MongoQueryValidator | None = None,
     ) -> None:
         self.provider = provider or KoboldCppProvider()
-        self.prompt_path = Path(prompt_path or DEFAULT_VALIDATOR_PROMPT)
+        self.postgres_validator = postgres_validator or PostgresQueryValidator(
+            provider=self.provider, prompt_path=prompt_path
+        )
+        self.mongo_validator = mongo_validator or MongoQueryValidator(
+            provider=self.provider, prompt_path=prompt_path
+        )
 
-    def _load_prompt_template(self) -> str:
-        if self.prompt_path.exists():
-            return self.prompt_path.read_text(encoding="utf-8")
-        resolved = Path.cwd() / self.prompt_path
-        if resolved.exists():
-            return resolved.read_text(encoding="utf-8")
-        raise FileNotFoundError(f"Validator prompt not found at {self.prompt_path}")
+    @property
+    def last_prompt_tokens(self) -> int:
+        return max(
+            getattr(self.postgres_validator, "last_prompt_tokens", 0),
+            getattr(self.mongo_validator, "last_prompt_tokens", 0),
+        )
 
     async def validate(
         self,
         question: str,
-        plan: QueryPlan,
-        generated_query: GeneratedQuery,
-        schema: RelevantSchema,
+        generated_query: Any = None,
+        schema: Any = None,
+        plan: Any = None,
+        feedback: str | None = None,
+        **kwargs: Any,
     ) -> ValidationResult:
-        """Validate generated query using SLM verification and safety boundaries.
-
-        Deterministic parsing/schema checks are intentionally omitted to avoid false
-        rejections on complex PostgreSQL dialects, subqueries, or valid syntax.
-        The SLM performs semantic, syntax, and relational validation.
-        """
-        # 1. Fast safety check: empty SQL or destructive write statements
-        if generated_query.database_type == DatabaseType.POSTGRESQL:
-            sql_str = str(generated_query.raw_query).strip()
-            if not sql_str:
-                return ValidationResult(
-                    valid=False,
-                    error_type=ValidationErrorType.GENERATION_ERROR,
-                    issues=["No SQL query was generated."],
-                    suggestion="Generate a valid read-only PostgreSQL query based on the query plan.",
-                )
-
-            if UNSAFE_SQL_PATTERN.search(sql_str):
-                return ValidationResult(
-                    valid=False,
-                    error_type=ValidationErrorType.UNSAFE,
-                    issues=["Unsafe modifying or destructive SQL statement detected."],
-                    suggestion="Queries must be read-only SELECT statements.",
-                )
-
-        # 2. SLM Semantic & Relational Validation
-        template = self._load_prompt_template()
-        schema_context = _format_relevant_schema_for_planner(schema)
-        plan_context = plan.model_dump_json(indent=2)
-
-        prompt = template.format(
-            question=question,
-            database_type=generated_query.database_type.value,
-            plan_context=plan_context,
-            schema_context=schema_context,
-            query_context=generated_query.formatted_query,
-        )
-
-        try:
-            raw_response = await self.provider.generate(
-                prompt=prompt,
-                temperature=0.0,
-                max_tokens=settings.validator_max_tokens,
-            )
-            data = extract_json_block(raw_response)
-
-            # Map error_type if returned as string
-            raw_err_type = data.get("error_type", "VALID")
-            if not isinstance(raw_err_type, str) or raw_err_type not in ValidationErrorType.__members__:
-                raw_err_type = "VALID" if data.get("valid", True) else "GENERATION_ERROR"
-
-            # Enforce mutual consistency between valid boolean and error_type
-            if raw_err_type != ValidationErrorType.VALID:
-                data["valid"] = False
-            elif not data.get("valid", True):
-                raw_err_type = ValidationErrorType.GENERATION_ERROR
-
-            data["error_type"] = raw_err_type
-
-            # Sanitize issues and suggestions from ANSI escapes and unreadable characters
-            raw_issues = data.get("issues", [])
-            if isinstance(raw_issues, list):
-                data["issues"] = [
-                    clean_unreadable_characters(strip_ansi_escapes(str(i)))
-                    for i in raw_issues
-                    if i
-                ]
-            raw_suggestion = data.get("suggestion")
-            if raw_suggestion:
-                data["suggestion"] = clean_unreadable_characters(strip_ansi_escapes(str(raw_suggestion)))
-
-            return ValidationResult.model_validate(data)
-
-        except Exception as err:
-            logger.warning("Validation SLM call failed: %s. Lenient fallback: accepting query.", err)
-            # Lenient fallback: do NOT fail queries on deterministic parser guesses.
-            # Downstream database engine will catch genuine runtime errors.
+        """Route query validation to specialized validator based on database type."""
+        if isinstance(generated_query, GeneratedQuery):
+            active_query = generated_query
+        elif isinstance(schema, GeneratedQuery):
+            active_query = schema
+        elif isinstance(kwargs.get("generated_query"), GeneratedQuery):
+            active_query = kwargs["generated_query"]
+        else:
             return ValidationResult(
-                valid=True,
-                error_type=ValidationErrorType.VALID,
-                issues=[],
-                suggestion=None,
+                valid=False,
+                error_type=ValidationErrorType.GENERATION_ERROR,
+                issues=["Invalid arguments passed to query validator: missing GeneratedQuery."],
+                suggestion="Provide a valid GeneratedQuery.",
             )
+
+        active_feedback = feedback if isinstance(feedback, str) else kwargs.get("feedback")
+
+        if active_query.database_type == DatabaseType.POSTGRESQL:
+            return await self.postgres_validator.validate(
+                question=question,
+                generated_query=generated_query,
+                schema=schema,
+                plan=plan,
+                feedback=active_feedback,
+                **kwargs,
+            )
+        elif active_query.database_type == DatabaseType.MONGODB:
+            return await self.mongo_validator.validate(
+                question=question,
+                generated_query=generated_query,
+                schema=schema,
+                plan=plan,
+                feedback=active_feedback,
+                **kwargs,
+            )
+        else:
+            return ValidationResult(
+                valid=False,
+                error_type=ValidationErrorType.GENERATION_ERROR,
+                issues=[f"Unsupported database type: {active_query.database_type}"],
+                suggestion="Provide PostgreSQL or MongoDB query.",
+            )
+

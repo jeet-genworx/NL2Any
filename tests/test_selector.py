@@ -1,10 +1,20 @@
-"""Tests for TableSelector stage."""
+"""Tests for V2 TableSelector stage with complete schema description."""
 
 import json
 import pytest
-from backend.src.schemas.pipeline import CandidateTable, QuestionAnalysis
-from backend.src.data.models.schema import DatabaseSchema, DatabaseType, Field, SchemaObject, SchemaObjectKind
-from backend.src.core.query_processing.pipeline.selector import TableSelector
+from backend.src.data.models.schema import (
+    DatabaseSchema,
+    DatabaseType,
+    Field,
+    Relationship,
+    SchemaObject,
+    SchemaObjectKind,
+)
+from backend.src.core.query_processing.pipeline.selector import (
+    TableSelector,
+    format_schema_description,
+    package_selected_schema,
+)
 
 
 class MockSelectorProvider:
@@ -21,21 +31,32 @@ class MockSelectorProvider:
 
 @pytest.fixture
 def sample_schema() -> DatabaseSchema:
-    from backend.src.data.models.schema import Relationship
     cust_obj = SchemaObject(
         name="customers",
         kind=SchemaObjectKind.TABLE,
-        fields=[Field(name="id", type="int"), Field(name="city", type="varchar")],
+        description="Customer records and profiles.",
+        fields=[
+            Field(name="id", type="int", description="Primary key"),
+            Field(name="city", type="varchar", description="City name"),
+        ],
     )
     orders_obj = SchemaObject(
         name="orders",
         kind=SchemaObjectKind.TABLE,
-        fields=[Field(name="id", type="int"), Field(name="customer_id", type="int")],
+        description="Customer orders.",
+        fields=[
+            Field(name="id", type="int", description="Order ID"),
+            Field(name="customer_id", type="int", description="FK to customers"),
+        ],
     )
     items_obj = SchemaObject(
         name="order_items",
         kind=SchemaObjectKind.TABLE,
-        fields=[Field(name="id", type="int"), Field(name="order_id", type="int")],
+        description="Line items for orders.",
+        fields=[
+            Field(name="id", type="int", description="Item ID"),
+            Field(name="order_id", type="int", description="FK to orders"),
+        ],
     )
     return DatabaseSchema(
         database_type=DatabaseType.POSTGRESQL,
@@ -48,187 +69,121 @@ def sample_schema() -> DatabaseSchema:
                 to_object="customers",
                 to_field="id",
                 relationship_type="many_to_one",
-            )
+            ),
+            Relationship(
+                from_object="order_items",
+                from_field="order_id",
+                to_object="orders",
+                to_field="id",
+                relationship_type="many_to_one",
+            ),
         ],
     )
 
 
 @pytest.mark.asyncio
 async def test_table_selector_valid_selection(sample_schema):
-    candidates = [
-        CandidateTable(table_name="customers", similarity=0.92, rank=1),
-        CandidateTable(table_name="orders", similarity=0.88, rank=2),
-    ]
-
     response_json = json.dumps({
-        "selected_objects": ["customers", "orders"],
+        "selected_tables": ["customers", "orders"],
         "sufficient": True,
         "missing_objects": [],
         "reason": "Both tables are needed to show customer orders.",
-        "retrieval_hint": None,
     })
 
     provider = MockSelectorProvider(response_json)
     selector = TableSelector(provider=provider)
-    qa = QuestionAnalysis(question="Show customer orders", subjective=["customers", "orders"])
 
-    res = await selector.select(qa, candidates, sample_schema)
+    res = await selector.select(
+        question="Show customer orders",
+        schema=sample_schema,
+    )
 
     assert res.selected_objects == ["customers", "orders"]
     assert res.sufficient is True
     assert res.missing_objects == []
+    assert "Complete Database Schema:" in provider.last_prompt
+    assert "customers" in provider.last_prompt
+    assert "orders" in provider.last_prompt
 
 
 @pytest.mark.asyncio
 async def test_table_selector_filters_hallucinations(sample_schema):
-    candidates = [
-        CandidateTable(table_name="customers", similarity=0.92, rank=1),
-        CandidateTable(table_name="orders", similarity=0.85, rank=2),
-    ]
-
     # Model attempts to hallucinate 'fake_table'
     response_json = json.dumps({
-        "selected_objects": ["customers", "fake_table"],
+        "selected_tables": ["customers", "fake_table"],
         "sufficient": True,
         "missing_objects": [],
         "reason": "Selected customer data",
-        "retrieval_hint": None,
     })
 
     provider = MockSelectorProvider(response_json)
     selector = TableSelector(provider=provider)
-    qa = QuestionAnalysis(question="Show customers", subjective=["customers"])
 
-    res = await selector.select(qa, candidates, sample_schema)
+    res = await selector.select(
+        question="Show customers",
+        schema=sample_schema,
+    )
 
     assert "customers" in res.selected_objects
     assert "fake_table" not in res.selected_objects
 
 
 @pytest.mark.asyncio
-async def test_table_selector_insufficient_selection(sample_schema):
-    candidates = [
-        CandidateTable(table_name="customers", similarity=0.89, rank=1),
-    ]
-
-    response_json = json.dumps({
-        "selected_objects": ["customers"],
-        "sufficient": False,
-        "missing_objects": ["orders"],
-        "reason": "Missing orders table needed for order count.",
-        "retrieval_hint": "tables containing customer order records and dates",
-    })
-
-    provider = MockSelectorProvider(response_json)
-    selector = TableSelector(provider=provider)
-    qa = QuestionAnalysis(question="How many orders did each customer place?", subjective=["orders"])
-
-    res = await selector.select(qa, candidates, sample_schema)
-
-    assert res.sufficient is False
-    assert "orders" in res.missing_objects
-    assert res.retrieval_hint == "tables containing customer order records and dates"
-
-
-@pytest.mark.asyncio
 async def test_table_selector_passes_retry_feedback(sample_schema):
-    candidates = [
-        CandidateTable(table_name="customers", similarity=0.90, rank=1),
-        CandidateTable(table_name="orders", similarity=0.85, rank=2),
-    ]
-
     response_json = json.dumps({
-        "selected_objects": ["customers", "orders"],
+        "selected_tables": ["customers", "orders", "order_items"],
         "sufficient": True,
         "missing_objects": [],
-        "reason": "Both tables present now.",
-        "retrieval_hint": None,
+        "reason": "Added order_items based on generator feedback.",
     })
 
     provider = MockSelectorProvider(response_json)
     selector = TableSelector(provider=provider)
-    qa = QuestionAnalysis(question="Show orders", subjective=["orders"])
 
-    feedback_msg = "Previous attempt was missing orders."
-    await selector.select(qa, candidates, sample_schema, feedback=feedback_msg)
+    feedback_msg = "Query Generator reported missing line item details."
+    await selector.select(
+        question="Show order items",
+        schema=sample_schema,
+        feedback=feedback_msg,
+    )
 
-    assert "PREVIOUS SELECTION FEEDBACK (RETRY)" in provider.last_prompt
+    assert "PREVIOUS ATTEMPT FEEDBACK (RETRY)" in provider.last_prompt
     assert feedback_msg in provider.last_prompt
 
 
 @pytest.mark.asyncio
-async def test_table_selector_zero_candidates(sample_schema):
+async def test_table_selector_empty_schema():
+    empty_schema = DatabaseSchema(
+        database_type=DatabaseType.POSTGRESQL,
+        database_name="empty",
+        objects=[],
+    )
     selector = TableSelector(provider=None)
-    qa = QuestionAnalysis(question="Show astronauts", subjective=["astronauts"])
-    res = await selector.select(qa, [], sample_schema)
+    res = await selector.select(question="Show data", schema=empty_schema)
 
     assert res.selected_objects == []
     assert res.sufficient is False
 
 
-@pytest.mark.asyncio
-async def test_table_selector_context_enrichment_and_max_tokens(sample_schema):
-    from backend.src.config import settings
+def test_package_selected_schema(sample_schema):
+    relevant = package_selected_schema(sample_schema, ["customers", "orders"])
 
-    candidates = [
-        CandidateTable(table_name="customers", similarity=0.92, rank=1),
-        CandidateTable(table_name="orders", similarity=0.88, rank=2),
-    ]
-
-    response_json = json.dumps({
-        "selected_objects": ["customers", "orders"],
-        "sufficient": True,
-        "missing_objects": [],
-        "reason": "Both tables needed.",
-        "retrieval_hint": None,
-    })
-
-    provider = MockSelectorProvider(response_json)
-    selector = TableSelector(provider=provider)
-    qa = QuestionAnalysis(question="Show customer orders", subjective=["customers", "orders"])
-
-    res = await selector.select(qa, candidates, sample_schema)
-
-    assert res.selected_objects == ["customers", "orders"]
-    # Check that candidate context includes columns with types
-    assert "Columns: id (int), city (varchar)" in provider.last_prompt
-    assert "Columns: id (int), customer_id (int)" in provider.last_prompt
-    # Check that candidate relationships are formatted
-    assert "Known Relationships Between Candidates:" in provider.last_prompt
-    assert "orders.customer_id -> customers.id" in provider.last_prompt
-    # Check that max_tokens was passed from settings.table_selector_max_tokens
-    assert provider.last_kwargs.get("max_tokens") == settings.table_selector_max_tokens
+    assert len(relevant.objects) == 2
+    obj_names = {o.name for o in relevant.objects}
+    assert obj_names == {"customers", "orders"}
+    # Check that relationship connecting customers and orders is included
+    assert len(relevant.relationships) == 1
+    rel = relevant.relationships[0]
+    assert rel.from_object == "orders"
+    assert rel.to_object == "customers"
+    # Order items relationship should NOT be included since order_items was not selected
+    assert not any(r.from_object == "order_items" for r in relevant.relationships)
 
 
-@pytest.mark.asyncio
-async def test_table_selector_multi_concept_and_prompt_instructions(sample_schema):
-    candidates = [
-        CandidateTable(table_name="customers", similarity=0.92, rank=1),
-        CandidateTable(table_name="orders", similarity=0.88, rank=2),
-        CandidateTable(table_name="order_items", similarity=0.45, rank=12),
-    ]
+def test_format_schema_description(sample_schema):
+    desc = format_schema_description(sample_schema)
 
-    response_json = json.dumps({
-        "reason": "Scanning all candidates: 'orders' covers order data and 'order_items' at rank 12 covers the requested item details.",
-        "selected_objects": ["orders", "order_items"],
-        "sufficient": True,
-        "missing_objects": [],
-        "retrieval_hint": None,
-    })
-
-    provider = MockSelectorProvider(response_json)
-    selector = TableSelector(provider=provider)
-    qa = QuestionAnalysis(
-        question="Show me all the item details for all the orders",
-        subjective=["item details"],
-        objective=["orders"],
-        nouns=["item details", "orders"],
-    )
-
-    res = await selector.select(qa, candidates, sample_schema)
-
-    assert res.selected_objects == ["orders", "order_items"]
-    assert res.sufficient is True
-    assert "Exhaustive Candidate Scan" in provider.last_prompt
-    assert "Deconstruct Query Concepts & Ensure 100% Concept Coverage" in provider.last_prompt
-
+    assert "shop (postgresql)" in desc
+    assert "customers" in desc
+    assert "Customer records and profiles." in desc
+    assert "orders.customer_id -> customers.id" in desc

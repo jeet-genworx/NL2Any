@@ -126,7 +126,11 @@ def existing_ingestion(
         "description_count": len(descriptions),
         "column_description_count": sum(len(t.columns) for t in descriptions.values()),
         "embedding_count": len(embeddings),
-        "embedding_dimensions": len(next(iter(embeddings.values()))),
+        "embedding_dimensions": (
+            len(next(iter(embeddings.values())))
+            if embeddings and next(iter(embeddings.values()))
+            else 0
+        ),
         "schema_path": str(schema_path),
         "graph_path": str(paths.graph_path(target)),
         "mst_path": str(mst_path) if has_mst else None,
@@ -201,10 +205,19 @@ async def run_ingestion_pipeline(
         schema=artifacts.schema,
     )
 
-    embeddings = await embed_descriptions(table_descriptions(descriptions))
-    embeddings_path = embedding_repository.save_embeddings(
-        embeddings, paths.embeddings_path(target)
-    )
+    # Embeddings are no longer used by the V2 query processing pipeline.
+    # Commented out embedding process trigger:
+    # embeddings = await embed_descriptions(table_descriptions(descriptions))
+    embeddings_path = paths.embeddings_path(target)
+    embeddings: dict[str, list[float]] = {}
+    if embeddings_path.exists():
+        try:
+            embeddings = embedding_repository.load_embeddings(embeddings_path)
+        except Exception:
+            embeddings = {}
+    if not embeddings:
+        embeddings = {table: [] for table in descriptions}
+        embedding_repository.save_embeddings(embeddings, embeddings_path)
 
     return {
         "database": target.key,
@@ -216,7 +229,11 @@ async def run_ingestion_pipeline(
         "description_count": len(descriptions),
         "column_description_count": column_description_count,
         "embedding_count": len(embeddings),
-        "embedding_dimensions": len(next(iter(embeddings.values()))) if embeddings else 0,
+        "embedding_dimensions": (
+            len(next(iter(embeddings.values())))
+            if embeddings and next(iter(embeddings.values()))
+            else 0
+        ),
         "schema_path": str(artifacts.schema_path),
         "graph_path": str(artifacts.graph_path),
         "mst_path": str(artifacts.mst_path) if artifacts.mst_path else None,

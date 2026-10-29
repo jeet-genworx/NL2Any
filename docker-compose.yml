@@ -35,6 +35,7 @@ services:
       retries: 10
 
   seed:
+    profiles: ["seed"]
     build:
       context: .
       dockerfile: docker/Dockerfile.app
@@ -66,8 +67,6 @@ services:
         condition: service_healthy
       mongo:
         condition: service_healthy
-      seed:
-        condition: service_completed_successfully
     environment:
       POSTGRES_DSN: postgresql://nl2user:nl2password@postgres:5432/nl2anyquery_db
       FINOPS_DSN: ${FINOPS_DSN:-postgresql://nl2user:nl2password@postgres:5432/finopsiq_be}
@@ -94,6 +93,7 @@ services:
       HF_BASE_URL: ${HF_BASE_URL:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-}
+      GEMINI_BASE_URL: ${GEMINI_BASE_URL:-}
     env_file:
       - path: .env
         required: false
@@ -116,6 +116,7 @@ services:
       # host. Reads then fail with IsADirectoryError. Mounting the directory
       # makes new targets work with no compose change, too.
       - ./backend/src/data/embeddings:/app/backend/src/data/embeddings
+      - ./backend/src/core/query_processing/prompts:/app/backend/src/core/query_processing/prompts
     ports:
       - "8000:8000"
     command: ["uvicorn", "backend.src.main:app", "--host", "0.0.0.0", "--port", "8000"]
@@ -130,6 +131,8 @@ services:
       - api
     environment:
       API_BASE_URL: http://api:8000
+    volumes:
+      - ./frontend:/app/frontend
     ports:
       - "8501:8501"
     command: ["streamlit", "run", "frontend/app.py", "--server.address", "0.0.0.0", "--server.port", "8501"]

@@ -75,3 +75,43 @@ def test_empty_question(checker: SpellingChecker):
     res = checker.check("")
     assert res.corrected_question == ""
     assert res.corrections == []
+
+
+def test_hyphenated_compound_jargon_preservation(checker: SpellingChecker):
+    question = "show me the number of unhealthy logs for the agent with name Test-Agent-Langgraph"
+    res = checker.check(question, jargons=["Test-Agent-Langgraph"])
+    assert res.corrected_question == question
+    assert len(res.corrections) == 0
+
+
+def test_hyphenated_jargon_casing_normalization(checker: SpellingChecker):
+    question = "show me logs for test-agent-langgraph"
+    res = checker.check(question, jargons=["Test-Agent-Langgraph"])
+    assert res.corrected_question == "show me logs for Test-Agent-Langgraph"
+    assert any(c.original == "test-agent-langgraph" and c.corrected == "Test-Agent-Langgraph" for c in res.corrections)
+
+
+def test_unknown_proper_nouns_not_lowercased_without_jargon(checker: SpellingChecker):
+    question = "Show me all Langgraph agents"
+    res = checker.check(question)
+    assert res.corrected_question == "Show me all Langgraph agents"
+    assert len(res.corrections) == 0
+
+
+def test_stopwords_and_short_jargon_not_falsely_corrected(checker: SpellingChecker):
+    question = "Find all agents in team AB along with their total count of healthy checks versus unhealthy checks."
+    res = checker.check(question, jargons=["AB"])
+    assert res.corrected_question == question
+    assert len(res.corrections) == 0
+    assert "AB" in res.jargons_applied
+
+
+def test_misspelled_words_still_corrected_with_stopwords_present(checker: SpellingChecker):
+    question = "Find all customrs in team AB"
+    res = checker.check(question, jargons=["AB"])
+    assert res.corrected_question == "Find all customers in team AB"
+    assert len(res.corrections) == 1
+    assert res.corrections[0].original == "customrs"
+    assert res.corrections[0].corrected == "customers"
+
+

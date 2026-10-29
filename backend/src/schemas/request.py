@@ -2,6 +2,23 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 
+class StageProviders(BaseModel):
+    """Per-stage model provider selection for NL2AnyQuery pipeline."""
+
+    table_selection: Literal["koboldcpp", "huggingface", "gemini"] = Field(
+        default="koboldcpp",
+        description="Provider for Stage 1 (Guardrail & Table Selection)",
+    )
+    query_generation: Literal["koboldcpp", "huggingface", "gemini"] = Field(
+        default="koboldcpp",
+        description="Provider for Stage 2 (Query Generation)",
+    )
+    validation: Literal["koboldcpp", "huggingface", "gemini"] = Field(
+        default="koboldcpp",
+        description="Provider for Stage 3 (Query Validation)",
+    )
+
+
 class QueryRequest(BaseModel):
     """Request model for the natural language query endpoint."""
 
@@ -15,11 +32,32 @@ class QueryRequest(BaseModel):
     )
     provider: Literal["koboldcpp", "huggingface", "gemini"] = Field(
         default="koboldcpp",
-        description="Selected LLM provider: 'koboldcpp', 'huggingface', or 'gemini'",
+        description="Fallback/global LLM provider: 'koboldcpp', 'huggingface', or 'gemini'",
+    )
+    stages: StageProviders | None = Field(
+        default=None,
+        description="Optional independent per-stage provider configuration",
     )
     jargons: list[str] = Field(
         default_factory=list,
         description="Optional list of domain-specific jargon terms for spelling check",
+    )
+
+
+class RerunRequest(BaseModel):
+    """Request model for partial pipeline rerun with per-stage feedback."""
+
+    run_id: str = Field(
+        ...,
+        description="32-character hexadecimal ID of the original run to rerun from",
+    )
+    starting_stage: Literal["table_selection", "query_generation", "validation"] | None = Field(
+        default=None,
+        description="Stage to rerun from onward. If omitted, earliest stage with feedback is selected.",
+    )
+    feedback: dict[str, str] = Field(
+        default_factory=dict,
+        description="Mapping of stage name to user feedback text",
     )
 
 

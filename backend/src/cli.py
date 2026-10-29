@@ -8,7 +8,6 @@ import sys
 from backend.src.config import settings
 from backend.src.data.models.schema import DatabaseType
 from backend.src.data.models.targets import TARGETS, resolve_target
-from backend.src.core.query_processing.nlp.linguistic import LinguisticAnalyzer
 from backend.src.control.providers.model.koboldcpp import KoboldCppProvider
 from backend.src.core.query_processing.retrieval.semantic import SemanticRetriever
 from backend.src.core.ingestion.pipeline import extract_and_save_schema, run_ingestion_pipeline
@@ -389,32 +388,6 @@ def test_retrieval_cli() -> None:
                 print(f"    Description: {r.schema_object.description}")
 
     asyncio.run(_run())
-
-
-def test_nlp_cli() -> None:
-    """CLI handler for test-nlp: test spaCy deterministic linguistic analysis."""
-    parser = argparse.ArgumentParser(description="Test spaCy linguistic analyzer.")
-    parser.add_argument(
-        "--text",
-        "-t",
-        type=str,
-        required=True,
-        help="Input text / question to analyze",
-    )
-    args = parser.parse_args()
-
-    analyzer = LinguisticAnalyzer()
-    analysis = analyzer.analyze(args.text)
-
-    print(f"\nInput: {args.text!r}")
-    print("Nouns / Noun Chunks:", analysis.nouns)
-    print("Verbs:", analysis.verbs)
-    print("Named Entities:")
-    if analysis.entities:
-        for ent in analysis.entities:
-            print(f"  • {ent.text} ({ent.label})")
-    else:
-        print("  (None detected)")
 
 
 def run_api_cli() -> None:

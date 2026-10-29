@@ -54,3 +54,49 @@ def test_extract_json_block_raw_array():
 def test_extract_json_block_invalid():
     with pytest.raises(ValueError, match="Failed to extract valid JSON"):
         extract_json_block("<think>Thinking</think> No valid json at all")
+
+
+def test_extract_json_block_trailing_commas():
+    text = """
+    {
+      "descriptions": {
+        "agent_status_audit": {
+          "description": "tracks changes to agent status, including id, and status",
+          "columns": {
+            "id": "pk",
+            "status": "st",
+          },
+        },
+      },
+    }
+    """
+    result = extract_json_block(text)
+    assert result["descriptions"]["agent_status_audit"]["columns"] == {"id": "pk", "status": "st"}
+
+
+def test_extract_json_block_single_quotes_and_comments():
+    text = """
+    // Single line comment
+    {
+      'table': 'agents',
+      /* Multi-line comment */
+      'columns': {
+        'id': 'pk',
+      }
+    }
+    """
+    result = extract_json_block(text)
+    assert result == {"table": "agents", "columns": {"id": "pk"}}
+
+
+def test_extract_json_block_unquoted_keys_and_python_constants():
+    text = "{ valid: True, count: 10, note: None, }"
+    result = extract_json_block(text)
+    assert result == {"valid": True, "count": 10, "note": None}
+
+
+def test_extract_json_block_truncated_auto_balance():
+    text = '{"descriptions": {"eval_cases": {"columns": {"id": "pk"'
+    result = extract_json_block(text)
+    assert result == {"descriptions": {"eval_cases": {"columns": {"id": "pk"}}}}
+

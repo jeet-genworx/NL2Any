@@ -62,3 +62,4 @@ backend/src/data/schemas/pg_*
 backend/src/data/schemas/mg_*
 backend/src/data/embeddings/pg_*
 backend/src/data/embeddings/mg_*
+backend/src/data/runs/
