@@ -129,53 +129,121 @@ def run_ingestion(database: str, use_mst: bool, api_url: str, force: bool = Fals
         return False, f"Ingestion failed: {err}"
 
 
+STAGE_CONFIG: dict[str, tuple[str, str]] = {
+    "spelling_check": ("🔤", "Spelling Check"),
+    "question_guardrail": ("🛡️", "Safety & Intent Guardrail"),
+    "feedback_guardrail": ("🛡️", "Feedback Guardrail"),
+    "table_selection": ("📋", "Table & Schema Selection"),
+    "query_generation": ("⚙️", "Query Generation"),
+    "query_validation": ("🔍", "Query Validation"),
+    "policy_check": ("🔒", "Safety Policy Verification"),
+    "query_execution": ("⚡", "Database Query Execution"),
+}
+
+
 def execute_rerun(
     api_url: str,
     run_id: str,
     starting_stage: str,
     feedback_payload: dict[str, str],
 ) -> None:
-    """Execute partial pipeline rerun from a specified stage."""
-    spinner_label = f"Rerunning pipeline from {starting_stage.replace('_', ' ').title()}..."
-    with st.spinner(spinner_label):
-        start_time = time.perf_counter()
+    """Execute partial pipeline rerun from a specified stage with stage progress updates."""
+    start_time = time.perf_counter()
+    status_label = f"Rerunning pipeline from {starting_stage.replace('_', ' ').title()}..."
+
+    with st.status(f"🔄 {status_label}", expanded=True) as status_box:
+        pipeline_data = None
+        stream_error = None
+
         try:
-            resp = httpx.post(
-                f"{api_url}/rerun",
+            with httpx.stream(
+                "POST",
+                f"{api_url}/rerun/stream",
                 json={
                     "run_id": run_id,
                     "starting_stage": starting_stage,
                     "feedback": feedback_payload,
                 },
                 timeout=None,
-            )
+            ) as resp:
+                resp.raise_for_status()
+                for line in resp.iter_lines():
+                    if not line or not line.startswith("data: "):
+                        continue
+                    raw_data = line[len("data: "):].strip()
+                    try:
+                        evt = json.loads(raw_data)
+                    except Exception:
+                        continue
+
+                    evt_type = evt.get("event")
+                    stage = evt.get("stage", "")
+                    icon, name = STAGE_CONFIG.get(stage, ("⏳", stage.replace("_", " ").title()))
+
+                    if evt_type == "stage_start":
+                        status_box.update(
+                            label=f"⏳ Running: {name} (rerun)...",
+                            state="running",
+                            expanded=True,
+                        )
+                    elif evt_type == "stage_done":
+                        summary = evt.get("summary") or {}
+                        extra = ""
+                        if stage == "table_selection" and summary.get("selected_objects"):
+                            objs = summary["selected_objects"]
+                            extra = f" (Selected: `{', '.join(objs)}`)"
+                        elif stage == "query_validation":
+                            extra = " (Valid query)" if summary.get("is_valid") else " (Retrying or invalid)"
+                        elif stage == "policy_check":
+                            extra = " (Approved)" if summary.get("passed") else " (Rejected by policy)"
+
+                        st.write(f"{icon} **{name}** done ✅{extra}")
+                    elif evt_type == "complete":
+                        pipeline_data = evt.get("data")
+                        status_box.update(
+                            label="✅ Rerun completed!",
+                            state="complete",
+                            expanded=False,
+                        )
+                    elif evt_type == "error":
+                        status_code = evt.get("status_code", 500)
+                        detail = evt.get("detail", "Error during rerun")
+                        stream_error = (status_code, detail)
+                        status_box.update(
+                            label=f"❌ Error: {detail}",
+                            state="error",
+                            expanded=True,
+                        )
+                        break
+
             elapsed_time = time.perf_counter() - start_time
-            if resp.status_code == 404:
-                st.session_state["query_data"] = None
-                st.session_state["query_execution_time"] = None
-                st.session_state["query_error"] = (
-                    "This run has expired or does not exist. Please ask your question again."
-                )
+            if stream_error:
+                code, detail = stream_error
+                if code == 404:
+                    st.session_state["query_data"] = None
+                    st.session_state["query_execution_time"] = None
+                    st.session_state["query_error"] = (
+                        "This run has expired or does not exist. Please ask your question again."
+                    )
+                    st.session_state["feedback_warning"] = None
+                elif code == 400:
+                    st.session_state["feedback_warning"] = f"🛡️ {detail}"
+                elif code >= 500:
+                    st.session_state["query_error"] = f"❌ Backend Server Error (HTTP {code}): {detail}"
+                else:
+                    st.session_state["query_error"] = f"❌ Pipeline Error: {detail}"
+            elif pipeline_data:
+                st.session_state["query_data"] = pipeline_data
+                st.session_state["query_execution_time"] = elapsed_time
+                st.session_state["query_error"] = None
                 st.session_state["feedback_warning"] = None
-                st.rerun()
-                return
 
-            if resp.status_code == 400:
-                try:
-                    detail = resp.json().get("detail", resp.text)
-                except Exception:
-                    detail = resp.text
-                st.session_state["feedback_warning"] = f"🛡️ {detail}"
-                st.rerun()
-                return
-
-            resp.raise_for_status()
-            st.session_state["query_data"] = resp.json()
-            st.session_state["query_execution_time"] = elapsed_time
-            st.session_state["query_error"] = None
-            st.session_state["feedback_warning"] = None
+        except httpx.ConnectError:
+            st.session_state["query_error"] = (
+                f"Could not connect to FastAPI backend at {api_url}. "
+                "Please make sure it is running via `uv run run-api`."
+            )
         except httpx.HTTPStatusError as err:
-            elapsed_time = time.perf_counter() - start_time
             try:
                 detail = err.response.json().get("detail", err.response.text)
             except Exception:
@@ -193,13 +261,9 @@ def execute_rerun(
                 st.session_state["query_error"] = f"❌ Backend Server Error (HTTP {err.response.status_code}): {detail}"
             else:
                 st.session_state["query_error"] = f"❌ Pipeline Error: {detail}"
-        except httpx.ConnectError:
-            st.session_state["query_error"] = (
-                f"Could not connect to FastAPI backend at {api_url}. "
-                "Please make sure it is running via `uv run run-api`."
-            )
         except Exception as err:
             st.session_state["query_error"] = f"Error during rerun: {err}"
+
         st.rerun()
 
 
@@ -519,33 +583,95 @@ if is_executing:
         st.warning("⚠️ Please enter a question before running.")
         st.session_state["is_executing_query"] = False
     else:
-        spinner_label = (
-            f"Executing pipeline (Stage 1: {stage1_choice}, "
-            f"Stage 2: {stage2_choice}, Stage 3: {stage3_choice})..."
-        )
-        with st.spinner(spinner_label):
-            start_time = time.perf_counter()
+        start_time = time.perf_counter()
+        jargon_list = [j.strip() for j in jargons_input.split(",") if j.strip()]
+        payload = {
+            "database": db_choice,
+            "question": question.strip(),
+            "stages": {
+                "table_selection": stage1_choice,
+                "query_generation": stage2_choice,
+                "validation": stage3_choice,
+            },
+            "jargons": jargon_list,
+        }
+
+        with st.status("🚀 Processing query pipeline...", expanded=True) as status_box:
+            pipeline_data = None
+            stream_error = None
+
             try:
-                jargon_list = [j.strip() for j in jargons_input.split(",") if j.strip()]
-                resp = httpx.post(
-                    f"{api_url}/query",
-                    json={
-                        "database": db_choice,
-                        "question": question.strip(),
-                        "stages": {
-                            "table_selection": stage1_choice,
-                            "query_generation": stage2_choice,
-                            "validation": stage3_choice,
-                        },
-                        "jargons": jargon_list,
-                    },
-                    timeout=None,
-                )
+                with httpx.stream("POST", f"{api_url}/query/stream", json=payload, timeout=None) as resp:
+                    resp.raise_for_status()
+                    for line in resp.iter_lines():
+                        if not line or not line.startswith("data: "):
+                            continue
+                        raw_data = line[len("data: "):].strip()
+                        try:
+                            evt = json.loads(raw_data)
+                        except Exception:
+                            continue
+
+                        evt_type = evt.get("event")
+                        stage = evt.get("stage", "")
+                        icon, name = STAGE_CONFIG.get(stage, ("⏳", stage.replace("_", " ").title()))
+
+                        if evt_type == "stage_start":
+                            status_box.update(
+                                label=f"⏳ Running: {name}...",
+                                state="running",
+                                expanded=True,
+                            )
+                        elif evt_type == "stage_done":
+                            summary = evt.get("summary") or {}
+                            extra = ""
+                            if stage == "table_selection" and summary.get("selected_objects"):
+                                objs = summary["selected_objects"]
+                                extra = f" (Selected: `{', '.join(objs)}`)"
+                            elif stage == "spelling_check":
+                                extra = " (Corrections applied)" if summary.get("has_changes") else " (No typos found)"
+                            elif stage == "question_guardrail" and summary.get("decision"):
+                                extra = f" (Decision: `{summary['decision']}`)"
+                            elif stage == "query_validation":
+                                extra = " (Valid query)" if summary.get("is_valid") else " (Retrying or invalid)"
+                            elif stage == "policy_check":
+                                extra = " (Approved)" if summary.get("passed") else " (Rejected by policy)"
+
+                            st.write(f"{icon} **{name}** done ✅{extra}")
+                        elif evt_type == "complete":
+                            pipeline_data = evt.get("data")
+                            status_box.update(
+                                label="✅ Pipeline execution completed!",
+                                state="complete",
+                                expanded=False,
+                            )
+                        elif evt_type == "error":
+                            status_code = evt.get("status_code", 500)
+                            detail = evt.get("detail", "Error during execution")
+                            stream_error = (status_code, detail)
+                            status_box.update(
+                                label=f"❌ Error: {detail}",
+                                state="error",
+                                expanded=True,
+                            )
+                            break
+
                 elapsed_time = time.perf_counter() - start_time
-                resp.raise_for_status()
-                st.session_state["query_data"] = resp.json()
-                st.session_state["query_execution_time"] = elapsed_time
-                st.session_state["query_error"] = None
+                if stream_error:
+                    code, detail = stream_error
+                    st.session_state["query_data"] = None
+                    st.session_state["query_execution_time"] = elapsed_time
+                    if code == 400:
+                        st.session_state["query_error"] = f"❌ Pipeline Error: {detail}"
+                    elif code >= 500:
+                        st.session_state["query_error"] = f"❌ Backend Server Error (HTTP {code}): {detail}"
+                    else:
+                        st.session_state["query_error"] = f"❌ Error: {detail}"
+                elif pipeline_data:
+                    st.session_state["query_data"] = pipeline_data
+                    st.session_state["query_execution_time"] = elapsed_time
+                    st.session_state["query_error"] = None
+
             except httpx.ConnectError:
                 elapsed_time = time.perf_counter() - start_time
                 st.session_state["query_data"] = None

@@ -359,6 +359,7 @@ class NL2AnyQueryOrchestrator:
         provider: str | ModelProvider | None = None,
         stages: StageProviders | dict[str, str] | None = None,
         jargons: list[str] | None = None,
+        on_stage_event: Any = None,
     ) -> PipelineResponse:
         """Run complete V2 natural-language-to-query pipeline driven by the FSM runner."""
         run_id = uuid.uuid4().hex
@@ -465,6 +466,7 @@ class NL2AnyQueryOrchestrator:
             jargons=list(jargons or []),
             stage_providers=stage_providers_map,
             max_retries=self.max_retries,
+            on_stage_event=on_stage_event,
         )
 
         fb_guardrail = getattr(self, "feedback_guardrail", None) or FeedbackGuardrailClassifier(
@@ -659,6 +661,7 @@ class NL2AnyQueryOrchestrator:
         run_id: str,
         starting_stage: str | None = None,
         feedback: dict[str, str] | None = None,
+        on_stage_event: Any = None,
     ) -> PipelineResponse:
         """Execute a partial pipeline rerun from a specified stage using saved run state driven by FSM."""
         if not validate_run_id(run_id):
@@ -737,6 +740,7 @@ class NL2AnyQueryOrchestrator:
             target=target,
             schema=schema,
         )
+        context.on_stage_event = on_stage_event
 
         fb_guardrail = getattr(self, "feedback_guardrail", None) or FeedbackGuardrailClassifier(
             provider=s1_provider, provider_name=s1_name

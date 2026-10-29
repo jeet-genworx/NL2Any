@@ -1,8 +1,11 @@
 """Query and ingestion API routes."""
 
+import asyncio
+import json
 import logging
 from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
+from starlette.responses import StreamingResponse
 
 from backend.src.api.rest.dependencies import get_orchestrator, resolve_db_target
 from backend.src.control.providers.model.factory import get_available_providers
@@ -97,3 +100,124 @@ async def rerun_endpoint(
     except Exception as err:
         logger.exception("Unexpected error executing rerun: %s", err)
         raise HTTPException(status_code=500, detail=str(err))
+
+
+@router.post("/query/stream")
+async def query_stream_endpoint(
+    request: QueryRequest,
+    orchestrator: NL2AnyQueryOrchestrator = Depends(get_orchestrator),
+) -> StreamingResponse:
+    """Execute natural language query pipeline with live SSE stage progress updates."""
+    queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
+
+    def on_stage_event(stage: str, event_type: str, summary: dict[str, Any] | None) -> None:
+        if event_type == "started":
+            queue.put_nowait({"event": "stage_start", "stage": stage})
+        elif event_type == "completed":
+            queue.put_nowait({"event": "stage_done", "stage": stage, "summary": summary or {}})
+
+    async def run_pipeline() -> None:
+        try:
+            response = await orchestrator.execute_pipeline(
+                question=request.question,
+                database=request.database,
+                provider=request.provider,
+                stages=request.stages,
+                jargons=request.jargons,
+                on_stage_event=on_stage_event,
+            )
+            queue.put_nowait({"event": "complete", "data": response.model_dump(mode="json")})
+        except ValueError as err:
+            queue.put_nowait({"event": "error", "status_code": 400, "detail": str(err)})
+        except RuntimeError as err:
+            logger.error("Provider execution failed during streaming query: %s", err)
+            queue.put_nowait({"event": "error", "status_code": 502, "detail": str(err)})
+        except Exception as err:
+            logger.exception("Unexpected error executing streaming query: %s", err)
+            queue.put_nowait({"event": "error", "status_code": 500, "detail": str(err)})
+        finally:
+            queue.put_nowait(None)
+
+    task = asyncio.create_task(run_pipeline())
+
+    async def event_generator():
+        try:
+            while True:
+                msg = await queue.get()
+                if msg is None:
+                    break
+                yield f"data: {json.dumps(msg, default=str)}\n\n"
+        finally:
+            if not task.done():
+                task.cancel()
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@router.post("/rerun/stream")
+async def rerun_stream_endpoint(
+    request: RerunRequest,
+    orchestrator: NL2AnyQueryOrchestrator = Depends(get_orchestrator),
+) -> StreamingResponse:
+    """Execute partial pipeline rerun with live SSE stage progress updates."""
+    queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
+
+    def on_stage_event(stage: str, event_type: str, summary: dict[str, Any] | None) -> None:
+        if event_type == "started":
+            queue.put_nowait({"event": "stage_start", "stage": stage})
+        elif event_type == "completed":
+            queue.put_nowait({"event": "stage_done", "stage": stage, "summary": summary or {}})
+
+    async def run_rerun() -> None:
+        try:
+            response = await orchestrator.rerun_pipeline(
+                run_id=request.run_id,
+                starting_stage=request.starting_stage,
+                feedback=request.feedback,
+                on_stage_event=on_stage_event,
+            )
+            queue.put_nowait({"event": "complete", "data": response.model_dump(mode="json")})
+        except FileNotFoundError as err:
+            queue.put_nowait({"event": "error", "status_code": 404, "detail": str(err)})
+        except ValueError as err:
+            queue.put_nowait({"event": "error", "status_code": 400, "detail": str(err)})
+        except RuntimeError as err:
+            logger.error("Provider execution failed during streaming rerun: %s", err)
+            queue.put_nowait({"event": "error", "status_code": 502, "detail": str(err)})
+        except Exception as err:
+            logger.exception("Unexpected error executing streaming rerun: %s", err)
+            queue.put_nowait({"event": "error", "status_code": 500, "detail": str(err)})
+        finally:
+            queue.put_nowait(None)
+
+    task = asyncio.create_task(run_rerun())
+
+    async def event_generator():
+        try:
+            while True:
+                msg = await queue.get()
+                if msg is None:
+                    break
+                yield f"data: {json.dumps(msg, default=str)}\n\n"
+        finally:
+            if not task.done():
+                task.cancel()
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+

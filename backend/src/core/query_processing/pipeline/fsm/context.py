@@ -123,6 +123,7 @@ class PipelineContext:
     # Error and exit payload
     error: str | None = None
     basic_answer: str | None = None
+    on_stage_event: Any = None
 
     def apply_updates(self, updates: ContextUpdates) -> None:
         """Apply pure ContextUpdates to this context instance."""

@@ -5,7 +5,13 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field as PydanticField, model_validator
 
 from backend.src.data.models.schema import DatabaseType, Relationship, SchemaObject
-from backend.src.core.query_processing.nlp.linguistic import LinguisticEntity
+
+
+class LinguisticEntity(BaseModel):
+    """Named entity extracted from text."""
+
+    text: str
+    label: str
 
 
 class GuardrailDecision(str, Enum):

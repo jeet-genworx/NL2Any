@@ -238,3 +238,37 @@ async def test_runner_cancellation_propagating():
 
     with pytest.raises(asyncio.CancelledError):
         await runner.run(context, PipelineState.QUERY_GENERATION)
+
+
+@pytest.mark.asyncio
+async def test_runner_notifies_stage_events():
+    """Verify runner invokes on_stage_event with started and completed for each stage."""
+    events = []
+
+    def callback(stage: str, event_type: str, summary: dict[str, Any] | None) -> None:
+        events.append((stage, event_type, summary))
+
+    adapters = _build_fake_adapters()
+    runner = PipelineFSMRunner(adapters=adapters)
+    context = PipelineContext(
+        run_id="events_run",
+        question="show customers",
+        max_retries=3,
+        entry_stage="fresh",
+        on_stage_event=callback,
+    )
+
+    result_ctx = await runner.run(context, PipelineState.SPELLING_CHECK)
+    assert result_ctx.error is None
+
+    started_stages = [stage for stage, evt_type, _ in events if evt_type == "started"]
+    completed_stages = [stage for stage, evt_type, _ in events if evt_type == "completed"]
+
+    assert started_stages == completed_stages
+    assert "spelling_check" in started_stages
+    assert "table_selection" in started_stages
+    assert "query_generation" in started_stages
+
+    table_sel_evt = next(s for stg, evt, s in events if stg == "table_selection" and evt == "completed")
+    assert table_sel_evt["selected_objects"] == ["customers"]
+
