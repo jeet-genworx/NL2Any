@@ -7,6 +7,8 @@ import uuid
 from typing import Any
 
 from backend.src.config import settings
+from backend.src.control.providers.embedding.base import EmbeddingProvider
+from backend.src.control.providers.embedding.koboldcpp import KoboldCppEmbeddingProvider
 from backend.src.control.providers.model.base import ModelProvider
 from backend.src.control.providers.model.factory import resolve_model_provider
 from backend.src.control.providers.model.koboldcpp import KoboldCppProvider
@@ -42,6 +44,7 @@ from backend.src.core.query_processing.pipeline.generators.postgres import (
     PostgresQueryGenerator,
 )
 from backend.src.core.query_processing.pipeline.guardrail import GuardrailClassifier
+from backend.src.core.query_processing.pipeline.join_graph import JoinGraph
 from backend.src.core.query_processing.pipeline.policy import SafetyPolicyValidator
 from backend.src.core.query_processing.pipeline.results import ResultProcessor
 from backend.src.core.query_processing.pipeline.selector import (
@@ -49,7 +52,14 @@ from backend.src.core.query_processing.pipeline.selector import (
     package_selected_schema,
 )
 from backend.src.core.query_processing.pipeline.spelling import SpellingChecker
+from backend.src.core.query_processing.pipeline.strategies import (
+    BfsStrategy,
+    TableSelectionStrategy,
+    WholeSchemaStrategy,
+)
 from backend.src.core.query_processing.pipeline.validator import QueryValidator
+from backend.src.core.query_processing.retrieval.store import EmbeddingStore
+from backend.src.core.query_processing.retrieval.vector import VectorRetriever
 from backend.src.data.clients.detector import detect_database_type
 from backend.src.data.models.schema import DatabaseSchema, DatabaseType
 from backend.src.data.models.targets import DatabaseTarget, as_target, resolve_target
@@ -61,6 +71,7 @@ from backend.src.data.repositories.run_repository import (
 )
 from backend.src.data.repositories.schema_cache import SchemaCache
 from backend.src.schemas.pipeline import (
+    CandidateTable,
     ExecutionResult,
     GeneratedQuery,
     GuardrailDecision,
@@ -70,6 +81,7 @@ from backend.src.schemas.pipeline import (
     PolicyResult,
     RelevantSchema,
     SpellingCorrectionResult,
+    TableNeighborhood,
     ValidationResult,
 )
 from backend.src.schemas.request import StageProviders
@@ -95,10 +107,15 @@ class NL2AnyQueryOrchestrator:
         results: ResultProcessor | None = None,
         max_retries: int | None = None,
         cache_manager: KoboldCppCacheManager | None = None,
+        embedding_provider: EmbeddingProvider | None = None,
         **kwargs: Any,
     ) -> None:
         self.cache_manager = cache_manager or get_cache_manager()
         self.provider = provider or KoboldCppProvider()
+        # Only the BFS table-selection strategy uses this; constructing it is
+        # cheap and does no I/O, so it is built unconditionally rather than
+        # threaded through every call site that might one day need it.
+        self.embedding_provider = embedding_provider or KoboldCppEmbeddingProvider()
         self.guardrail = guardrail or GuardrailClassifier(provider=self.provider)
         self.spelling_checker = spelling_checker or SpellingChecker()
         self.selector = selector or TableSelector(provider=self.provider, cache_manager=self.cache_manager)
@@ -118,6 +135,11 @@ class NL2AnyQueryOrchestrator:
         self._custom_validator = validator is not None
 
         self.schema_cache = SchemaCache()
+        # Per-target artifacts the BFS strategy reads. Both are derived from
+        # files ingestion writes and are expensive enough to load that they
+        # are kept for the life of the process.
+        self._vector_retrievers: dict[str, VectorRetriever] = {}
+        self._join_graphs: dict[int, tuple[DatabaseSchema, JoinGraph]] = {}
 
     def _resolve_stage_provider(
         self,
@@ -183,6 +205,79 @@ class NL2AnyQueryOrchestrator:
         """Load and cache canonical schema from TOML file, enriched with table/column descriptions."""
         return self.schema_cache.get_or_load(database)
 
+    # -- table-selection strategy -----------------------------------------
+
+    def _get_vector_retriever(self, target: DatabaseTarget) -> VectorRetriever:
+        """Retriever over this target's embedding file, loaded once per target.
+
+        Cached because the file is read and validated on first use and the
+        vectors then live in memory for the life of the process; a fresh
+        retriever per question would re-read it every time.
+        """
+        cached = self._vector_retrievers.get(target.key)
+        if cached is not None:
+            return cached
+        retriever = VectorRetriever(store=EmbeddingStore(file_path=target.embeddings_path))
+        self._vector_retrievers[target.key] = retriever
+        return retriever
+
+    def _get_join_graph(self, schema: DatabaseSchema) -> JoinGraph:
+        """Join graph for a schema, built once and reused.
+
+        Keyed by schema identity rather than database name: a reloaded schema
+        is a different object and must get a freshly built graph. The cached
+        schema is compared by identity on every hit, because CPython reuses
+        the id of a collected object and a graph built from a stale schema
+        would offer the selector tables from another database entirely.
+        """
+        key = id(schema)
+        cached = self._join_graphs.get(key)
+        if cached is not None and cached[0] is schema:
+            return cached[1]
+        graph = JoinGraph(schema)
+        self._join_graphs[key] = (schema, graph)
+        return graph
+
+    def _resolve_selection_strategy(
+        self,
+        requested: str | None,
+        target: DatabaseTarget,
+        db_type: DatabaseType,
+        schema: DatabaseSchema,
+    ) -> tuple[TableSelectionStrategy, str]:
+        """Pick the strategy for this run, and report the name actually chosen.
+
+        BFS is PostgreSQL-only: the walk is over foreign keys and MongoDB has
+        none, so every seed's neighborhood would be the seed itself -- an
+        embedding call spent to arrive at a worse whole-schema view. Asking
+        for it against Mongo silently gets the whole schema rather than an
+        error, because the strategy is a performance choice and refusing the
+        question over it would be the wrong trade.
+        """
+        name = (requested or settings.table_selection_strategy or "whole_schema").strip().lower()
+
+        if name == "bfs":
+            if db_type is not DatabaseType.POSTGRESQL:
+                logger.info(
+                    "BFS table selection requested for %s (%s); it is PostgreSQL-only, "
+                    "so the whole schema is used.",
+                    target.key,
+                    db_type.value,
+                )
+                return WholeSchemaStrategy(), "whole_schema"
+            return (
+                BfsStrategy(
+                    retriever=self._get_vector_retriever(target),
+                    embedding_provider=self.embedding_provider,
+                    graph=self._get_join_graph(schema),
+                ),
+                "bfs",
+            )
+
+        if name != "whole_schema":
+            logger.warning("Unknown table selection strategy %r; using the whole schema.", name)
+        return WholeSchemaStrategy(), "whole_schema"
+
     def _build_response(
         self,
         db_type: DatabaseType,
@@ -205,6 +300,10 @@ class NL2AnyQueryOrchestrator:
         stage_providers: dict[str, str] | None = None,
         stage_tokens: dict[str, int] | None = None,
         spelling_correction: SpellingCorrectionResult | None = None,
+        table_selection_strategy: str = "whole_schema",
+        candidate_tables: list[CandidateTable] | None = None,
+        table_neighborhood: TableNeighborhood | None = None,
+        selection_notice: str | None = None,
     ) -> PipelineResponse:
         if validation is not None:
             if validation.issues:
@@ -230,6 +329,10 @@ class NL2AnyQueryOrchestrator:
             basic_answer=basic_answer,
             selected_objects=selected or [],
             selection_retries=selection_retries,
+            table_selection_strategy=table_selection_strategy,
+            candidate_tables=candidate_tables or [],
+            table_neighborhood=table_neighborhood,
+            selection_notice=selection_notice,
             relevant_schema=schema.model_dump() if schema else None,
             generated_query=query.formatted_query if query else None,
             attempts=attempts,
@@ -289,6 +392,11 @@ class NL2AnyQueryOrchestrator:
             basic_answer=context.basic_answer,
             selected=context.selected_objects,
             selection_retries=context.selector_retries,
+            table_selection_strategy=context.selection_strategy_used
+            or context.selection_strategy,
+            candidate_tables=context.candidates,
+            table_neighborhood=context.table_neighborhood,
+            selection_notice=context.selection_notice,
             schema=context.relevant_schema,
             query=context.generated_query,
             attempts=context.attempts,
@@ -333,6 +441,7 @@ class NL2AnyQueryOrchestrator:
                 "processed_question": context.processed_question,
                 "jargons": list(context.jargons or []),
                 "stage_providers": context.stage_providers,
+                "table_selection_strategy": context.selection_strategy,
                 "stage_tokens": stage_tokens,
                 "guardrail": context.guardrail_result.model_dump() if context.guardrail_result else None,
                 "spelling_correction": context.spelling_result.model_dump() if context.spelling_result else None,
@@ -360,8 +469,16 @@ class NL2AnyQueryOrchestrator:
         stages: StageProviders | dict[str, str] | None = None,
         jargons: list[str] | None = None,
         on_stage_event: Any = None,
+        table_selection_strategy: str | None = None,
     ) -> PipelineResponse:
-        """Run complete V2 natural-language-to-query pipeline driven by the FSM runner."""
+        """Run complete V2 natural-language-to-query pipeline driven by the FSM runner.
+
+        `table_selection_strategy` picks what Stage 1 is shown: "whole_schema"
+        (the default -- every table, cacheable prefix) or "bfs" (embedding
+        retrieval widened along foreign keys, smaller prompt, no prefix
+        cache). BFS applies to PostgreSQL only; anything else falls back to
+        the whole schema. Unset follows `settings.table_selection_strategy`.
+        """
         run_id = uuid.uuid4().hex
 
         # Resolve active fallback provider
@@ -455,6 +572,10 @@ class NL2AnyQueryOrchestrator:
                 error=str(err),
             )
 
+        strategy, strategy_name = self._resolve_selection_strategy(
+            table_selection_strategy, target, db_type, schema
+        )
+
         context = PipelineContext(
             run_id=run_id,
             database_target=target,
@@ -467,6 +588,7 @@ class NL2AnyQueryOrchestrator:
             stage_providers=stage_providers_map,
             max_retries=self.max_retries,
             on_stage_event=on_stage_event,
+            selection_strategy=strategy_name,
         )
 
         fb_guardrail = getattr(self, "feedback_guardrail", None) or FeedbackGuardrailClassifier(
@@ -476,7 +598,7 @@ class NL2AnyQueryOrchestrator:
             PipelineState.SPELLING_CHECK: SpellingAdapter(self.spelling_checker),
             PipelineState.QUESTION_GUARDRAIL: QuestionGuardrailAdapter(guardrail),
             PipelineState.FEEDBACK_GUARDRAIL: FeedbackGuardrailAdapter(fb_guardrail),
-            PipelineState.TABLE_SELECTION: TableSelectionAdapter(selector),
+            PipelineState.TABLE_SELECTION: TableSelectionAdapter(selector, strategy),
             PipelineState.QUERY_GENERATION: QueryGenerationAdapter(postgres_gen, mongo_gen),
             PipelineState.QUERY_VALIDATION: QueryValidationAdapter(validator),
             PipelineState.POLICY_CHECK: PolicyAdapter(self.policy),
@@ -631,6 +753,9 @@ class NL2AnyQueryOrchestrator:
             question=question,
             processed_question=processed_question,
             jargons=list(run_state.get("jargons") or []),
+            selection_strategy=str(
+                run_state.get("table_selection_strategy") or "whole_schema"
+            ),
             is_rerun=True,
             entry_stage=actual_start,
             stage_1_frozen=stage_1_frozen,
@@ -742,12 +867,18 @@ class NL2AnyQueryOrchestrator:
         )
         context.on_stage_event = on_stage_event
 
+        # Same strategy the original run used, so a rerun from table selection
+        # re-asks the question the same way it was asked the first time.
+        strategy, _ = self._resolve_selection_strategy(
+            context.selection_strategy, target, target.db_type, schema
+        )
+
         fb_guardrail = getattr(self, "feedback_guardrail", None) or FeedbackGuardrailClassifier(
             provider=s1_provider, provider_name=s1_name
         )
         adapters_map = {
             PipelineState.FEEDBACK_GUARDRAIL: FeedbackGuardrailAdapter(fb_guardrail),
-            PipelineState.TABLE_SELECTION: TableSelectionAdapter(selector),
+            PipelineState.TABLE_SELECTION: TableSelectionAdapter(selector, strategy),
             PipelineState.QUERY_GENERATION: QueryGenerationAdapter(postgres_gen, mongo_gen),
             PipelineState.QUERY_VALIDATION: QueryValidationAdapter(validator),
             PipelineState.POLICY_CHECK: PolicyAdapter(self.policy),

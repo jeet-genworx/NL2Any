@@ -42,6 +42,18 @@ class QueryRequest(BaseModel):
         default_factory=list,
         description="Optional list of domain-specific jargon terms for spelling check",
     )
+    table_selection_strategy: Literal["whole_schema", "bfs"] | None = Field(
+        default=None,
+        description=(
+            "What the table selector is shown. 'whole_schema' sends every "
+            "table and keeps the prompt prefix cacheable by the KoboldCpp "
+            "KV slots; 'bfs' retrieves candidates by embedding similarity "
+            "and widens along foreign keys, giving a much smaller but "
+            "question-specific prompt with no prefix cache. PostgreSQL only: "
+            "requesting 'bfs' for MongoDB falls back to 'whole_schema'. "
+            "Unset uses the TABLE_SELECTION_STRATEGY setting."
+        ),
+    )
 
 
 class RerunRequest(BaseModel):

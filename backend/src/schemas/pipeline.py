@@ -77,6 +77,47 @@ class EmbeddingRetrievalResult(BaseModel):
     candidates: list[CandidateTable] = PydanticField(default_factory=list)
 
 
+class NeighborhoodTable(BaseModel):
+    """One schema object in the table neighborhood handed to the table selector.
+
+    `level` is how many foreign-key hops away from the nearest embedding match
+    the object sits: 0 means it *is* an embedding match, 1 a direct neighbor of
+    one, and so on up to the traversal limit. `reached_from` names the embedding
+    matches whose breadth-first walk discovered it, which is what explains to
+    the selector why a table it never searched for is on the list at all.
+    """
+
+    name: str
+    description: str = ""
+    kind: str = "table"
+    level: int = 0
+    similarity: float | None = None
+    rank: int | None = None
+    reached_from: list[str] = PydanticField(default_factory=list)
+
+
+class TableNeighborhood(BaseModel):
+    """Embedding matches plus every table reachable from them within N hops.
+
+    The candidate space the table selector chooses from when the BFS strategy
+    is active: the embedding matches are the seeds, and breadth-first traversal
+    of the foreign-key graph supplies the tables a question needs but never
+    names -- the bridge tables, and the entity tables one hop past them.
+    """
+
+    seed_objects: list[str] = PydanticField(default_factory=list)
+    tables: list[NeighborhoodTable] = PydanticField(default_factory=list)
+    relationships: list[Relationship] = PydanticField(default_factory=list)
+    max_levels: int = 0
+    max_tables: int = 0
+    truncated: bool = False
+    discarded_objects: list[str] = PydanticField(default_factory=list)
+
+    def table_names(self) -> list[str]:
+        """Names of every table in the neighborhood, seeds first."""
+        return [t.name for t in self.tables]
+
+
 class TableSelectionResult(BaseModel):
     """Result of Table Selector SLM."""
 
@@ -100,6 +141,15 @@ class TableSelectionResult(BaseModel):
                     data["missing_objects"] = missing_info
                 elif isinstance(missing_info, str) and missing_info:
                     data["missing_objects"] = [missing_info]
+            # The prompt asks for prose here and the model sometimes answers
+            # with its reasoning steps as a list instead. The tables it chose
+            # are still valid, so the selection is kept rather than rejected
+            # over the shape of a field nothing branches on.
+            reason = data.get("reason")
+            if isinstance(reason, list):
+                data["reason"] = " ".join(str(part) for part in reason if part)
+            elif reason is not None and not isinstance(reason, str):
+                data["reason"] = str(reason)
         return data
 
 
@@ -254,6 +304,11 @@ class PipelineResponse(BaseModel):
     linguistic_analysis: dict[str, Any] | None = None
     candidate_objects: list[str] = PydanticField(default_factory=list)
     candidate_tables: list[CandidateTable] = PydanticField(default_factory=list)
+    # Which view of the schema the table selector was shown, and why it may
+    # not be the one that was asked for.
+    table_selection_strategy: str = "whole_schema"
+    table_neighborhood: TableNeighborhood | None = None
+    selection_notice: str | None = None
     selected_objects: list[str] = PydanticField(default_factory=list)
     relevant_schema: dict[str, Any] | None = None
     query_plan: QueryPlan | None = None

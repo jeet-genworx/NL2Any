@@ -376,6 +376,33 @@ with st.sidebar:
         for p in providers
     }
 
+    st.markdown("#### Table Selection Strategy")
+    is_postgres = db_type == "postgresql"
+    strategy_labels = {
+        "whole_schema": "Whole schema (KV cache)",
+        "bfs": "BFS retrieval (embeddings + foreign keys)",
+    }
+    strategy_choice = st.radio(
+        "What Stage 1 sees",
+        options=["whole_schema", "bfs"] if is_postgres else ["whole_schema"],
+        format_func=lambda key: strategy_labels.get(key, key),
+        index=0,
+        key="strategy_choice",
+        help=(
+            "Whole schema sends every table, so the prompt prefix never changes "
+            "and the KoboldCpp KV cache can restore it. BFS retrieves candidate "
+            "tables by embedding similarity and widens along foreign keys, giving "
+            "a much smaller prompt that differs per question, so the cache is "
+            "bypassed. BFS needs embeddings from ingestion; without them the run "
+            "falls back to the whole schema."
+            if is_postgres
+            else "BFS walks foreign keys, which MongoDB does not have, so "
+            "PostgreSQL targets only."
+        ),
+    )
+    if not is_postgres:
+        st.caption("BFS is PostgreSQL-only — this target uses the whole schema.")
+
     st.markdown("#### Model Providers (Per-Stage)")
     stage1_choice = st.selectbox(
         "Stage 1: Table Selection & Guardrail",
@@ -594,6 +621,7 @@ if is_executing:
                 "validation": stage3_choice,
             },
             "jargons": jargon_list,
+            "table_selection_strategy": strategy_choice,
         }
 
         with st.status("🚀 Processing query pipeline...", expanded=True) as status_box:
@@ -836,6 +864,37 @@ if data:
     with st.expander("3. Table Selection & Grounded Schema", expanded=False):
         if stage_tokens and stage_tokens.get("table_selection") is not None:
             st.caption(f"🪙 **Prompt Tokens Sent:** `{stage_tokens.get('table_selection', 0):,}` tokens")
+
+        strategy_used = data.get("table_selection_strategy", "whole_schema")
+        st.markdown(f"**Strategy:** `{strategy_used}`")
+        if data.get("selection_notice"):
+            st.warning(data["selection_notice"])
+
+        neighborhood = data.get("table_neighborhood")
+        if neighborhood:
+            # Only BFS produces these, and they are the whole case for it:
+            # how much of the schema the selector was spared, and how many of
+            # the tables it was offered came from the walk rather than from
+            # embedding similarity.
+            candidates = data.get("candidate_tables") or []
+            offered = len(neighborhood.get("tables", []))
+            st.markdown(
+                f"**Embedding matches:** {len(candidates)} → "
+                f"**offered to selector:** {offered} table(s) "
+                f"within {neighborhood.get('max_levels', 0)} hop(s)"
+            )
+            if neighborhood.get("truncated"):
+                st.caption(
+                    f"{len(neighborhood.get('discarded_objects', []))} table(s) "
+                    f"dropped by the {neighborhood.get('max_tables', 0)}-table cap."
+                )
+            if candidates:
+                st.caption(
+                    "Matches: "
+                    + ", ".join(
+                        f"{c['table_name']} ({c['similarity']:.2f})" for c in candidates
+                    )
+                )
 
         st.markdown(f"**Selected Tables / Objects:** `{data.get('selected_objects', [])}`")
         st.markdown(f"**Selection Retries:** {data.get('selection_retries', 0)}")

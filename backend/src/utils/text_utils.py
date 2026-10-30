@@ -233,6 +233,24 @@ def extract_json_block(text: str) -> dict[str, Any] | list[Any]:
         except (json.JSONDecodeError, TypeError) as err:
             last_err = err
 
+        # Pass 3: un-escape over-escaped string delimiters.
+        #
+        # Small models sometimes emit a value wrapped in \" rather than ",
+        # which is illegal -- a \" is only valid *inside* a string:
+        #
+        #     {"reason": \"(1) Concepts: ...\", "selected_tables": [...]}
+        #
+        # The content is fine; only the delimiters are wrong, and the whole
+        # selection is otherwise thrown away over a quoting slip. Replacing
+        # \" with " would corrupt genuinely escaped inner quotes, so this
+        # runs only after passes 1 and 2 have already failed on this
+        # candidate: by here the alternative is no parse at all.
+        if '\\"' in candidate:
+            try:
+                return json.loads(candidate.replace('\\"', '"'), strict=False)
+            except (json.JSONDecodeError, TypeError) as err:
+                last_err = err
+
     preview = cleaned[:200] + "..." if len(cleaned) > 200 else cleaned
     raise ValueError(
         f"Failed to extract valid JSON from model response: {last_err}. Response preview: {preview!r}"

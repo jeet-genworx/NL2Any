@@ -1,0 +1,5 @@
+./koboldcpp-mac-arm64 \
+  --model Qwen_Qwen3-4B-Instruct-2507-Q6_K.gguf \
+  --gpulayers -1 --contextsize 32768 --flashattention --quantkv 1 \
+  --blasbatchsize 512 --admin --admindir ~/koboldcpp-admin \
+  --embeddingsmodel nomic-embed-text-v2-moe.Q6_K.gguf

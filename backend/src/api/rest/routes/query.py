@@ -65,6 +65,7 @@ async def query_endpoint(
             provider=request.provider,
             stages=request.stages,
             jargons=request.jargons,
+            table_selection_strategy=request.table_selection_strategy,
         )
         return response
     except ValueError as err:
@@ -124,6 +125,7 @@ async def query_stream_endpoint(
                 provider=request.provider,
                 stages=request.stages,
                 jargons=request.jargons,
+                table_selection_strategy=request.table_selection_strategy,
                 on_stage_event=on_stage_event,
             )
             queue.put_nowait({"event": "complete", "data": response.model_dump(mode="json")})

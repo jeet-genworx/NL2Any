@@ -1,6 +1,7 @@
 """Stage handler adapters translating stage execution and exceptions into typed FSM events."""
 
 import asyncio
+import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any
@@ -28,11 +29,17 @@ from backend.src.core.query_processing.pipeline.fsm.events import (
     ValidationFailed,
 )
 from backend.src.core.query_processing.pipeline.fsm.states import PipelineState
+from backend.src.core.query_processing.pipeline.strategies import (
+    BfsRetrievalUnavailable,
+    WholeSchemaStrategy,
+)
 from backend.src.data.models.schema import DatabaseType
 from backend.src.schemas.pipeline import (
     GeneratorMissingInfo,
     GuardrailDecision,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class StageAdapter(ABC):
@@ -113,19 +120,58 @@ class FeedbackGuardrailAdapter(StageAdapter):
 
 
 class TableSelectionAdapter(StageAdapter):
-    """Executes Stage 1 Table Selector with active feedback."""
+    """Executes Stage 1 Table Selector with active feedback.
 
-    def __init__(self, selector: Any) -> None:
+    The strategy decides which view of the schema the selector is shown.
+    Default is the whole schema, exactly as before strategies existed.
+
+    A strategy that cannot run for this question -- BFS against a database
+    whose embeddings were never generated, say -- raises
+    `BfsRetrievalUnavailable`, and the adapter falls back to the whole schema
+    with a notice rather than failing the run. Narrowing is an optimization,
+    so losing it should cost tokens, not the answer.
+    """
+
+    def __init__(self, selector: Any, strategy: Any = None) -> None:
         self.selector = selector
+        self.strategy = strategy or WholeSchemaStrategy()
+        self.fallback = WholeSchemaStrategy()
 
     async def execute(self, context: PipelineContext) -> tuple[StageEvent, int]:
         try:
+            try:
+                scope = await self.strategy.scope(context)
+                context.selection_strategy_used = self.strategy.name
+            except BfsRetrievalUnavailable as err:
+                logger.warning(
+                    "Strategy '%s' unavailable for '%s' (%s); using the whole schema.",
+                    self.strategy.name,
+                    context.target_name,
+                    err,
+                )
+                scope = await self.fallback.scope(context)
+                scope.notice = (
+                    f"'{self.strategy.name}' table selection was unavailable "
+                    f"({err}); the full schema was used instead."
+                )
+                context.selection_strategy_used = self.fallback.name
+
+            context.selection_notice = scope.notice
+            context.candidates = list(scope.candidates)
+            context.table_neighborhood = scope.neighborhood
+
             fb = compose_feedback_prompt(context.s1_user_guidance, context.s1_system_retry)
+            # Only passed when the prefix cache must be switched off. The
+            # default call stays exactly what it was before strategies
+            # existed, so a selector that predates the flag -- including
+            # every test double -- keeps working untouched.
+            cache_kwarg = {} if scope.cache_key is not None else {"use_prefix_cache": False}
             res = await self.selector.select(
                 question=context.processed_question,
-                schema=context.schema,
+                schema=scope.schema_view,
                 feedback=fb,
                 target_key=context.target_name,
+                **cache_kwarg,
             )
             tok = getattr(self.selector, "last_prompt_tokens", 0)
             self.selector.last_prompt_tokens = 0

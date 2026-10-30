@@ -20,12 +20,14 @@ from backend.src.core.query_processing.pipeline.selector import package_selected
 from backend.src.data.models.schema import DatabaseSchema, DatabaseType
 from backend.src.data.models.targets import DatabaseTarget
 from backend.src.schemas.pipeline import (
+    CandidateTable,
     ExecutionResult,
     GeneratedQuery,
     GuardrailResult,
     PolicyResult,
     RelevantSchema,
     SpellingCorrectionResult,
+    TableNeighborhood,
     ValidationResult,
 )
 
@@ -114,6 +116,17 @@ class PipelineContext:
     validation_result: ValidationResult | None = None
     policy_result: PolicyResult | None = None
     execution_result: ExecutionResult | None = None
+
+    # Table-selection strategy: which view of the schema Stage 1 was shown.
+    # `selection_strategy` is what the request asked for; `selection_strategy_used`
+    # is what actually ran, which differs when a strategy was unavailable and
+    # the adapter fell back. Both are reported, so a run that quietly lost its
+    # narrowing is visible rather than merely slower.
+    selection_strategy: str = "whole_schema"
+    selection_strategy_used: str | None = None
+    selection_notice: str | None = None
+    candidates: list[CandidateTable] = field(default_factory=list)
+    table_neighborhood: TableNeighborhood | None = None
 
     # Telemetry and telemetry accumulators
     stage_providers: dict[str, str] = field(default_factory=dict)

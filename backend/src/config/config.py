@@ -157,6 +157,45 @@ class Settings(BaseSettings):
         description="Maximum number of candidate tables to retrieve (alias for SIMILARITY_TOP_K)",
     )
 
+    table_selection_strategy: str = Field(
+        default="whole_schema",
+        alias="TABLE_SELECTION_STRATEGY",
+        description=(
+            "Default view of the schema shown to the table selector when a "
+            "request does not say. 'whole_schema' sends every table, which "
+            "keeps the prompt prefix byte-identical so the KoboldCpp KV-slot "
+            "cache can restore it; 'bfs' retrieves by embedding similarity and "
+            "widens along foreign keys, which makes the prompt far smaller but "
+            "question-specific, so the cache is bypassed. PostgreSQL only -- "
+            "MongoDB has no foreign keys to walk and always uses the whole "
+            "schema."
+        ),
+    )
+    table_neighborhood_max_levels: int = Field(
+        default=3,
+        alias="TABLE_NEIGHBORHOOD_MAX_LEVELS",
+        description=(
+            "BFS strategy only: how many foreign-key hops the walk takes out "
+            "from each embedding match. Embedding matching finds the tables a "
+            "question names; the tables a query must touch are often one or "
+            "two hops past them -- the bridge table nobody mentions, and the "
+            "entity table on its far side. 3 reaches those while staying well "
+            "short of the whole schema."
+        ),
+    )
+    table_neighborhood_max_tables: int = Field(
+        default=40,
+        alias="TABLE_NEIGHBORHOOD_MAX_TABLES",
+        description=(
+            "BFS strategy only: ceiling on unique tables handed to the "
+            "selector after the walk. Three hops through a densely normalized "
+            "schema can reach most of the database, and the prompt has to fit "
+            "a context window. Embedding matches are never dropped; past them "
+            "nearer tables survive truncation, so what is discarded is always "
+            "the weakest-related end of the walk."
+        ),
+    )
+
     @property
     def effective_similarity_top_k(self) -> int:
         """Effective top-K limit for candidate table similarity matching from settings."""

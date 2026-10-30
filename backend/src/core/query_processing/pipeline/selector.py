@@ -248,8 +248,15 @@ class TableSelector:
         feedback: str | None = None,
         target_key: str | None = None,
         max_tokens: int | None = None,
+        use_prefix_cache: bool = True,
     ) -> TableSelectionResult:
-        """Select relevant tables from complete database description using SLM."""
+        """Select relevant tables from the given schema view using the SLM.
+
+        `use_prefix_cache=False` bypasses the KV-slot cache. A caller that
+        narrows `schema` per question must pass it: slots are keyed by
+        database, so a prefix warmed for one question's tables would otherwise
+        be restored for another's.
+        """
         q_text = str(question)
 
         if not schema or not schema.objects:
@@ -280,7 +287,8 @@ class TableSelector:
 
         db_key = target_key or getattr(schema, "database_name", "default")
         use_cache = (
-            self.cache_manager is not None
+            use_prefix_cache
+            and self.cache_manager is not None
             and isinstance(self.provider, KoboldCppProvider)
             and settings.koboldcpp_admin_enabled
             and db_key not in getattr(self.cache_manager, "_disabled_databases", set())
